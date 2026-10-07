@@ -5,6 +5,7 @@ using WinIsland.Core.Diagnostics;
 
 namespace WinIsland.App;
 
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "Lives for the whole process; the host and mutex are released in the exit handler.")]
 public partial class App : Application
 {
     private Mutex? _singleInstance;
