@@ -13,7 +13,8 @@ public sealed record MediaSnapshot(
     bool CanGoPrevious,
     TimeSpan Position,
     TimeSpan Duration,
-    DateTimeOffset PositionSampledAt)
+    DateTimeOffset PositionSampledAt,
+    MediaArtwork? Artwork = null)
 {
     public TimeSpan PositionAt(DateTimeOffset now)
     {

@@ -44,6 +44,12 @@ public sealed unsafe class WindowMessageHook : IWindowMessageSource, IDisposable
 
     public event EventHandler<int>? HotkeyPressed;
 
+    /// <summary>
+    /// When true the whole window is client area (no non-client frame at all), so no system
+    /// border can be drawn around the island.
+    /// </summary>
+    public bool RemoveNonClientArea { get; set; }
+
     /// <summary>When true, clicks never activate the window (passive and non-text interaction).</summary>
     public bool RefuseMouseActivation { get; set; } = true;
 
@@ -85,6 +91,10 @@ public sealed unsafe class WindowMessageHook : IWindowMessageSource, IDisposable
         {
             case WM_MOUSEACTIVATE when RefuseMouseActivation:
                 return MA_NOACTIVATE;
+
+            case WM_NCCALCSIZE when RemoveNonClientArea && wParam != 0:
+                // Client rect = window rect: zero-width non-client frame.
+                return 0;
 
             case WM_DISPLAYCHANGE:
                 DisplayChanged?.Invoke(this, EventArgs.Empty);

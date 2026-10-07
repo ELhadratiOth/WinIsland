@@ -88,7 +88,7 @@ public class IslandStateManagerTests
         _manager.SetMode(InteractionMode.Interactive);
 
         Assert.False(_manager.State.HasSwitcher);
-        Assert.Equal(IslandMetrics.Expanded, _manager.State.SizeDip);
+        Assert.Equal(_clock.GetSize(IslandSize.Expanded), _manager.State.SizeDip);
     }
 
     [Fact]

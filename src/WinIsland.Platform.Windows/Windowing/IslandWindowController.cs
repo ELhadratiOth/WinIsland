@@ -87,6 +87,19 @@ public sealed unsafe class IslandWindowController
         SetClickThrough(true);
     }
 
+    /// <summary>Diagnostics: styles plus window vs client rectangles.</summary>
+    public string DescribeFrame()
+    {
+        RECT window, client;
+        GetWindowRect(Handle, &window);
+        GetClientRect(Handle, &client);
+        return $"style=0x{GetWindowLongPtr(Handle, GWL_STYLE):X} ex=0x{GetWindowLongPtr(Handle, GWL_EXSTYLE):X} window={window.ToPixelRect()} client={client.ToPixelRect()}";
+    }
+
+    /// <summary>Forces Windows to recompute the frame (after changing WM_NCCALCSIZE handling).</summary>
+    public void RefreshFrame() =>
+        SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+
     /// <summary>Passive mode: every click goes to the window underneath.</summary>
     public void SetClickThrough(bool clickThrough)
     {

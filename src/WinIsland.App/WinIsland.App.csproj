@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <Content Include="Assets\WinIsland.ico" />
+    <Content Include="Assets\PreviewArt.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

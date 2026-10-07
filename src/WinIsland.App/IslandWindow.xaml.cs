@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Windows.System;
 using Windows.UI.ViewManagement;
 using WinIsland.App.Animation;
@@ -23,8 +24,10 @@ namespace WinIsland.App;
 public sealed partial class IslandWindow : Window
 {
     private readonly PillAnimator _pill;
+    private readonly ActivityAnimations _activity;
     private readonly UISettings _uiSettings = new();
     private DipSize _pillSize;
+    private double _previousArea;
     private bool _allowClose;
 
     public IslandWindow(IslandViewModel viewModel)
@@ -44,12 +47,17 @@ public sealed partial class IslandWindow : Window
             SystemBackdrop = new TransparentTintBackdrop();
         }
 
-        OverlappedPresenter presenter = OverlappedPresenter.Create();
-        presenter.IsResizable = false;
-        presenter.IsMaximizable = false;
-        presenter.IsMinimizable = false;
+        // A context-menu presenter is WinUI's own borderless, non-resizable popup flavour.
+        OverlappedPresenter presenter = Services.Experiments.Has("plainpresenter") ? OverlappedPresenter.Create() : OverlappedPresenter.CreateForContextMenu();
         presenter.IsAlwaysOnTop = true;
-        presenter.SetBorderAndTitleBar(hasBorder: false, hasTitleBar: false);
+        if (Services.Experiments.Has("plainpresenter"))
+        {
+            presenter.IsResizable = false;
+            presenter.IsMaximizable = false;
+            presenter.IsMinimizable = false;
+            presenter.SetBorderAndTitleBar(hasBorder: false, hasTitleBar: false);
+        }
+
         AppWindow.SetPresenter(presenter);
         AppWindow.IsShownInSwitchers = false;
         AppWindow.Title = "WinIsland";
@@ -57,8 +65,18 @@ public sealed partial class IslandWindow : Window
         // Alt+F4 on the focused island must not leave a headless process behind; exit is via the tray.
         AppWindow.Closing += (_, args) => args.Cancel = !_allowClose;
 
-        _pill = new PillAnimator(PillSurface);
+        _pill = new PillAnimator(PillSurface, BackgroundHost);
+        _activity = new ActivityAnimations(_pill.Compositor);
+        _activity.AddBars(CompactBars.Children.OfType<FrameworkElement>());
+        _activity.AddBars(ExpandedBars.Children.OfType<FrameworkElement>());
+        _activity.AddSpinner(CompactClaudeGlyph);
+        _activity.AddSpinner(PanelClaudeGlyph);
         ConfigureContentTransitions();
+
+        AccentBrush.Color = Converters.ToColor(ViewModel.Media.AccentColor);
+        ViewModel.PropertyChanged += (_, _) => UpdateActivity();
+        ViewModel.Media.PropertyChanged += OnMediaPropertyChanged;
+        ViewModel.Claude.PropertyChanged += (_, _) => UpdateActivity();
 
         // Clicking the text box of a not-yet-focused island: TextBox marks pointer presses as
         // handled, so listen for handled events too.
@@ -70,6 +88,9 @@ public sealed partial class IslandWindow : Window
     }
 
     public IslandViewModel ViewModel { get; }
+
+    /// <summary>Tint taken from the current cover art (waveform, progress, glow).</summary>
+    public SolidColorBrush AccentBrush { get; } = new(Microsoft.UI.Colors.White);
 
     public nint Handle { get; }
 
@@ -100,6 +121,7 @@ public sealed partial class IslandWindow : Window
         {
             _pill.Snap(offset, size, radius);
             _pillSize = pillSize;
+            _previousArea = pillSize.Width * pillSize.Height;
             completed?.Invoke();
             return;
         }
@@ -108,7 +130,9 @@ public sealed partial class IslandWindow : Window
         // then animate from it.
         _pill.Reanchor(new Vector2((float)((windowSize.Width - _pillSize.Width) / 2), 0));
         _pillSize = pillSize;
-        _pill.Animate(offset, size, radius, IslandMetrics.ResizeDuration, () => completed?.Invoke());
+        bool growing = pillSize.Width * pillSize.Height >= _previousArea;
+        _previousArea = pillSize.Width * pillSize.Height;
+        _pill.Animate(offset, size, radius, growing, () => completed?.Invoke());
     }
 
     public void PlayShowAnimation()
@@ -134,6 +158,9 @@ public sealed partial class IslandWindow : Window
         Close();
     }
 
+    /// <summary>Brightens the island's edge while the pointer rests on it (before it turns interactive).</summary>
+    public void SetHover(bool hover) => _pill.SetHover(hover);
+
     private void ConfigureContentTransitions()
     {
         if (!AnimationsEnabled)
@@ -141,17 +168,39 @@ public sealed partial class IslandWindow : Window
             return;
         }
 
-        // Layers cross-fade on the compositor when their Visibility flips; XAML keeps a hiding
-        // layer rendered until its fade completes. The incoming layer waits a beat for the
-        // pill to start growing so content never spills outside the shape.
-        var fadeIn = _pill.CreateFade(0f, 1f, IslandMetrics.FadeDuration, TimeSpan.FromMilliseconds(60));
-        var fadeOut = _pill.CreateFade(1f, 0f, TimeSpan.FromMilliseconds(90), TimeSpan.Zero);
-        UIElement[] layers = [CompactLayer, ClockLayer, MediaLayer, ClaudeNoticeLayer, ClaudePanelLayer, Switcher];
+        // Layers fade/slide on the compositor when their Visibility flips; XAML keeps a hiding
+        // layer rendered until its exit completes. The incoming layer waits a beat for the
+        // shape to start growing so content never spills outside it. Each element gets its own
+        // animation objects.
+        UIElement[] layers =
+        [
+            CompactClockLayer, CompactMediaLayer, CompactClaudeLayer, ClockLayer, MediaLayer,
+            ClaudeNoticeLayer, ClaudePanelLayer, Switcher, AmbientGlow,
+        ];
         foreach (UIElement layer in layers)
         {
-            ElementCompositionPreview.SetImplicitShowAnimation(layer, fadeIn);
-            ElementCompositionPreview.SetImplicitHideAnimation(layer, fadeOut);
+            ElementCompositionPreview.SetIsTranslationEnabled(layer, true);
+            ElementCompositionPreview.SetImplicitShowAnimation(layer, _pill.CreateEnter(TimeSpan.FromMilliseconds(70)));
+            ElementCompositionPreview.SetImplicitHideAnimation(layer, _pill.CreateExit());
         }
+    }
+
+    private void OnMediaPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(Core.Modules.MediaModule.AccentColor))
+        {
+            AccentBrush.Color = Converters.ToColor(ViewModel.Media.AccentColor);
+        }
+
+        UpdateActivity();
+    }
+
+    /// <summary>Loops run only while visible and meaningful, so an idle island costs no GPU time.</summary>
+    private void UpdateActivity()
+    {
+        bool visible = ViewModel.State.IsVisible && AnimationsEnabled;
+        _activity.SetBarsRunning(visible && ViewModel.Media.IsPlaying && (ViewModel.ShowMediaCompact || ViewModel.ShowMediaExpanded));
+        _activity.SetSpinnersRunning(visible && ViewModel.Claude.HasActiveSessions && (ViewModel.ShowClaudeCompact || ViewModel.ShowClaudeLarge));
     }
 
     private void OnActivated(object sender, WindowActivatedEventArgs args)

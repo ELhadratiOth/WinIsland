@@ -17,7 +17,7 @@ public sealed class ClockModule : IslandModule
     private string _dateText = string.Empty;
 
     public ClockModule(TimeProvider time, IUiDispatcher dispatcher)
-        : base(ModuleId, "Clock", "")
+        : base(ModuleId, "Clock", "\uE823")
     {
         _time = time ?? throw new ArgumentNullException(nameof(time));
         _minuteTimer = new OneShotTimer(time, dispatcher, Refresh);
@@ -38,6 +38,9 @@ public sealed class ClockModule : IslandModule
         get => _dateText;
         private set => SetProperty(ref _dateText, value);
     }
+
+    public override Geometry.DipSize GetSize(Layout.IslandSize size) =>
+        size == Layout.IslandSize.Expanded ? new Geometry.DipSize(340, 96) : base.GetSize(size);
 
     /// <summary>Re-reads the time; also called when the system clock, time zone or locale changes.</summary>
     public void Refresh()

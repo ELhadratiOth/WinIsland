@@ -17,6 +17,8 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
     private GlobalSystemMediaTransportControlsSession? _session;
     private MediaSnapshot? _current;
     private int _version;
+    private string? _artworkKey;
+    private MediaArtwork? _artwork;
 
     public SystemMediaSource(TimeProvider time)
     {
@@ -144,12 +146,14 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
             MediaSnapshot? previous = Current;
             string title = previous?.Title ?? string.Empty;
             string artist = previous?.Artist ?? string.Empty;
+            MediaArtwork? artwork = previous?.Artwork;
             if (includeProperties || previous is null)
             {
                 GlobalSystemMediaTransportControlsSessionMediaProperties properties =
                     await session.TryGetMediaPropertiesAsync().AsTask().ConfigureAwait(false);
                 title = properties?.Title ?? string.Empty;
                 artist = properties?.Artist ?? string.Empty;
+                artwork = await GetArtworkAsync(session.SourceAppUserModelId, title, artist, properties).ConfigureAwait(false);
             }
 
             GlobalSystemMediaTransportControlsSessionPlaybackInfo playback = session.GetPlaybackInfo();
@@ -171,7 +175,8 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
                 playback.Controls.IsPreviousEnabled,
                 timeline.Position,
                 timeline.EndTime - timeline.StartTime,
-                sampled);
+                sampled,
+                artwork);
 
             lock (_gate)
             {
@@ -189,6 +194,30 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
             // Players disappear mid-call all the time; just wait for the next event.
             AppLog.Warn(nameof(SystemMediaSource), "Reading media session failed", ex);
         }
+    }
+
+    /// <summary>Decodes cover art only when the track changes; the result is reused for timeline/playback updates.</summary>
+    private async Task<MediaArtwork?> GetArtworkAsync(string? appId, string title, string artist, GlobalSystemMediaTransportControlsSessionMediaProperties? properties)
+    {
+        string key = $"{appId}|{title}|{artist}";
+        if (key == _artworkKey)
+        {
+            return _artwork;
+        }
+
+        MediaArtwork? artwork = null;
+        try
+        {
+            artwork = await ArtworkLoader.LoadAsync(properties?.Thumbnail).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn(nameof(SystemMediaSource), "Could not load cover art", ex);
+        }
+
+        _artworkKey = key;
+        _artwork = artwork;
+        return artwork;
     }
 
     private void Publish(MediaSnapshot? snapshot)

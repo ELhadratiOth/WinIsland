@@ -1,5 +1,7 @@
 using System.Windows.Input;
 using WinIsland.Core.Diagnostics;
+using WinIsland.Core.Geometry;
+using WinIsland.Core.Layout;
 using WinIsland.Core.Media;
 using WinIsland.Core.Mvvm;
 using WinIsland.Core.Threading;
@@ -27,9 +29,11 @@ public sealed class MediaModule : IslandModule
     private double _progress;
     private string _positionText = string.Empty;
     private string _durationText = string.Empty;
+    private byte[]? _artwork;
+    private uint _accentColor = AccentPicker.Neutral;
 
     public MediaModule(IMediaSource source, TimeProvider time, IUiDispatcher dispatcher)
-        : base(ModuleId, "Media", "")
+        : base(ModuleId, "Media", "\uEC4F")
     {
         _source = source ?? throw new ArgumentNullException(nameof(source));
         _time = time ?? throw new ArgumentNullException(nameof(time));
@@ -68,8 +72,37 @@ public sealed class MediaModule : IslandModule
         }
     }
 
+    /// <summary>Downscaled cover art (PNG/JPEG bytes), or null when the player provides none.</summary>
+    public byte[]? Artwork
+    {
+        get => _artwork;
+        private set
+        {
+            if (SetProperty(ref _artwork, value))
+            {
+                OnPropertyChanged(nameof(HasArtwork));
+            }
+        }
+    }
+
+    public bool HasArtwork => _artwork is not null;
+
+    /// <summary>ARGB accent derived from the cover art; tints the waveform and progress bar.</summary>
+    public uint AccentColor
+    {
+        get => _accentColor;
+        private set => SetProperty(ref _accentColor, value);
+    }
+
+    public override DipSize GetSize(IslandSize size) => size switch
+    {
+        IslandSize.Compact => IslandMetrics.CompactWide,
+        IslandSize.Expanded => new DipSize(420, 164),
+        _ => base.GetSize(size),
+    };
+
     /// <summary>Segoe Fluent Icons Pause / Play.</summary>
-    public string PlayPauseGlyph => IsPlaying ? "" : "";
+    public string PlayPauseGlyph => IsPlaying ? "\uE769" : "\uE768";
 
     /// <summary>0–100.</summary>
     public double Progress
@@ -125,6 +158,8 @@ public sealed class MediaModule : IslandModule
         Artist = snapshot?.Artist ?? string.Empty;
         IsPlaying = hasMedia && snapshot!.IsPlaying;
         CompactText = Title;
+        Artwork = snapshot?.Artwork?.Image;
+        AccentColor = snapshot?.Artwork?.AccentArgb ?? AccentPicker.Neutral;
 
         IsAvailable = hasMedia;
         CompactPriority = IsPlaying ? ModulePriority.Media : ModulePriority.Unavailable;

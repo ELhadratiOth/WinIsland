@@ -5,12 +5,18 @@ namespace WinIsland.Core.Layout;
 /// <summary>Default sizes and timings. Sizes are in DIPs so they scale with display DPI.</summary>
 public static class IslandMetrics
 {
-    public static readonly DipSize Compact = new(180, 36);
+    public static readonly DipSize Compact = new(172, 36);
     public static readonly DipSize Expanded = new(380, 84);
-    public static readonly DipSize Large = new(440, 300);
+    public static readonly DipSize Large = new(460, 300);
+
+    /// <summary>Compact width when the pill carries leading and trailing content (art + waveform…).</summary>
+    public static readonly DipSize CompactWide = new(236, 36);
 
     /// <summary>Extra height for the module switcher strip shown while interacting.</summary>
     public const double SwitcherHeight = 28;
+
+    /// <summary>Extra room (DIPs) around the shape during a transition so a spring overshoot is never clipped.</summary>
+    public const double OvershootMargin = 14;
 
     /// <summary>Resize animation duration (spec: 150–250 ms).</summary>
     public static readonly TimeSpan ResizeDuration = TimeSpan.FromMilliseconds(220);
@@ -31,5 +37,5 @@ public static class IslandMetrics
 
     /// <summary>Corner radius in DIPs: a full pill when compact, a rounded card when larger.</summary>
     public static double CornerRadius(DipSize size, IslandSize kind) =>
-        kind == IslandSize.Compact ? size.Height / 2 : Math.Min(28, size.Height / 2);
+        kind == IslandSize.Compact ? size.Height / 2 : Math.Min(32, size.Height / 2);
 }

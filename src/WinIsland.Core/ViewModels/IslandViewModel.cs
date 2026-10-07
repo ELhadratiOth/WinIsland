@@ -57,6 +57,12 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
     /// <summary>Small status dot in the compact pill when Claude is working but another module is shown.</summary>
     public bool ShowActivityDot => IsCompact && Claude.HasActiveSessions && _activeModule != Claude;
 
+    public bool ShowClockCompact => Is(ClockModule.ModuleId, IslandSize.Compact);
+
+    public bool ShowMediaCompact => Is(MediaModule.ModuleId, IslandSize.Compact);
+
+    public bool ShowClaudeCompact => Is(ClaudeModule.ModuleId, IslandSize.Compact);
+
     public bool ShowClockExpanded => Is(ClockModule.ModuleId, IslandSize.Expanded);
 
     public bool ShowMediaExpanded => Is(MediaModule.ModuleId, IslandSize.Expanded);
@@ -107,6 +113,9 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(State));
         OnPropertyChanged(nameof(IsCompact));
         OnPropertyChanged(nameof(ShowActivityDot));
+        OnPropertyChanged(nameof(ShowClockCompact));
+        OnPropertyChanged(nameof(ShowMediaCompact));
+        OnPropertyChanged(nameof(ShowClaudeCompact));
         OnPropertyChanged(nameof(ShowClockExpanded));
         OnPropertyChanged(nameof(ShowMediaExpanded));
         OnPropertyChanged(nameof(ShowClaudeExpanded));

@@ -6,6 +6,7 @@ using WinIsland.Core.Geometry;
 using WinIsland.Core.Integrations;
 using WinIsland.Core.Interaction;
 using WinIsland.Core.Layout;
+using WinIsland.Core.Media;
 using WinIsland.Core.Modules;
 using WinIsland.Core.Settings;
 using WinIsland.Core.State;
@@ -34,7 +35,7 @@ namespace WinIsland.App.Services;
 /// The UI is touched only when the published <see cref="IslandState"/> or the placement
 /// actually changes.
 /// </summary>
-internal sealed class IslandHost : IAsyncDisposable
+internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
 {
     private const int HotkeyId = 0x5749;
     private const double SnapLayoutsZoneDip = 120;
@@ -44,14 +45,16 @@ internal sealed class IslandHost : IAsyncDisposable
 
     private readonly TimeProvider _time = TimeProvider.System;
     private readonly IUiDispatcher _dispatcher;
-    private readonly SettingsStore _settingsStore = new(SettingsStore.DefaultPath);
+    private readonly DispatcherQueue _dispatcherQueue;
+    private readonly SettingsStore _settingsStore;
+    private readonly Preview.PreviewScenario? _preview;
 
     private readonly MonitorProvider _monitors = new();
     private readonly ForegroundInspector _inspector = new();
     private readonly ForegroundWatcher _foreground = new();
     private readonly ConnectivityMonitor _connectivity = new();
     private readonly PointerHotZoneWatcher _pointer;
-    private readonly SystemMediaSource _media;
+    private readonly IMediaSource _media;
     private readonly ClaudeSessionMonitor _claudeSessions;
 
     private readonly ClockModule _clockModule;
@@ -82,27 +85,38 @@ internal sealed class IslandHost : IAsyncDisposable
     private MonitorDescriptor? _renderedMonitor;
     private int _transitionGeneration;
 
-    public IslandHost(DispatcherQueue queue)
+    public IslandHost(DispatcherQueue queue, bool preview = false)
     {
         _dispatcher = new DispatcherQueueUiDispatcher(queue);
-        _settings = _settingsStore.Load();
+        _dispatcherQueue = queue;
+        _preview = preview ? new Preview.PreviewScenario() : null;
+
+        // The preview never touches the user's real settings.
+        _settingsStore = new SettingsStore(preview ? Path.Combine(Path.GetTempPath(), "WinIsland-preview", "settings.json") : SettingsStore.DefaultPath);
+        _settings = preview ? new IslandSettings() : _settingsStore.Load();
         _placementOptions = new PlacementOptions { TopMarginDip = _settings.TopMarginDip };
         ApplyGameSettings();
 
-        _media = new SystemMediaSource(_time);
-        _claudeSessions = new ClaudeSessionMonitor(new ClaudeSessionMonitorOptions(), _time);
+        var systemMedia = preview ? null : new SystemMediaSource(_time);
+        _media = (IMediaSource?)_preview?.Media ?? systemMedia!;
+        _claudeSessions = new ClaudeSessionMonitor(
+            _preview is null ? new ClaudeSessionMonitorOptions() : new ClaudeSessionMonitorOptions { ProjectsDirectory = _preview.ClaudeProjectsDirectory },
+            _time);
 
         // The clock goes first: it is the fallback module when nothing else has content.
         _clockModule = new ClockModule(_time, _dispatcher);
         _mediaModule = new MediaModule(_media, _time, _dispatcher);
-        _claudeModule = new ClaudeModule(_claudeSessions, new ClaudeCliMessenger(), _dispatcher);
+        _claudeModule = new ClaudeModule(_claudeSessions, new ClaudeCliMessenger(), _dispatcher, _time);
         _state = new IslandStateManager([_clockModule, _mediaModule, _claudeModule], _time, _dispatcher);
         _interaction = new InteractionController(_time, _dispatcher, _settings.ToInteractionOptions());
         _viewModel = new IslandViewModel(_state, _clockModule, _mediaModule, _claudeModule);
 
         // Offline-capable sources first; network-bound ones (calendar, usage…) slot in here and
         // are paused automatically while offline.
-        _integrations = new IntegrationHost([_media, _claudeSessions], _connectivity, _time);
+        _integrations = new IntegrationHost(
+            systemMedia is null ? [_claudeSessions] : [systemMedia, _claudeSessions],
+            _connectivity,
+            _time);
 
         _window = new IslandWindow(_viewModel);
         _controller = new IslandWindowController(_window.Handle);
@@ -118,7 +132,9 @@ internal sealed class IslandHost : IAsyncDisposable
     public void Start()
     {
         AppLog.Info(nameof(IslandHost), $"Window 0x{_window.Handle:X}; settings: {_settings.VisibilityMode}, {_settings.MonitorPreference}, hover={_settings.HoverToInteract}; experiments: {Experiments.Describe()}");
+        _messages.RemoveNonClientArea = !Experiments.Has("keepnc");
         _controller.ApplyOverlayStyles(layered: !Experiments.Has("nolayered"), stripFrame: !Experiments.Has("keepframe"));
+        _controller.RefreshFrame();
         if (Experiments.Has("activate"))
         {
             _controller.ActivateWithoutKeepingFocus(_window.Activate);
@@ -134,7 +150,14 @@ internal sealed class IslandHost : IAsyncDisposable
         AppLog.Info(nameof(IslandHost), $"Monitors: {string.Join("; ", _monitors.GetMonitors().Select(m => $"{m.Id} {m.Bounds} work {m.WorkArea} x{m.Scale}{(m.IsPrimary ? " primary" : string.Empty)}"))}");
         _connectivity.Start();
         _integrations.Start();
+        _preview?.Run(_dispatcherQueue, this);
     }
+
+    void Preview.IPreviewTarget.PreviewActivate() => _interaction.Activate();
+
+    void Preview.IPreviewTarget.PreviewSelect(string moduleId) => _state.SelectModule(moduleId);
+
+    void Preview.IPreviewTarget.PreviewDismiss() => _interaction.Dismiss();
 
     public async ValueTask DisposeAsync()
     {
@@ -306,7 +329,14 @@ internal sealed class IslandHost : IAsyncDisposable
         }
 
         bool animate = sizeChanged && !firstShow && !monitorChanged && _renderedPill is not null;
-        DipSize windowSize = animate ? DipSize.Max(_renderedPill!.Value, target) : target;
+
+        // While animating, the window covers both shapes plus room for the spring's overshoot.
+        DipSize windowSize = target;
+        if (animate)
+        {
+            DipSize union = DipSize.Max(_renderedPill!.Value, target);
+            windowSize = new DipSize(union.Width + (2 * IslandMetrics.OvershootMargin), union.Height + IslandMetrics.OvershootMargin);
+        }
         PixelRect windowRect = animate ? WindowRectAround(pill, windowSize, monitor) : pill;
         int generation = ++_transitionGeneration;
         _renderedPill = target;
@@ -344,6 +374,7 @@ internal sealed class IslandHost : IAsyncDisposable
     {
         AppLog.Info(nameof(IslandHost), $"Showing island at {_controller.Bounds} on {_monitor?.Id} ({_state.State.ModuleId}, {_state.State.Size})");
         _controller.Show();
+        AppLog.Info(nameof(IslandHost), $"Frame: {_controller.DescribeFrame()}");
         _window.PlayShowAnimation();
         UpdatePointerWatcher();
     }
@@ -396,6 +427,7 @@ internal sealed class IslandHost : IAsyncDisposable
 
     private void OnPointerInsideChanged(object? sender, bool inside)
     {
+        _window.SetHover(inside);
         if (inside)
         {
             _interaction.PointerEntered();

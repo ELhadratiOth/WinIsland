@@ -75,7 +75,8 @@ public partial class App : Application
 
         try
         {
-            _host = new IslandHost(DispatcherQueue.GetForCurrentThread());
+            bool preview = Environment.GetCommandLineArgs().Contains("--preview", StringComparer.OrdinalIgnoreCase);
+            _host = new IslandHost(DispatcherQueue.GetForCurrentThread(), preview);
             _host.Start();
             AppLog.Info(nameof(App), "Startup complete");
         }

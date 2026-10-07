@@ -15,6 +15,7 @@ public sealed class ClaudeModule : IslandModule
     private readonly ClaudeSessionMonitor _monitor;
     private readonly IClaudeMessenger _messenger;
     private readonly IUiDispatcher _dispatcher;
+    private readonly TimeProvider _time;
     private ClaudeSessionItem? _selectedSession;
     private string _draftMessage = string.Empty;
     private string _statusMessage = string.Empty;
@@ -22,9 +23,10 @@ public sealed class ClaudeModule : IslandModule
     private int _activeCount;
     private bool _isSending;
 
-    public ClaudeModule(ClaudeSessionMonitor monitor, IClaudeMessenger messenger, IUiDispatcher dispatcher)
-        : base(ModuleId, "Claude Code", "")
+    public ClaudeModule(ClaudeSessionMonitor monitor, IClaudeMessenger messenger, IUiDispatcher dispatcher, TimeProvider? time = null)
+        : base(ModuleId, "Claude Code", "\uE99A")
     {
+        _time = time ?? TimeProvider.System;
         _monitor = monitor ?? throw new ArgumentNullException(nameof(monitor));
         _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
@@ -85,11 +87,15 @@ public sealed class ClaudeModule : IslandModule
             if (SetProperty(ref _activeCount, value))
             {
                 OnPropertyChanged(nameof(HasActiveSessions));
+                OnPropertyChanged(nameof(ActiveSummary));
             }
         }
     }
 
     public bool HasActiveSessions => ActiveCount > 0;
+
+    /// <summary>Badge text in the panel header, e.g. "2 working".</summary>
+    public string ActiveSummary => ActiveCount == 0 ? "All idle" : $"{ActiveCount} working";
 
     public bool HasSessions => Sessions.Count > 0;
 
@@ -101,9 +107,12 @@ public sealed class ClaudeModule : IslandModule
 
     public AsyncRelayCommand SendCommand { get; }
 
-    public override DipSize GetSize(IslandSize size) => size == IslandSize.Large
-        ? IslandMetrics.Large with { Height = Math.Clamp(150 + (Sessions.Count * 32), 200, 360) }
-        : base.GetSize(size);
+    public override DipSize GetSize(IslandSize size) => size switch
+    {
+        IslandSize.Compact => IslandMetrics.CompactWide,
+        IslandSize.Large => IslandMetrics.Large with { Height = Math.Clamp(168 + (Sessions.Count * 46), 260, 440) },
+        _ => base.GetSize(size),
+    };
 
     protected override void Dispose(bool disposing)
     {
@@ -148,11 +157,11 @@ public sealed class ClaudeModule : IslandModule
             int existing = IndexOf(info.SessionId);
             if (existing < 0)
             {
-                Sessions.Insert(i, new ClaudeSessionItem(info));
+                Sessions.Insert(i, new ClaudeSessionItem(info, _time.GetUtcNow()));
             }
             else
             {
-                Sessions[existing].Info = info;
+                Sessions[existing].Update(info, _time.GetUtcNow());
                 if (existing != i)
                 {
                     Sessions.Move(existing, i);
@@ -172,7 +181,7 @@ public sealed class ClaudeModule : IslandModule
         {
             0 => string.Empty,
             1 => sessions.First(s => s.IsActive).ProjectName,
-            _ => $"{ActiveCount} sessions working",
+            _ => $"{ActiveCount} working",
         };
 
         IsAvailable = _monitor.IsInstalled || Sessions.Count > 0;

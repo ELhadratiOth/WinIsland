@@ -8,23 +8,110 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- The island is always dark, like a hardware notch, regardless of the app theme. -->
-            <SolidColorBrush x:Key="IslandBackgroundBrush" Color="#FF050505" />
+            <!-- ===== Palette: the island is always dark, like a hardware notch ===== -->
             <SolidColorBrush x:Key="IslandForegroundBrush" Color="#FFF5F5F7" />
-            <SolidColorBrush x:Key="IslandSecondaryBrush" Color="#FF98989F" />
-            <SolidColorBrush x:Key="IslandAccentBrush" Color="#FF34C759" />
-            <SolidColorBrush x:Key="IslandActivityBrush" Color="#FFFF9F0A" />
-            <SolidColorBrush x:Key="IslandSubtleFillBrush" Color="#FF1C1C1E" />
+            <SolidColorBrush x:Key="IslandSecondaryBrush" Color="#FF8E8E93" />
+            <SolidColorBrush x:Key="IslandTertiaryBrush" Color="#FF636366" />
+            <SolidColorBrush x:Key="IslandTrackBrush" Color="#33FFFFFF" />
+            <SolidColorBrush x:Key="IslandRaisedBrush" Color="#FF1C1C1E" />
+            <SolidColorBrush x:Key="IslandRaisedHoverBrush" Color="#FF2C2C2E" />
+            <SolidColorBrush x:Key="IslandClaudeBrush" Color="#FFE08A6A" />
+            <SolidColorBrush x:Key="IslandClaudeSoftBrush" Color="#26E08A6A" />
+            <LinearGradientBrush x:Key="IslandArtPlaceholderBrush" StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Offset="0" Color="#FF2C2C2E" />
+                <GradientStop Offset="1" Color="#FF1C1C1E" />
+            </LinearGradientBrush>
 
-            <Style x:Key="IslandIconButton" TargetType="Button">
+            <!-- ===== Typography (Segoe UI Variable on Windows 11, Segoe UI elsewhere) ===== -->
+            <Style x:Key="IslandCompactTextStyle" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="Segoe UI Variable Display" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource IslandForegroundBrush}" />
+                <Setter Property="MaxLines" Value="1" />
+            </Style>
+            <Style x:Key="IslandBodyStyle" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="Segoe UI Variable Text" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="Foreground" Value="{StaticResource IslandSecondaryBrush}" />
+            </Style>
+            <Style x:Key="IslandCaptionStyle" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="Segoe UI Variable Text" />
+                <Setter Property="FontSize" Value="10.5" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="CharacterSpacing" Value="60" />
+                <Setter Property="Foreground" Value="{StaticResource IslandTertiaryBrush}" />
+            </Style>
+            <Style x:Key="IslandTimeStyle" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="Segoe UI Variable Text" />
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Foreground" Value="{StaticResource IslandSecondaryBrush}" />
+            </Style>
+
+            <!-- Claude's spark glyph; each Path sets its own Data (geometry can't be shared). -->
+            <Style x:Key="ClaudeGlyphStyle" TargetType="Path">
+                <Setter Property="Stroke" Value="{StaticResource IslandClaudeBrush}" />
+                <Setter Property="StrokeThickness" Value="2.6" />
+                <Setter Property="StrokeStartLineCap" Value="Round" />
+                <Setter Property="StrokeEndLineCap" Value="Round" />
+            </Style>
+
+            <!-- ===== Controls ===== -->
+            <Style x:Key="IslandTransportButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
                 <Setter Property="Background" Value="Transparent" />
                 <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="Foreground" Value="{StaticResource IslandForegroundBrush}" />
                 <Setter Property="Padding" Value="0" />
-                <Setter Property="Width" Value="36" />
-                <Setter Property="Height" Value="36" />
-                <Setter Property="CornerRadius" Value="18" />
+                <Setter Property="Width" Value="44" />
+                <Setter Property="Height" Value="40" />
+                <Setter Property="CornerRadius" Value="20" />
             </Style>
+            <Style x:Key="IslandSendButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+                <Setter Property="Background" Value="{StaticResource IslandClaudeBrush}" />
+                <Setter Property="Foreground" Value="#FF1A0F0B" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Width" Value="38" />
+                <Setter Property="Height" Value="38" />
+                <Setter Property="CornerRadius" Value="19" />
+            </Style>
+            <Style x:Key="IslandChipButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+                <Setter Property="Background" Value="{StaticResource IslandRaisedBrush}" />
+                <Setter Property="Foreground" Value="{StaticResource IslandSecondaryBrush}" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Width" Value="34" />
+                <Setter Property="Height" Value="22" />
+                <Setter Property="CornerRadius" Value="11" />
+            </Style>
+            <Style x:Key="IslandTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource DefaultTextBoxStyle}">
+                <Setter Property="Background" Value="{StaticResource IslandRaisedBrush}" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="CornerRadius" Value="19" />
+                <Setter Property="Padding" Value="16,9,16,9" />
+                <Setter Property="MinHeight" Value="38" />
+                <Setter Property="FontSize" Value="13" />
+            </Style>
+            <Style x:Key="SessionItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+                <Setter Property="Padding" Value="8,0" />
+                <Setter Property="Margin" Value="0,1" />
+                <Setter Property="MinHeight" Value="0" />
+                <Setter Property="CornerRadius" Value="12" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            </Style>
+
+            <!-- Lightweight styling: keep inputs and list rows on the island's palette in every state. -->
+            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FF242426" />
+            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FF242426" />
+            <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="#FF1C1C1E" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#FF242426" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#FF2C2C2E" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="#FF2C2C2E" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#FF2C2C2E" />
+            <SolidColorBrush x:Key="ListViewItemSelectionIndicatorBrush" Color="#FFE08A6A" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

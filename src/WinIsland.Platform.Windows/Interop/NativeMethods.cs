@@ -34,6 +34,7 @@ internal static unsafe partial class NativeMethods
     public const int SW_SHOWNOACTIVATE = 4;
 
     public const uint WM_NULL = 0x0000;
+    public const uint WM_NCCALCSIZE = 0x0083;
     public const uint WM_QUIT = 0x0012;
     public const uint WM_SETTINGCHANGE = 0x001A;
     public const uint WM_TIMECHANGE = 0x001E;
@@ -163,6 +164,9 @@ internal static unsafe partial class NativeMethods
 
     [LibraryImport("user32.dll")]
     public static partial int GetWindowRect(nint hWnd, RECT* lpRect);
+
+    [LibraryImport("user32.dll")]
+    public static partial int GetClientRect(nint hWnd, RECT* lpRect);
 
     [LibraryImport("user32.dll", EntryPoint = "GetClassNameW")]
     public static partial int GetClassName(nint hWnd, char* lpClassName, int nMaxCount);

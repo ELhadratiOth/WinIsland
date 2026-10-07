@@ -93,7 +93,7 @@ jobs:
             [System.Drawing.Graphics]::FromImage($full).CopyFromScreen($screen.Location, [System.Drawing.Point]::Empty, $screen.Size)
             $full.Save("$PWD/visual/$name-full.png")
             # Top-centre region, zoomed 3x with nearest-neighbour so individual pixels are visible.
-            $w = 560; $h = 140; $x = [int](($screen.Width - $w) / 2)
+            $w = 560; $h = 220; $x = [int](($screen.Width - $w) / 2)
             $zoom = New-Object System.Drawing.Bitmap ($w * 3), ($h * 3)
             $g = [System.Drawing.Graphics]::FromImage($zoom)
             $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
@@ -104,11 +104,9 @@ jobs:
 
           $variants = [ordered]@{
             'default'          = ''
-            'keepframe'        = 'keepframe'
-            'activate'         = 'activate'
-            'nolayered'        = 'nolayered'
-            'nolayered-act'    = 'nolayered,activate'
-            'nobackdrop'       = 'nobackdrop'
+            'keepnc'           = 'keepnc'
+            'plainpresenter'   = 'plainpresenter'
+            'plain-keepnc'     = 'plainpresenter,keepnc'
           }
           foreach ($name in $variants.Keys) {
             Remove-Item $log -ErrorAction SilentlyContinue
@@ -122,6 +120,19 @@ jobs:
             Write-Host "captured $name"
           }
           $env:WINISLAND_EXPERIMENT = ''
+
+          # Design review: the --preview tour, photographed at each state (see PreviewScenario).
+          Remove-Item $log -ErrorAction SilentlyContinue
+          $start = Get-Date
+          $process = Start-Process $exe -ArgumentList '--preview' -PassThru
+          $shots = [ordered]@{ '1-claude-compact' = 3.0; '2-track-notice' = 5.5; '3-media-compact' = 8.5; '4-media-expanded' = 11.0; '5-claude-panel' = 14.0; '6-clock-expanded' = 16.5; '7-back-compact' = 20.0 }
+          foreach ($name in $shots.Keys) {
+            $wait = $shots[$name] - ((Get-Date) - $start).TotalSeconds
+            if ($wait -gt 0) { Start-Sleep -Milliseconds ([int]($wait * 1000)) }
+            Save-Island "preview-$name"
+          }
+          Get-Process WinIsland -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (Test-Path $log) { Copy-Item $log "visual/preview.log" }
 
       - name: Upload visual capture
         if: always()

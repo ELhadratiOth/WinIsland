@@ -2,19 +2,46 @@
     x:Class="WinIsland.App.IslandWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:WinIsland.App"
     xmlns:modules="using:WinIsland.Core.Modules"
     Title="WinIsland">
 
-    <!-- Transparent root: only the clipped PillSurface is visible. -->
+    <!--
+        Transparent window. PillSurface is clipped to an animated rounded rectangle (see
+        PillAnimator); BackgroundHost draws the black body + hairline with that same geometry.
+        Content layers cross-fade on the compositor when their Visibility flips.
+    -->
     <Grid
         x:Name="RootGrid"
         Background="Transparent"
-        KeyboardAcceleratorPlacementMode="Hidden">
+        KeyboardAcceleratorPlacementMode="Hidden"
+        RequestedTheme="Dark">
         <Grid.KeyboardAccelerators>
-            <!-- Escape always ends interaction and hands focus back. -->
             <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
         </Grid.KeyboardAccelerators>
-        <Grid x:Name="PillSurface" Background="{StaticResource IslandBackgroundBrush}">
+
+        <Grid x:Name="PillSurface">
+            <Grid x:Name="BackgroundHost" />
+
+            <!-- Soft accent glow behind the expanded player, tinted from the cover art. -->
+            <Ellipse
+                x:Name="AmbientGlow"
+                Width="320"
+                Height="220"
+                Margin="-120,-110,0,0"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                IsHitTestVisible="False"
+                Opacity="0.22"
+                Visibility="{x:Bind ViewModel.ShowMediaExpanded, Mode=OneWay}">
+                <Ellipse.Fill>
+                    <RadialGradientBrush>
+                        <GradientStop Offset="0" Color="{x:Bind local:Converters.ToColor(ViewModel.Media.AccentColor), Mode=OneWay}" />
+                        <GradientStop Offset="1" Color="#00000000" />
+                    </RadialGradientBrush>
+                </Ellipse.Fill>
+            </Ellipse>
+
             <Grid
                 x:Name="ContentHost"
                 HorizontalAlignment="Center"
@@ -24,183 +51,288 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <!-- Compact: glyph + short label (+ activity dot) -->
+                <!-- ============ Compact: clock ============ -->
                 <Grid
-                    x:Name="CompactLayer"
-                    Padding="14,0"
-                    ColumnSpacing="8"
-                    Visibility="{x:Bind ViewModel.IsCompact, Mode=OneWay}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <FontIcon
-                        VerticalAlignment="Center"
-                        FontSize="13"
-                        Foreground="{StaticResource IslandSecondaryBrush}"
-                        Glyph="{x:Bind ViewModel.CompactGlyph, Mode=OneWay}" />
+                    x:Name="CompactClockLayer"
+                    Padding="16,0"
+                    Visibility="{x:Bind ViewModel.ShowClockCompact, Mode=OneWay}">
                     <TextBlock
-                        Grid.Column="1"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
-                        FontSize="14"
-                        FontWeight="SemiBold"
-                        Foreground="{StaticResource IslandForegroundBrush}"
-                        MaxLines="1"
-                        Text="{x:Bind ViewModel.CompactText, Mode=OneWay}"
-                        TextTrimming="CharacterEllipsis" />
+                        Style="{StaticResource IslandCompactTextStyle}"
+                        Text="{x:Bind ViewModel.Clock.TimeText, Mode=OneWay}" />
                     <Ellipse
-                        Grid.Column="2"
-                        Width="7"
-                        Height="7"
+                        Width="6"
+                        Height="6"
+                        HorizontalAlignment="Right"
                         VerticalAlignment="Center"
-                        Fill="{StaticResource IslandActivityBrush}"
+                        Fill="{StaticResource IslandClaudeBrush}"
                         Visibility="{x:Bind ViewModel.ShowActivityDot, Mode=OneWay}" />
                 </Grid>
 
-                <!-- Expanded: clock -->
-                <StackPanel
-                    x:Name="ClockLayer"
-                    Padding="24,0"
-                    VerticalAlignment="Center"
-                    Spacing="2"
-                    Visibility="{x:Bind ViewModel.ShowClockExpanded, Mode=OneWay}">
-                    <TextBlock
-                        FontSize="30"
-                        FontWeight="SemiBold"
-                        Foreground="{StaticResource IslandForegroundBrush}"
-                        Text="{x:Bind ViewModel.Clock.TimeText, Mode=OneWay}" />
-                    <TextBlock
-                        FontSize="13"
-                        Foreground="{StaticResource IslandSecondaryBrush}"
-                        Text="{x:Bind ViewModel.Clock.DateText, Mode=OneWay}" />
-                </StackPanel>
-
-                <!-- Expanded: media -->
+                <!-- ============ Compact: media (cover + waveform, like iOS) ============ -->
                 <Grid
-                    x:Name="MediaLayer"
-                    Padding="18,12"
-                    ColumnSpacing="12"
-                    RowSpacing="6"
-                    Visibility="{x:Bind ViewModel.ShowMediaExpanded, Mode=OneWay}">
+                    x:Name="CompactMediaLayer"
+                    Padding="6,6,14,6"
+                    Visibility="{x:Bind ViewModel.ShowMediaCompact, Mode=OneWay}">
+                    <Border
+                        Width="24"
+                        Height="24"
+                        HorizontalAlignment="Left"
+                        Background="{StaticResource IslandArtPlaceholderBrush}"
+                        CornerRadius="7">
+                        <Border
+                            CornerRadius="7"
+                            Visibility="{x:Bind ViewModel.Media.HasArtwork, Mode=OneWay}">
+                            <Border.Background>
+                                <ImageBrush ImageSource="{x:Bind local:Converters.ToImage(ViewModel.Media.Artwork), Mode=OneWay}" Stretch="UniformToFill" />
+                            </Border.Background>
+                        </Border>
+                    </Border>
+                    <StackPanel
+                        x:Name="CompactBars"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Orientation="Horizontal"
+                        Spacing="2.5">
+                        <Rectangle Width="3" Height="16" Fill="{x:Bind AccentBrush}" RadiusX="1.5" RadiusY="1.5" />
+                        <Rectangle Width="3" Height="16" Fill="{x:Bind AccentBrush}" RadiusX="1.5" RadiusY="1.5" />
+                        <Rectangle Width="3" Height="16" Fill="{x:Bind AccentBrush}" RadiusX="1.5" RadiusY="1.5" />
+                        <Rectangle Width="3" Height="16" Fill="{x:Bind AccentBrush}" RadiusX="1.5" RadiusY="1.5" />
+                        <Rectangle Width="3" Height="16" Fill="{x:Bind AccentBrush}" RadiusX="1.5" RadiusY="1.5" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- ============ Compact: Claude Code working ============ -->
+                <Grid
+                    x:Name="CompactClaudeLayer"
+                    Padding="12,0,16,0"
+                    ColumnSpacing="10"
+                    Visibility="{x:Bind ViewModel.ShowClaudeCompact, Mode=OneWay}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
+                    <Viewbox
+                        x:Name="CompactClaudeGlyph"
+                        Width="16"
+                        Height="16"
+                        VerticalAlignment="Center">
+                        <Path Data="M12,2 L12,22 M2,12 L22,12 M4.9,4.9 L19.1,19.1 M19.1,4.9 L4.9,19.1" Style="{StaticResource ClaudeGlyphStyle}" />
+                    </Viewbox>
+                    <TextBlock
+                        Grid.Column="1"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource IslandCompactTextStyle}"
+                        Text="{x:Bind ViewModel.Claude.CompactText, Mode=OneWay}"
+                        TextTrimming="CharacterEllipsis" />
+                    <Border
+                        Grid.Column="2"
+                        Padding="7,1,7,2"
+                        VerticalAlignment="Center"
+                        Background="{StaticResource IslandClaudeSoftBrush}"
+                        CornerRadius="9">
+                        <TextBlock
+                            FontSize="11"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource IslandClaudeBrush}"
+                            Text="{x:Bind local:Converters.Text(ViewModel.Claude.ActiveCount), Mode=OneWay}" />
+                    </Border>
+                </Grid>
+
+                <!-- ============ Expanded: clock ============ -->
+                <Grid
+                    x:Name="ClockLayer"
+                    Padding="26,0"
+                    ColumnSpacing="18"
+                    Visibility="{x:Bind ViewModel.ShowClockExpanded, Mode=OneWay}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontFamily="Segoe UI Variable Display"
+                        FontSize="44"
+                        FontWeight="Light"
+                        Foreground="{StaticResource IslandForegroundBrush}"
+                        Text="{x:Bind ViewModel.Clock.TimeText, Mode=OneWay}" />
+                    <StackPanel
+                        Grid.Column="1"
+                        VerticalAlignment="Center"
+                        Spacing="2">
+                        <TextBlock Style="{StaticResource IslandCaptionStyle}" Text="TODAY" />
+                        <TextBlock
+                            Style="{StaticResource IslandBodyStyle}"
+                            Text="{x:Bind ViewModel.Clock.DateText, Mode=OneWay}"
+                            TextWrapping="WrapWholeWords" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- ============ Expanded: now playing ============ -->
+                <Grid
+                    x:Name="MediaLayer"
+                    Padding="18,18,18,14"
+                    RowSpacing="12"
+                    Visibility="{x:Bind ViewModel.ShowMediaExpanded, Mode=OneWay}">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <Border
-                        Width="40"
-                        Height="40"
-                        VerticalAlignment="Center"
-                        Background="{StaticResource IslandSubtleFillBrush}"
-                        CornerRadius="10">
-                        <FontIcon FontSize="18" Foreground="{StaticResource IslandAccentBrush}" Glyph="&#xEC4F;" />
-                    </Border>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock
-                            FontSize="14"
-                            FontWeight="SemiBold"
-                            Foreground="{StaticResource IslandForegroundBrush}"
-                            MaxLines="1"
-                            Text="{x:Bind ViewModel.Media.Title, Mode=OneWay}"
-                            TextTrimming="CharacterEllipsis" />
-                        <TextBlock
-                            FontSize="12"
-                            Foreground="{StaticResource IslandSecondaryBrush}"
-                            MaxLines="1"
-                            Text="{x:Bind ViewModel.Media.Artist, Mode=OneWay}"
-                            TextTrimming="CharacterEllipsis" />
-                    </StackPanel>
-                    <StackPanel
-                        Grid.Column="2"
-                        VerticalAlignment="Center"
-                        Orientation="Horizontal">
-                        <Button
-                            AutomationProperties.Name="Previous"
-                            Command="{x:Bind ViewModel.Media.PreviousCommand}"
-                            Style="{StaticResource IslandIconButton}">
-                            <FontIcon FontSize="14" Glyph="&#xE892;" />
-                        </Button>
-                        <Button
-                            AutomationProperties.Name="Play or pause"
-                            Command="{x:Bind ViewModel.Media.TogglePlayPauseCommand}"
-                            Style="{StaticResource IslandIconButton}">
-                            <FontIcon FontSize="16" Glyph="{x:Bind ViewModel.Media.PlayPauseGlyph, Mode=OneWay}" />
-                        </Button>
-                        <Button
-                            AutomationProperties.Name="Next"
-                            Command="{x:Bind ViewModel.Media.NextCommand}"
-                            Style="{StaticResource IslandIconButton}">
-                            <FontIcon FontSize="14" Glyph="&#xE893;" />
-                        </Button>
-                    </StackPanel>
-                    <Grid
-                        Grid.Row="1"
-                        Grid.ColumnSpan="3"
-                        ColumnSpacing="8">
+
+                    <Grid ColumnSpacing="14">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
+                        <Border
+                            Width="56"
+                            Height="56"
+                            Background="{StaticResource IslandArtPlaceholderBrush}"
+                            CornerRadius="14">
+                            <Grid>
+                                <FontIcon
+                                    FontSize="22"
+                                    Foreground="{StaticResource IslandSecondaryBrush}"
+                                    Glyph="&#xEC4F;" />
+                                <Border CornerRadius="14" Visibility="{x:Bind ViewModel.Media.HasArtwork, Mode=OneWay}">
+                                    <Border.Background>
+                                        <ImageBrush ImageSource="{x:Bind local:Converters.ToImage(ViewModel.Media.Artwork), Mode=OneWay}" Stretch="UniformToFill" />
+                                    </Border.Background>
+                                </Border>
+                            </Grid>
+                        </Border>
+                        <StackPanel
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Spacing="1">
+                            <TextBlock
+                                FontFamily="Segoe UI Variable Display"
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource IslandForegroundBrush}"
+                                MaxLines="1"
+                                Text="{x:Bind ViewModel.Media.Title, Mode=OneWay}"
+                                TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                Style="{StaticResource IslandBodyStyle}"
+                                MaxLines="1"
+                                Text="{x:Bind ViewModel.Media.Artist, Mode=OneWay}"
+                                TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <StackPanel
+                            x:Name="ExpandedBars"
+                            Grid.Column="2"
+                            Margin="0,0,4,0"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal"
+                            Spacing="3">
+                            <Rectangle Width="3.5" Height="22" Fill="{x:Bind AccentBrush}" RadiusX="1.75" RadiusY="1.75" />
+                            <Rectangle Width="3.5" Height="22" Fill="{x:Bind AccentBrush}" RadiusX="1.75" RadiusY="1.75" />
+                            <Rectangle Width="3.5" Height="22" Fill="{x:Bind AccentBrush}" RadiusX="1.75" RadiusY="1.75" />
+                            <Rectangle Width="3.5" Height="22" Fill="{x:Bind AccentBrush}" RadiusX="1.75" RadiusY="1.75" />
+                            <Rectangle Width="3.5" Height="22" Fill="{x:Bind AccentBrush}" RadiusX="1.75" RadiusY="1.75" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Scrubber -->
+                    <Grid Grid.Row="1" ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="38" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="38" />
+                        </Grid.ColumnDefinitions>
                         <TextBlock
-                            FontSize="10"
-                            Foreground="{StaticResource IslandSecondaryBrush}"
+                            HorizontalAlignment="Left"
+                            Style="{StaticResource IslandTimeStyle}"
                             Text="{x:Bind ViewModel.Media.PositionText, Mode=OneWay}" />
                         <ProgressBar
                             Grid.Column="1"
+                            MinHeight="5"
                             VerticalAlignment="Center"
-                            Foreground="{StaticResource IslandForegroundBrush}"
+                            Background="{StaticResource IslandTrackBrush}"
+                            CornerRadius="2.5"
+                            Foreground="{x:Bind AccentBrush}"
                             Maximum="100"
                             Value="{x:Bind ViewModel.Media.Progress, Mode=OneWay}" />
                         <TextBlock
                             Grid.Column="2"
-                            FontSize="10"
-                            Foreground="{StaticResource IslandSecondaryBrush}"
+                            HorizontalAlignment="Right"
+                            Style="{StaticResource IslandTimeStyle}"
                             Text="{x:Bind ViewModel.Media.DurationText, Mode=OneWay}" />
                     </Grid>
+
+                    <!-- Transport -->
+                    <StackPanel
+                        Grid.Row="2"
+                        HorizontalAlignment="Center"
+                        Orientation="Horizontal"
+                        Spacing="22">
+                        <Button
+                            AutomationProperties.Name="Previous"
+                            Command="{x:Bind ViewModel.Media.PreviousCommand}"
+                            Style="{StaticResource IslandTransportButton}">
+                            <FontIcon FontSize="18" Glyph="&#xE892;" />
+                        </Button>
+                        <Button
+                            AutomationProperties.Name="Play or pause"
+                            Command="{x:Bind ViewModel.Media.TogglePlayPauseCommand}"
+                            Style="{StaticResource IslandTransportButton}">
+                            <FontIcon FontSize="24" Glyph="{x:Bind ViewModel.Media.PlayPauseGlyph, Mode=OneWay}" />
+                        </Button>
+                        <Button
+                            AutomationProperties.Name="Next"
+                            Command="{x:Bind ViewModel.Media.NextCommand}"
+                            Style="{StaticResource IslandTransportButton}">
+                            <FontIcon FontSize="18" Glyph="&#xE893;" />
+                        </Button>
+                    </StackPanel>
                 </Grid>
 
-                <!-- Expanded: Claude Code notification -->
+                <!-- ============ Expanded: Claude Code notice ============ -->
                 <Grid
                     x:Name="ClaudeNoticeLayer"
-                    Padding="20,0"
-                    ColumnSpacing="12"
+                    Padding="18,0,22,0"
+                    ColumnSpacing="14"
                     Visibility="{x:Bind ViewModel.ShowClaudeExpanded, Mode=OneWay}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <FontIcon
+                    <Border
+                        Width="44"
+                        Height="44"
                         VerticalAlignment="Center"
-                        FontSize="20"
-                        Foreground="{StaticResource IslandActivityBrush}"
-                        Glyph="&#xE99A;" />
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        Background="{StaticResource IslandClaudeSoftBrush}"
+                        CornerRadius="22">
+                        <Viewbox Width="22" Height="22">
+                            <Path Data="M12,2 L12,22 M2,12 L22,12 M4.9,4.9 L19.1,19.1 M19.1,4.9 L4.9,19.1" Style="{StaticResource ClaudeGlyphStyle}" />
+                        </Viewbox>
+                    </Border>
+                    <StackPanel
+                        Grid.Column="1"
+                        VerticalAlignment="Center"
+                        Spacing="2">
+                        <TextBlock Style="{StaticResource IslandCaptionStyle}" Text="CLAUDE CODE" />
                         <TextBlock
-                            FontSize="14"
+                            FontFamily="Segoe UI Variable Display"
+                            FontSize="15"
                             FontWeight="SemiBold"
                             Foreground="{StaticResource IslandForegroundBrush}"
-                            Text="Claude Code" />
-                        <TextBlock
-                            FontSize="12"
-                            Foreground="{StaticResource IslandSecondaryBrush}"
                             MaxLines="1"
                             Text="{x:Bind ViewModel.Claude.AttentionText, Mode=OneWay}"
                             TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                 </Grid>
 
-                <!-- Large: Claude Code panel -->
+                <!-- ============ Large: Claude Code panel ============ -->
                 <Grid
                     x:Name="ClaudePanelLayer"
-                    Padding="18,14,18,14"
-                    RowSpacing="10"
+                    Padding="18,16,18,14"
+                    RowSpacing="12"
                     Visibility="{x:Bind ViewModel.ShowClaudeLarge, Mode=OneWay}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -208,47 +340,102 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <TextBlock
-                        FontSize="15"
-                        FontWeight="SemiBold"
-                        Foreground="{StaticResource IslandForegroundBrush}"
-                        Text="Claude Code" />
+
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Viewbox
+                            x:Name="PanelClaudeGlyph"
+                            Width="18"
+                            Height="18"
+                            VerticalAlignment="Center">
+                            <Path Data="M12,2 L12,22 M2,12 L22,12 M4.9,4.9 L19.1,19.1 M19.1,4.9 L4.9,19.1" Style="{StaticResource ClaudeGlyphStyle}" />
+                        </Viewbox>
+                        <TextBlock
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            FontFamily="Segoe UI Variable Display"
+                            FontSize="16"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource IslandForegroundBrush}"
+                            Text="Claude Code" />
+                        <Border
+                            Grid.Column="2"
+                            Padding="9,2,9,3"
+                            VerticalAlignment="Center"
+                            Background="{StaticResource IslandClaudeSoftBrush}"
+                            CornerRadius="10">
+                            <TextBlock
+                                FontSize="11"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource IslandClaudeBrush}"
+                                Text="{x:Bind ViewModel.Claude.ActiveSummary, Mode=OneWay}" />
+                        </Border>
+                    </Grid>
+
                     <ListView
                         x:Name="SessionList"
                         Grid.Row="1"
+                        Margin="-6,0"
+                        ItemContainerStyle="{StaticResource SessionItemStyle}"
                         ItemsSource="{x:Bind ViewModel.Claude.Sessions}"
                         SelectedItem="{x:Bind ViewModel.Claude.SelectedSession, Mode=OneWay}"
                         SelectionChanged="OnSessionSelectionChanged"
                         SelectionMode="Single">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="modules:ClaudeSessionItem">
-                                <Grid Height="28" ColumnSpacing="10">
+                                <Grid Height="42" ColumnSpacing="12">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock
+                                    <Border
+                                        Width="30"
+                                        Height="30"
                                         VerticalAlignment="Center"
-                                        Foreground="{StaticResource IslandAccentBrush}"
-                                        Text="{x:Bind StatusGlyph, Mode=OneWay}" />
-                                    <TextBlock
+                                        Background="{x:Bind local:Converters.ToBrush(AvatarColor), Mode=OneWay}"
+                                        CornerRadius="10"
+                                        Opacity="0.95">
+                                        <TextBlock
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            FontSize="11"
+                                            FontWeight="Bold"
+                                            Foreground="#E6000000"
+                                            Text="{x:Bind Initials, Mode=OneWay}" />
+                                    </Border>
+                                    <StackPanel
                                         Grid.Column="1"
                                         VerticalAlignment="Center"
-                                        Foreground="{StaticResource IslandForegroundBrush}"
-                                        MaxLines="1"
-                                        Text="{x:Bind ProjectName, Mode=OneWay}"
-                                        TextTrimming="CharacterEllipsis" />
-                                    <TextBlock
+                                        Spacing="0">
+                                        <TextBlock
+                                            FontSize="14"
+                                            FontWeight="SemiBold"
+                                            Foreground="{StaticResource IslandForegroundBrush}"
+                                            MaxLines="1"
+                                            Text="{x:Bind ProjectName, Mode=OneWay}"
+                                            TextTrimming="CharacterEllipsis" />
+                                        <TextBlock
+                                            FontSize="11.5"
+                                            Foreground="{StaticResource IslandSecondaryBrush}"
+                                            Text="{x:Bind Detail, Mode=OneWay}" />
+                                    </StackPanel>
+                                    <Ellipse
                                         Grid.Column="2"
+                                        Width="8"
+                                        Height="8"
                                         VerticalAlignment="Center"
-                                        FontSize="11"
-                                        Foreground="{StaticResource IslandSecondaryBrush}"
-                                        Text="{x:Bind StatusText, Mode=OneWay}" />
+                                        Fill="{StaticResource IslandClaudeBrush}"
+                                        Visibility="{x:Bind IsActive, Mode=OneWay}" />
                                 </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
+
                     <Grid Grid.Row="2" ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -259,44 +446,48 @@
                             GotFocus="OnTextInputGotFocus"
                             KeyDown="OnMessageInputKeyDown"
                             LostFocus="OnTextInputLostFocus"
-                            PlaceholderText="Send message…"
+                            PlaceholderText="Message the selected session…"
+                            Style="{StaticResource IslandTextBoxStyle}"
                             Text="{x:Bind ViewModel.Claude.DraftMessage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         <Button
                             Grid.Column="1"
+                            AutomationProperties.Name="Send"
                             Command="{x:Bind ViewModel.Claude.SendCommand}"
-                            Content="Send" />
+                            Style="{StaticResource IslandSendButton}">
+                            <FontIcon FontSize="15" Glyph="&#xE724;" />
+                        </Button>
                     </Grid>
+
                     <TextBlock
                         Grid.Row="3"
-                        FontSize="11"
-                        Foreground="{StaticResource IslandSecondaryBrush}"
+                        Margin="4,0,0,0"
+                        Style="{StaticResource IslandCaptionStyle}"
                         MaxLines="1"
                         Text="{x:Bind ViewModel.Claude.StatusMessage, Mode=OneWay}"
                         TextTrimming="CharacterEllipsis" />
                 </Grid>
 
-                <!-- Module switcher strip (interactive only; its height is included in the island size) -->
+                <!-- ============ Module switcher (interactive only; its height is part of the island size) ============ -->
                 <ItemsControl
                     x:Name="Switcher"
                     Grid.Row="1"
                     Height="28"
+                    Margin="0,0,0,6"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     ItemsSource="{x:Bind ViewModel.SwitcherModules, Mode=OneWay}"
                     Visibility="{x:Bind ViewModel.ShowSwitcher, Mode=OneWay}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal" Spacing="2" />
+                            <StackPanel Orientation="Horizontal" Spacing="6" />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="modules:IslandModule">
                             <Button
-                                Width="26"
-                                Height="26"
                                 AutomationProperties.Name="{x:Bind DisplayName}"
                                 Click="OnModuleButtonClick"
-                                Style="{StaticResource IslandIconButton}"
+                                Style="{StaticResource IslandChipButton}"
                                 Tag="{x:Bind Id}"
                                 ToolTipService.ToolTip="{x:Bind DisplayName}">
                                 <FontIcon FontSize="12" Glyph="{x:Bind Glyph}" />
