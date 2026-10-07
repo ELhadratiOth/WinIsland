@@ -5,7 +5,14 @@ namespace WinIsland.Platform.Windows.Interop;
 internal static unsafe partial class NativeMethods
 {
     // ---- Window styles / messages -------------------------------------------------------
+    public const int GWL_STYLE = -16;
     public const int GWL_EXSTYLE = -20;
+    public const long WS_CAPTION = 0x00C00000;
+    public const long WS_THICKFRAME = 0x00040000;
+    public const long WS_SYSMENU = 0x00080000;
+    public const long WS_MINIMIZEBOX = 0x00020000;
+    public const long WS_MAXIMIZEBOX = 0x00010000;
+    public const long WS_POPUP_STYLE = 0x80000000;
     public const long WS_EX_TOPMOST = 0x00000008;
     public const long WS_EX_TRANSPARENT = 0x00000020;
     public const long WS_EX_TOOLWINDOW = 0x00000080;

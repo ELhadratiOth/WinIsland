@@ -36,21 +36,42 @@ public sealed unsafe class IslandWindowController
 
     public bool IsShown { get; private set; }
 
+    /// <summary>Click-through needs WS_EX_LAYERED together with WS_EX_TRANSPARENT.</summary>
+    public bool IsLayered { get; private set; }
+
     public PixelRect Bounds { get; private set; }
 
     public bool HasKeyboardFocus => GetForegroundWindow() == Handle;
 
-    public void ApplyOverlayStyles()
+    public void ApplyOverlayStyles(bool layered = true, bool stripFrame = true)
     {
+        if (stripFrame)
+        {
+            // A plain popup: no caption, sizing frame or system menu that could draw a border.
+            long style = GetWindowLongPtr(Handle, GWL_STYLE);
+            style &= ~(WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
+            style |= WS_POPUP_STYLE;
+            SetWindowLongPtr(Handle, GWL_STYLE, (nint)style);
+        }
+
         long ex = GetWindowLongPtr(Handle, GWL_EXSTYLE);
-        ex |= WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TOPMOST;
+        ex |= WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST;
+        if (layered)
+        {
+            ex |= WS_EX_LAYERED;
+        }
+
         ex &= ~WS_EX_APPWINDOW;
         SetWindowLongPtr(Handle, GWL_EXSTYLE, (nint)ex);
         IsActivatable = false;
+        IsLayered = layered;
 
-        // A layered window is invisible until its attributes are set; 255 = fully opaque,
-        // per-pixel transparency still comes from the composition content.
-        SetLayeredWindowAttributes(Handle, 0, 255, LWA_ALPHA);
+        if (layered)
+        {
+            // A layered window is invisible until its attributes are set; 255 = fully opaque,
+            // per-pixel transparency still comes from the composition content.
+            SetLayeredWindowAttributes(Handle, 0, 255, LWA_ALPHA);
+        }
 
         // No Windows 11 rounded frame/border (the island draws its own shape), no DWM
         // show/hide animation (ours are faster), and don't fade it during Aero Peek.
@@ -137,6 +158,25 @@ public sealed unsafe class IslandWindowController
         _previousForeground = foreground;
         SetActivatable(true);
         return SetForegroundWindow(Handle) != 0;
+    }
+
+    /// <summary>
+    /// Runs <paramref name="activate"/> (e.g. WinUI's Window.Activate, which some framework
+    /// initialisation waits for) and immediately gives the foreground back, so the user never
+    /// loses keyboard focus.
+    /// </summary>
+    public void ActivateWithoutKeepingFocus(Action activate)
+    {
+        ArgumentNullException.ThrowIfNull(activate);
+        nint previous = GetForegroundWindow();
+        SetActivatable(true);
+        activate();
+        if (previous != 0 && previous != Handle && IsWindow(previous) != 0)
+        {
+            SetForegroundWindow(previous);
+        }
+
+        SetActivatable(false);
     }
 
     /// <summary>Returns keyboard focus to whatever the user was working in before.</summary>

@@ -78,6 +78,59 @@ jobs:
           $results | Format-Table | Out-String | Write-Host
           if ($results.Values -contains $false) { throw 'Smoke test failed' }
 
+      - name: Visual capture (window configurations)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          New-Item -ItemType Directory -Force visual | Out-Null
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $exe = Resolve-Path 'publish/release/WinIsland.exe'
+          $log = Join-Path $env:LOCALAPPDATA 'WinIsland\winisland.log'
+
+          function Save-Island([string] $name) {
+            $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $full = New-Object System.Drawing.Bitmap $screen.Width, $screen.Height
+            [System.Drawing.Graphics]::FromImage($full).CopyFromScreen($screen.Location, [System.Drawing.Point]::Empty, $screen.Size)
+            $full.Save("$PWD/visual/$name-full.png")
+            # Top-centre region, zoomed 3x with nearest-neighbour so individual pixels are visible.
+            $w = 560; $h = 140; $x = [int](($screen.Width - $w) / 2)
+            $zoom = New-Object System.Drawing.Bitmap ($w * 3), ($h * 3)
+            $g = [System.Drawing.Graphics]::FromImage($zoom)
+            $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
+            $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
+            $g.DrawImage($full, (New-Object System.Drawing.Rectangle 0, 0, ($w * 3), ($h * 3)), (New-Object System.Drawing.Rectangle $x, 0, $w, $h), [System.Drawing.GraphicsUnit]::Pixel)
+            $zoom.Save("$PWD/visual/$name-zoom.png")
+          }
+
+          $variants = [ordered]@{
+            'default'          = ''
+            'keepframe'        = 'keepframe'
+            'activate'         = 'activate'
+            'nolayered'        = 'nolayered'
+            'nolayered-act'    = 'nolayered,activate'
+            'nobackdrop'       = 'nobackdrop'
+          }
+          foreach ($name in $variants.Keys) {
+            Remove-Item $log -ErrorAction SilentlyContinue
+            $env:WINISLAND_EXPERIMENT = $variants[$name]
+            $process = Start-Process $exe -PassThru
+            Start-Sleep -Seconds 5
+            Save-Island $name
+            Get-Process WinIsland -ErrorAction SilentlyContinue | Stop-Process -Force
+            Start-Sleep -Seconds 1
+            if (Test-Path $log) { Copy-Item $log "visual/$name.log" }
+            Write-Host "captured $name"
+          }
+          $env:WINISLAND_EXPERIMENT = ''
+
+      - name: Upload visual capture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual
+          path: visual/
+          if-no-files-found: ignore
+
       - name: Upload smoke test output
         if: always()
         uses: actions/upload-artifact@v4

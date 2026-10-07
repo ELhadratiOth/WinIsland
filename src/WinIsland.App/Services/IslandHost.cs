@@ -117,8 +117,13 @@ internal sealed class IslandHost : IAsyncDisposable
     /// </summary>
     public void Start()
     {
-        AppLog.Info(nameof(IslandHost), $"Window 0x{_window.Handle:X}; settings: {_settings.VisibilityMode}, {_settings.MonitorPreference}, hover={_settings.HoverToInteract}");
-        _controller.ApplyOverlayStyles();
+        AppLog.Info(nameof(IslandHost), $"Window 0x{_window.Handle:X}; settings: {_settings.VisibilityMode}, {_settings.MonitorPreference}, hover={_settings.HoverToInteract}; experiments: {Experiments.Describe()}");
+        _controller.ApplyOverlayStyles(layered: !Experiments.Has("nolayered"), stripFrame: !Experiments.Has("keepframe"));
+        if (Experiments.Has("activate"))
+        {
+            _controller.ActivateWithoutKeepingFocus(_window.Activate);
+        }
+
         Subscribe();
 
         _foreground.Start();

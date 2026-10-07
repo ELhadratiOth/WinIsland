@@ -31,10 +31,18 @@ public sealed partial class IslandWindow : Window
     {
         ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         InitializeComponent();
+
+        // x:Bind on a Window initialises lazily (on activation); the island is shown without
+        // ever being activated, so initialise the bindings explicitly.
+        Bindings.Update();
+
         Handle = WindowNative.GetWindowHandle(this);
 
         // Fully transparent window; the pill's shape comes from a composition clip.
-        SystemBackdrop = new TransparentTintBackdrop();
+        if (!Services.Experiments.Has("nobackdrop"))
+        {
+            SystemBackdrop = new TransparentTintBackdrop();
+        }
 
         OverlappedPresenter presenter = OverlappedPresenter.Create();
         presenter.IsResizable = false;
