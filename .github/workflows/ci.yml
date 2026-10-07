@@ -33,33 +33,50 @@ jobs:
         run: dotnet test tests/WinIsland.Core.Tests -c Release
       - name: Build app
         run: dotnet build src/WinIsland.App -c Release -p:Platform=x64
-      - name: Smoke test (launch the real app)
+      - name: Smoke test (launch the real app, build and published layouts)
         shell: pwsh
         run: |
-          $exe = Resolve-Path 'src/WinIsland.App/bin/x64/Release/net10.0-windows10.0.22621.0/win-x64/WinIsland.exe'
-          $log = Join-Path $env:LOCALAPPDATA 'WinIsland\winisland.log'
           New-Item -ItemType Directory -Force smoke | Out-Null
-          Remove-Item $log -ErrorAction SilentlyContinue
+          $log = Join-Path $env:LOCALAPPDATA 'WinIsland\winisland.log'
 
-          $process = Start-Process $exe -PassThru
-          Start-Sleep -Seconds 15
-          $alive = -not $process.HasExited
+          function Test-Island([string] $name, [string] $dir) {
+            Write-Host "===== $name ($dir)"
+            Get-ChildItem $dir -Recurse -Include *.pri, *.xbf | ForEach-Object { Write-Host "  $($_.FullName.Substring($dir.Length)) $($_.Length)" }
+            Remove-Item $log -ErrorAction SilentlyContinue
+            $process = Start-Process (Join-Path $dir 'WinIsland.exe') -PassThru
+            Start-Sleep -Seconds 12
+            $alive = -not $process.HasExited
+            try {
+              Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+              $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+              $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+              [System.Drawing.Graphics]::FromImage($bitmap).CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+              $bitmap.Save("$PWD/smoke/$name.png")
+            } catch { Write-Warning "Screenshot failed: $_" }
+            Get-Process WinIsland -ErrorAction SilentlyContinue | Stop-Process -Force
+            Start-Sleep -Seconds 1
+            if (Test-Path $log) { Copy-Item $log "smoke/$name.log"; Get-Content $log } else { Write-Warning 'No log written' }
+            $ok = $alive -and (Test-Path $log) -and
+                  -not (Select-String -Path $log -Pattern ' ERR ' -Quiet) -and
+                  (Select-String -Path $log -Pattern 'Showing island' -Quiet)
+            Write-Host "===== $name: $(if ($ok) { 'PASS' } else { 'FAIL' })"
+            return $ok
+          }
 
-          try {
-            Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-            $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-            $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
-            [System.Drawing.Graphics]::FromImage($bitmap).CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-            $bitmap.Save("$PWD/smoke/screen.png")
-          } catch { Write-Warning "Screenshot failed: $_" }
+          # Exactly what the release workflow ships.
+          dotnet publish src/WinIsland.App -c Release -p:Platform=x64 -r win-x64 --self-contained true -o publish/release
+          if ($LASTEXITCODE -ne 0) { throw 'publish failed' }
+          # Same, without ReadyToRun, to isolate the cause if the release layout fails.
+          dotnet publish src/WinIsland.App -c Release -p:Platform=x64 -r win-x64 --self-contained true -p:PublishReadyToRun=false -o publish/noR2R
+          if ($LASTEXITCODE -ne 0) { throw 'publish failed' }
 
-          if ($alive) { Stop-Process -Id $process.Id -Force }
-          if (Test-Path $log) { Copy-Item $log smoke/winisland.log; Get-Content $log } else { Write-Warning 'No log written' }
-
-          $failed = -not $alive -or -not (Test-Path $log) -or
-                    (Select-String -Path $log -Pattern ' ERR ' -Quiet) -or
-                    -not (Select-String -Path $log -Pattern 'Showing island' -Quiet)
-          if ($failed) { throw "Smoke test failed (process alive: $alive)" }
+          $results = [ordered]@{
+            build   = Test-Island 'build' (Resolve-Path 'src/WinIsland.App/bin/x64/Release/net10.0-windows10.0.22621.0/win-x64').Path
+            release = Test-Island 'release' (Resolve-Path 'publish/release').Path
+            noR2R   = Test-Island 'noR2R' (Resolve-Path 'publish/noR2R').Path
+          }
+          $results | Format-Table | Out-String | Write-Host
+          if ($results.Values -contains $false) { throw 'Smoke test failed' }
 
       - name: Upload smoke test output
         if: always()
