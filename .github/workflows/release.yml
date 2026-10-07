@@ -69,9 +69,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = '${{ steps.version.outputs.tag }}'
-          $args = @($tag, 'dist/*.zip', 'dist/SHA256SUMS.txt',
+          $ghArgs = @($tag, 'dist/*.zip', 'dist/SHA256SUMS.txt',
                     '--title', "WinIsland $tag",
                     '--notes-file', '.github/RELEASE_NOTES.md',
                     '--target', $env:GITHUB_SHA)
-          if ('${{ steps.version.outputs.prerelease }}' -eq 'true') { $args += '--prerelease' }
-          gh release create @args
+          if ('${{ steps.version.outputs.prerelease }}' -eq 'true') { $ghArgs += '--prerelease' }
+          gh release create @ghArgs
