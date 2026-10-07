@@ -59,7 +59,7 @@ jobs:
             $ok = $alive -and (Test-Path $log) -and
                   -not (Select-String -Path $log -Pattern ' ERR ' -Quiet) -and
                   (Select-String -Path $log -Pattern 'Showing island' -Quiet)
-            Write-Host "===== $name: $(if ($ok) { 'PASS' } else { 'FAIL' })"
+            Write-Host "===== ${name}: $(if ($ok) { 'PASS' } else { 'FAIL' })"
             return $ok
           }
 
