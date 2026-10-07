@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release (e.g. 0.1.0). Creates tag v<version>.
+        required: true
+      prerelease:
+        description: Mark as pre-release
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            $version = '${{ inputs.version }}'.TrimStart('v')
+            $prerelease = '${{ inputs.prerelease }}'
+          } else {
+            $version = $env:GITHUB_REF_NAME.TrimStart('v')
+            $prerelease = if ($version.Contains('-')) { 'true' } else { 'false' }
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { throw "Invalid version '$version'" }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+          "prerelease=$prerelease" >> $env:GITHUB_OUTPUT
+
+      - name: Test core
+        run: dotnet test tests/WinIsland.Core.Tests -c Release
+
+      - name: Publish x64 and ARM64
+        shell: pwsh
+        run: |
+          $v = '${{ steps.version.outputs.version }}'
+          New-Item -ItemType Directory -Force dist | Out-Null
+          foreach ($arch in @('x64', 'ARM64')) {
+            $rid = "win-$($arch.ToLowerInvariant())"
+            $out = "publish/$rid"
+            # Self-contained: runs on a clean Windows 10/11 machine without installing .NET or the Windows App SDK.
+            dotnet publish src/WinIsland.App -c Release -p:Platform=$arch -r $rid --self-contained true -p:Version=$v -o $out
+            if ($LASTEXITCODE -ne 0) { throw "Publish failed for $rid" }
+            Compress-Archive -Path "$out/*" -DestinationPath "dist/WinIsland-$v-$rid.zip" -CompressionLevel Optimal
+          }
+          Get-ChildItem dist/*.zip | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)"
+          } | Set-Content dist/SHA256SUMS.txt
+          Get-Content dist/SHA256SUMS.txt
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ steps.version.outputs.tag }}'
+          $args = @($tag, 'dist/*.zip', 'dist/SHA256SUMS.txt',
+                    '--title', "WinIsland $tag",
+                    '--notes-file', '.github/RELEASE_NOTES.md',
+                    '--target', $env:GITHUB_SHA)
+          if ('${{ steps.version.outputs.prerelease }}' -eq 'true') { $args += '--prerelease' }
+          gh release create @args
