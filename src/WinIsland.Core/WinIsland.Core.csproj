@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Platform-agnostic core: state machines, policies, layout math, modules and the
+    integration host. Nothing here touches Win32 or WinUI so it can be unit tested anywhere.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>WinIsland.Core</RootNamespace>
+    <IsTrimmable>true</IsTrimmable>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="WinIsland.Core.Tests" />
+  </ItemGroup>
+</Project>

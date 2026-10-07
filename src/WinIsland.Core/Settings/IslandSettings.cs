@@ -1,0 +1,49 @@
+using WinIsland.Core.Display;
+using WinIsland.Core.Interaction;
+using WinIsland.Core.Visibility;
+
+namespace WinIsland.Core.Settings;
+
+public sealed record IslandSettings
+{
+    public VisibilityMode VisibilityMode { get; init; } = VisibilityMode.HideInFullscreen;
+
+    public MonitorPreference MonitorPreference { get; init; } = MonitorPreference.Primary;
+
+    public bool HoverToInteract { get; init; } = true;
+
+    public int HoverDwellMilliseconds { get; init; } = 180;
+
+    public int LeaveGraceMilliseconds { get; init; } = 400;
+
+    /// <summary>Global hotkey that toggles interactive mode, e.g. "Win+Alt+I". Empty disables it.</summary>
+    public string ActivationHotkey { get; init; } = "Win+Alt+I";
+
+    public double TopMarginDip { get; init; } = 6;
+
+    /// <summary>Executable names (e.g. "eldenring.exe") always treated as games.</summary>
+    public IReadOnlyList<string> GameProcesses { get; init; } = [];
+
+    /// <summary>
+    /// Fragments of executable paths that identify games installed by common launchers.
+    /// A fullscreen window from such a path counts as a game.
+    /// </summary>
+    public IReadOnlyList<string> GamePathFragments { get; init; } =
+    [
+        @"\steamapps\common\",
+        @"\Epic Games\",
+        @"\XboxGames\",
+        @"\GOG Galaxy\Games\",
+        @"\Riot Games\",
+        @"\Ubisoft Game Launcher\games\",
+        @"\EA Games\",
+        @"\Battle.net\",
+    ];
+
+    public InteractionOptions ToInteractionOptions() => new()
+    {
+        HoverToInteract = HoverToInteract,
+        HoverDwell = TimeSpan.FromMilliseconds(Math.Clamp(HoverDwellMilliseconds, 0, 2000)),
+        LeaveGrace = TimeSpan.FromMilliseconds(Math.Clamp(LeaveGraceMilliseconds, 0, 5000)),
+    };
+}

@@ -1,0 +1,33 @@
+root = true
+
+[*]
+indent_style = space
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{cs,xaml}]
+indent_size = 4
+
+[*.{csproj,props,targets,json,yml,xml,manifest,slnx}]
+indent_size = 2
+
+[*.cs]
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_sort_system_directives_first = true
+# P/Invoke-heavy platform code uses Win32 naming for constants and structs.
+dotnet_diagnostic.CA1707.severity = none
+# Event handlers marshal to the UI thread; ConfigureAwait is applied explicitly where it matters.
+dotnet_diagnostic.CA2007.severity = none
+dotnet_diagnostic.CA1031.severity = none
+dotnet_diagnostic.CA1848.severity = none
+dotnet_diagnostic.CA1303.severity = none
+dotnet_diagnostic.CA1716.severity = none
+dotnet_diagnostic.CA1003.severity = none
+dotnet_diagnostic.CA1515.severity = none
+dotnet_diagnostic.CA1805.severity = none
+dotnet_diagnostic.CA1812.severity = none
+
+[src/WinIsland.Platform.Windows/**.cs]
+# Many Win32 calls are deliberately fire-and-forget (cosmetic DWM attributes, CloseHandle…).
+dotnet_diagnostic.CA1806.severity = none
