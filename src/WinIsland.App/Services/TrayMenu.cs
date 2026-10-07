@@ -5,7 +5,7 @@ using WinIsland.Platform.Windows.Shell;
 
 namespace WinIsland.App.Services;
 
-/// <summary>The tray menu: the island's settings surface, kept native and tiny.</summary>
+/// <summary>The island's settings entries in the tray menu, kept native and tiny.</summary>
 internal static class TrayMenu
 {
     private const int VisibilityBase = 100;
@@ -13,7 +13,6 @@ internal static class TrayMenu
     private const int HoverId = 300;
     private const int StartupId = 301;
     private const int HiddenId = 302;
-    private const int ExitId = 999;
 
     public static IReadOnlyList<TrayMenuItem> Build(IslandSettings settings, bool startsWithWindows, bool userHidden) =>
     [
@@ -39,7 +38,6 @@ internal static class TrayMenu
         new TrayMenuItem(StartupId, "Start with Windows", startsWithWindows),
         TrayMenuItem.Separator,
         new TrayMenuItem(HiddenId, userHidden ? "Show island" : "Hide island"),
-        new TrayMenuItem(ExitId, "Exit WinIsland"),
     ];
 
     public static Command? Parse(int id) => id switch
@@ -49,7 +47,6 @@ internal static class TrayMenu
         HoverId => new Command.ToggleHover(),
         StartupId => new Command.ToggleStartup(),
         HiddenId => new Command.ToggleHidden(),
-        ExitId => new Command.Exit(),
         _ => null,
     };
 
@@ -67,7 +64,5 @@ internal static class TrayMenu
         public sealed record ToggleStartup : Command;
 
         public sealed record ToggleHidden : Command;
-
-        public sealed record Exit : Command;
     }
 }

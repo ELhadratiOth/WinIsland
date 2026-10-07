@@ -87,3 +87,20 @@ internal unsafe struct NOTIFYICONDATAW
     public Guid guidItem;
     public nint hBalloonIcon;
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct WNDCLASSEXW
+{
+    public uint cbSize;
+    public uint style;
+    public delegate* unmanaged<nint, uint, nint, nint, nint> lpfnWndProc;
+    public int cbClsExtra;
+    public int cbWndExtra;
+    public nint hInstance;
+    public nint hIcon;
+    public nint hCursor;
+    public nint hbrBackground;
+    public char* lpszMenuName;
+    public char* lpszClassName;
+    public nint hIconSm;
+}

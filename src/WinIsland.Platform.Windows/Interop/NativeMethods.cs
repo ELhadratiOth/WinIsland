@@ -242,6 +242,20 @@ internal static unsafe partial class NativeMethods
     [LibraryImport("user32.dll")]
     public static partial int DestroyMenu(nint hMenu);
 
+    public const uint WS_POPUP = 0x80000000;
+
+    [LibraryImport("user32.dll", EntryPoint = "RegisterClassExW")]
+    public static partial ushort RegisterClassEx(WNDCLASSEXW* lpwcx);
+
+    [LibraryImport("user32.dll", EntryPoint = "CreateWindowExW")]
+    public static partial nint CreateWindowEx(uint dwExStyle, char* lpClassName, char* lpWindowName, uint dwStyle, int x, int y, int nWidth, int nHeight, nint hWndParent, nint hMenu, nint hInstance, nint lpParam);
+
+    [LibraryImport("user32.dll")]
+    public static partial int DestroyWindow(nint hWnd);
+
+    [LibraryImport("user32.dll", EntryPoint = "DefWindowProcW")]
+    public static partial nint DefWindowProc(nint hWnd, uint msg, nint wParam, nint lParam);
+
     [LibraryImport("user32.dll", EntryPoint = "MessageBoxW")]
     public static partial int MessageBox(nint hWnd, char* lpText, char* lpCaption, uint uType);
 

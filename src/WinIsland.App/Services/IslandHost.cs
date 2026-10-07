@@ -65,7 +65,6 @@ internal sealed class IslandHost : IAsyncDisposable
     private readonly IslandWindow _window;
     private readonly IslandWindowController _controller;
     private readonly WindowMessageHook _messages;
-    private readonly TrayIcon _tray;
     private readonly Throttler _reevaluate;
 
     private IslandSettings _settings;
@@ -108,12 +107,9 @@ internal sealed class IslandHost : IAsyncDisposable
         _window = new IslandWindow(_viewModel);
         _controller = new IslandWindowController(_window.Handle);
         _messages = new WindowMessageHook(_window.Handle);
-        _tray = new TrayIcon(_window.Handle, _messages, "WinIsland");
         _pointer = new PointerHotZoneWatcher(_dispatcher);
         _reevaluate = new Throttler(_time, _dispatcher, ReevaluateDelay, Reevaluate);
     }
-
-    public event EventHandler? ExitRequested;
 
     /// <summary>
     /// Startup order: lightweight core → island visible (clock) → integrations in the background.
@@ -129,7 +125,6 @@ internal sealed class IslandHost : IAsyncDisposable
         RefreshTaskbar();
         Reevaluate();
 
-        _tray.Show();
         RegisterHotkey();
         AppLog.Info(nameof(IslandHost), $"Monitors: {string.Join("; ", _monitors.GetMonitors().Select(m => $"{m.Id} {m.Bounds} work {m.WorkArea} x{m.Scale}{(m.IsPrimary ? " primary" : string.Empty)}"))}");
         _connectivity.Start();
@@ -149,7 +144,6 @@ internal sealed class IslandHost : IAsyncDisposable
         _pointer.Dispose();
         _foreground.Dispose();
         _hotkey?.Dispose();
-        _tray.Dispose();
 
         await _integrations.DisposeAsync();
 
@@ -178,7 +172,6 @@ internal sealed class IslandHost : IAsyncDisposable
         _messages.TimeChanged += OnTimeChanged;
         _messages.ResumedFromSleep += OnResumedFromSleep;
         _messages.HotkeyPressed += OnHotkeyPressed;
-        _tray.MenuRequested += OnTrayMenuRequested;
         _window.EscapePressed += OnEscapePressed;
         _window.TextInputFocusChanged += OnTextInputFocusChanged;
         _window.Deactivated += OnWindowDeactivated;
@@ -198,7 +191,6 @@ internal sealed class IslandHost : IAsyncDisposable
         _messages.TimeChanged -= OnTimeChanged;
         _messages.ResumedFromSleep -= OnResumedFromSleep;
         _messages.HotkeyPressed -= OnHotkeyPressed;
-        _tray.MenuRequested -= OnTrayMenuRequested;
         _window.EscapePressed -= OnEscapePressed;
         _window.TextInputFocusChanged -= OnTextInputFocusChanged;
         _window.Deactivated -= OnWindowDeactivated;
@@ -537,14 +529,13 @@ internal sealed class IslandHost : IAsyncDisposable
         }
     }
 
-    private void OnTrayMenuRequested(object? sender, (int X, int Y) anchor)
-    {
-        // The menu needs a foreground owner to dismiss correctly; hand focus back afterwards.
-        _controller.TakeKeyboardFocus();
-        int command = _tray.ShowMenu(TrayMenu.Build(_settings, StartupRegistration.IsEnabled(), _userHidden), anchor.X, anchor.Y);
-        _controller.ReleaseKeyboardFocus();
+    /// <summary>The island's own tray menu entries (the app adds log/exit around them).</summary>
+    public IReadOnlyList<TrayMenuItem> GetTrayMenuItems() =>
+        TrayMenu.Build(_settings, StartupRegistration.IsEnabled(), _userHidden);
 
-        switch (TrayMenu.Parse(command))
+    public void HandleTrayCommand(int id)
+    {
+        switch (TrayMenu.Parse(id))
         {
             case TrayMenu.Command.SetVisibility(VisibilityMode mode):
                 UpdateSettings(s => s with { VisibilityMode = mode });
@@ -561,9 +552,6 @@ internal sealed class IslandHost : IAsyncDisposable
             case TrayMenu.Command.ToggleHidden:
                 _userHidden = !_userHidden;
                 Reevaluate();
-                break;
-            case TrayMenu.Command.Exit:
-                ExitRequested?.Invoke(this, EventArgs.Empty);
                 break;
         }
     }

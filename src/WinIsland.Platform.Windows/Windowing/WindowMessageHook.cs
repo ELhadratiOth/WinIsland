@@ -9,7 +9,7 @@ namespace WinIsland.Platform.Windows.Windowing;
 /// changes, resume, hotkeys, tray callbacks) and to refuse mouse activation. This is how the
 /// app reacts to monitors being plugged in or resolution changes without polling.
 /// </summary>
-public sealed unsafe class WindowMessageHook : IDisposable
+public sealed unsafe class WindowMessageHook : IWindowMessageSource, IDisposable
 {
     private const nuint SubclassId = 0x57494E49; // "WINI"
 
@@ -27,6 +27,8 @@ public sealed unsafe class WindowMessageHook : IDisposable
             throw new InvalidOperationException("SetWindowSubclass failed.");
         }
     }
+
+    public nint Handle => _hwnd;
 
     /// <summary>Monitors connected/disconnected or resolution changed.</summary>
     public event EventHandler? DisplayChanged;
@@ -63,7 +65,7 @@ public sealed unsafe class WindowMessageHook : IDisposable
         try
         {
             if (GCHandle.FromIntPtr((nint)refData).Target is WindowMessageHook hook &&
-                hook.Handle(msg, wParam, lParam) is { } result)
+                hook.HandleMessage(msg, wParam, lParam) is { } result)
             {
                 return result;
             }
@@ -77,7 +79,7 @@ public sealed unsafe class WindowMessageHook : IDisposable
         return DefSubclassProc(hwnd, msg, wParam, lParam);
     }
 
-    private nint? Handle(uint msg, nint wParam, nint lParam)
+    private nint? HandleMessage(uint msg, nint wParam, nint lParam)
     {
         switch (msg)
         {

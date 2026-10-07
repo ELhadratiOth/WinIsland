@@ -6,9 +6,10 @@ using static WinIsland.Platform.Windows.Interop.NativeMethods;
 namespace WinIsland.Platform.Windows.Shell;
 
 /// <summary>
-/// Notification-area icon: the island's only "chrome" (settings and exit). Uses the island
-/// window for callbacks, so it costs no extra window or thread, and re-adds itself when
-/// Explorer restarts.
+/// Notification-area icon: the island's only "chrome" (settings, log, exit). Receives its
+/// callbacks through any <see cref="IWindowMessageSource"/> — the app uses a dedicated hidden
+/// window so the icon (and Exit) keeps working even if the island itself fails. Re-adds
+/// itself when Explorer restarts.
 /// </summary>
 public sealed unsafe class TrayIcon : IDisposable
 {
@@ -20,13 +21,13 @@ public sealed unsafe class TrayIcon : IDisposable
     private readonly string _tooltip;
     private bool _added;
 
-    public TrayIcon(nint hwnd, WindowMessageHook hook, string tooltip)
+    public TrayIcon(IWindowMessageSource window, string tooltip)
     {
-        ArgumentNullException.ThrowIfNull(hook);
-        _hwnd = hwnd;
+        ArgumentNullException.ThrowIfNull(window);
+        _hwnd = window.Handle;
         _tooltip = tooltip;
         _taskbarCreatedMessage = RegisterWindowMessage("TaskbarCreated");
-        hook.AddHandler(OnMessage);
+        window.AddHandler(OnMessage);
     }
 
     /// <summary>Raised when the user clicks the icon; the argument is the anchor point in screen pixels.</summary>
