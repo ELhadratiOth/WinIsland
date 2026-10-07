@@ -2,6 +2,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using WinIsland.App.Services;
 using WinIsland.Core.Diagnostics;
+using WinIsland.Platform.Windows.Shell;
 
 namespace WinIsland.App;
 
@@ -13,6 +14,17 @@ public partial class App : Application
 
     public App()
     {
+        AppLog.EnableFile(AppLog.DefaultPath);
+        AppLog.Info(nameof(App), $"WinIsland {typeof(App).Assembly.GetName().Version} starting on {Environment.OSVersion} ({System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture})");
+
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            Fatal("Unhandled exception", e.ExceptionObject as Exception);
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            AppLog.Error(nameof(App), "Unobserved task exception", e.Exception);
+            e.SetObserved();
+        };
+
         InitializeComponent();
         UnhandledException += (_, e) =>
         {
@@ -27,21 +39,40 @@ public partial class App : Application
         _singleInstance = new Mutex(initiallyOwned: true, @"Local\WinIsland.SingleInstance", out bool createdNew);
         if (!createdNew)
         {
+            AppLog.Info(nameof(App), "Another instance is already running; exiting");
             _singleInstance.Dispose();
             _singleInstance = null;
             Exit();
             return;
         }
 
-        _host = new IslandHost(DispatcherQueue.GetForCurrentThread());
-        _host.ExitRequested += async (_, _) =>
+        try
         {
-            await _host.DisposeAsync();
-            _singleInstance?.ReleaseMutex();
-            _singleInstance?.Dispose();
-            Exit();
-        };
+            _host = new IslandHost(DispatcherQueue.GetForCurrentThread());
+            _host.ExitRequested += async (_, _) =>
+            {
+                AppLog.Info(nameof(App), "Exit requested");
+                await _host.DisposeAsync();
+                _singleInstance?.ReleaseMutex();
+                _singleInstance?.Dispose();
+                Exit();
+            };
 
-        _host.Start();
+            _host.Start();
+            AppLog.Info(nameof(App), "Startup complete");
+        }
+        catch (Exception ex)
+        {
+            Fatal("WinIsland could not start", ex);
+            Exit();
+        }
+    }
+
+    private static void Fatal(string message, Exception? ex)
+    {
+        AppLog.Error(nameof(App), message, ex);
+        NativeDialog.ShowError(
+            "WinIsland",
+            $"{message}.\n\n{ex?.GetType().Name}: {ex?.Message}\n\nDetails were written to:\n{AppLog.FilePath ?? AppLog.DefaultPath}");
     }
 }

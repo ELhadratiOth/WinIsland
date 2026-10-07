@@ -242,6 +242,9 @@ internal static unsafe partial class NativeMethods
     [LibraryImport("user32.dll")]
     public static partial int DestroyMenu(nint hMenu);
 
+    [LibraryImport("user32.dll", EntryPoint = "MessageBoxW")]
+    public static partial int MessageBox(nint hWnd, char* lpText, char* lpCaption, uint uType);
+
     [LibraryImport("user32.dll", EntryPoint = "LoadIconW")]
     public static partial nint LoadIcon(nint hInstance, nint lpIconName);
 

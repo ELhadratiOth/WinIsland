@@ -121,6 +121,7 @@ internal sealed class IslandHost : IAsyncDisposable
     /// </summary>
     public void Start()
     {
+        AppLog.Info(nameof(IslandHost), $"Window 0x{_window.Handle:X}; settings: {_settings.VisibilityMode}, {_settings.MonitorPreference}, hover={_settings.HoverToInteract}");
         _controller.ApplyOverlayStyles();
         Subscribe();
 
@@ -130,6 +131,7 @@ internal sealed class IslandHost : IAsyncDisposable
 
         _tray.Show();
         RegisterHotkey();
+        AppLog.Info(nameof(IslandHost), $"Monitors: {string.Join("; ", _monitors.GetMonitors().Select(m => $"{m.Id} {m.Bounds} work {m.WorkArea} x{m.Scale}{(m.IsPrimary ? " primary" : string.Empty)}"))}");
         _connectivity.Start();
         _integrations.Start();
     }
@@ -343,6 +345,7 @@ internal sealed class IslandHost : IAsyncDisposable
 
     private void ShowIsland()
     {
+        AppLog.Info(nameof(IslandHost), $"Showing island at {_controller.Bounds} on {_monitor?.Id} ({_state.State.ModuleId}, {_state.State.Size})");
         _controller.Show();
         _window.PlayShowAnimation();
         UpdatePointerWatcher();
@@ -356,6 +359,7 @@ internal sealed class IslandHost : IAsyncDisposable
         }
 
         // Hide instantly: when a game or fullscreen video takes over, nothing should linger.
+        AppLog.Info(nameof(IslandHost), $"Hiding island ({_state.State.HiddenReason}; foreground {_foregroundSnapshot.ProcessName} {_foregroundSnapshot.Kind})");
         _controller.Hide();
         _renderedPill = null;
         _renderedBounds = null;

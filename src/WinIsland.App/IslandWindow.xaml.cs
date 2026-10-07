@@ -56,6 +56,9 @@ public sealed partial class IslandWindow : Window
         // handled, so listen for handled events too.
         MessageInput.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnTextInputPointerPressed), handledEventsToo: true);
         Activated += OnActivated;
+
+        // Diagnostic: confirms XAML content actually loaded and rendered.
+        RootGrid.Loaded += (_, _) => Core.Diagnostics.AppLog.Info(nameof(IslandWindow), $"Content loaded (scale {RootGrid.XamlRoot?.RasterizationScale})");
     }
 
     public IslandViewModel ViewModel { get; }
