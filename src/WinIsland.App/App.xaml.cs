@@ -34,6 +34,11 @@ public partial class App : Application
         };
 
         InitializeComponent();
+
+        // WinUI only reports "XAML parsing failed"; these surface the actual missing resource/binding.
+        DebugSettings.XamlResourceReferenceFailed += (_, e) => AppLog.Error("XAML", $"Resource reference failed: {e.Message}");
+        DebugSettings.BindingFailed += (_, e) => AppLog.Warn("XAML", $"Binding failed: {e.Message}");
+
         UnhandledException += (_, e) =>
         {
             // A background utility must not take the desktop down with it over a non-fatal error.
