@@ -44,8 +44,9 @@ internal sealed class ActivityAnimations
             Visual visual = ElementCompositionPreview.GetElementVisual(bar);
             float height = (float)bar.Height;
             visual.CenterPoint = new Vector3((float)bar.Width / 2, height, 0);
-            visual.Scale = new Vector3(1, 0.35f, 1);
-            _bars.Add((visual, index++ % BarPatterns.Length, height));
+            int pattern = index++ % BarPatterns.Length;
+            visual.Scale = new Vector3(1, RestingScale(pattern), 1);
+            _bars.Add((visual, pattern, height));
         }
     }
 
@@ -83,10 +84,13 @@ internal sealed class ActivityAnimations
             else
             {
                 visual.StopAnimation("Scale.Y");
-                visual.Scale = new Vector3(1, 0.35f, 1);
+                visual.Scale = new Vector3(1, RestingScale(index), 1);
             }
         }
     }
+
+    /// <summary>A still waveform still reads as a waveform (used when paused or with animations off).</summary>
+    private static float RestingScale(int pattern) => BarPatterns[pattern][1] * 0.8f;
 
     public void SetSpinnersRunning(bool running)
     {

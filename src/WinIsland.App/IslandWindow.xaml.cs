@@ -104,6 +104,9 @@ public sealed partial class IslandWindow : Window
 
     private bool AnimationsEnabled => _uiSettings.AnimationsEnabled;
 
+    /// <summary>False when Windows "Animation effects" is off; transitions then snap.</summary>
+    public bool CanAnimate => AnimationsEnabled;
+
     /// <summary>
     /// Moves the visible pill to <paramref name="pillSize"/> inside a window currently sized
     /// <paramref name="windowSize"/> (both DIPs). The pill is horizontally centred and top-aligned.

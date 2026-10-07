@@ -328,7 +328,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
             return;
         }
 
-        bool animate = sizeChanged && !firstShow && !monitorChanged && _renderedPill is not null;
+        bool animate = sizeChanged && !firstShow && !monitorChanged && _renderedPill is not null && _window.CanAnimate;
 
         // While animating, the window covers both shapes plus room for the spring's overshoot.
         DipSize windowSize = target;
@@ -346,6 +346,9 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         // Grow first (window = union of old and new shape), animate the shape on the
         // compositor, then shrink the window to the final shape so no invisible area is left
         // capturing clicks.
+        // Size the window first: if the transition completes synchronously (no animation) its
+        // completion must have the last word on the bounds.
+        _controller.SetBounds(windowRect);
         _window.TransitionTo(windowSize, target, state.Size, animate, () =>
         {
             if (generation == _transitionGeneration && windowRect != pill)
@@ -354,7 +357,6 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
                 _controller.SetBounds(pill);
             }
         });
-        _controller.SetBounds(windowRect);
 
         if (firstShow)
         {

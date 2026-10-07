@@ -106,7 +106,7 @@
                 <!-- ============ Compact: Claude Code working ============ -->
                 <Grid
                     x:Name="CompactClaudeLayer"
-                    Padding="12,0,16,0"
+                    Padding="14,0,18,0"
                     ColumnSpacing="10"
                     Visibility="{x:Bind ViewModel.ShowClaudeCompact, Mode=OneWay}">
                     <Grid.ColumnDefinitions>
@@ -127,18 +127,6 @@
                         Style="{StaticResource IslandCompactTextStyle}"
                         Text="{x:Bind ViewModel.Claude.CompactText, Mode=OneWay}"
                         TextTrimming="CharacterEllipsis" />
-                    <Border
-                        Grid.Column="2"
-                        Padding="7,1,7,2"
-                        VerticalAlignment="Center"
-                        Background="{StaticResource IslandClaudeSoftBrush}"
-                        CornerRadius="9">
-                        <TextBlock
-                            FontSize="11"
-                            FontWeight="SemiBold"
-                            Foreground="{StaticResource IslandClaudeBrush}"
-                            Text="{x:Bind local:Converters.Text(ViewModel.Claude.ActiveCount), Mode=OneWay}" />
-                    </Border>
                 </Grid>
 
                 <!-- ============ Expanded: clock ============ -->
@@ -154,7 +142,7 @@
                     <TextBlock
                         VerticalAlignment="Center"
                         FontFamily="Segoe UI Variable Display"
-                        FontSize="44"
+                        FontSize="40"
                         FontWeight="Light"
                         Foreground="{StaticResource IslandForegroundBrush}"
                         Text="{x:Bind ViewModel.Clock.TimeText, Mode=OneWay}" />
@@ -162,11 +150,13 @@
                         Grid.Column="1"
                         VerticalAlignment="Center"
                         Spacing="2">
-                        <TextBlock Style="{StaticResource IslandCaptionStyle}" Text="TODAY" />
                         <TextBlock
-                            Style="{StaticResource IslandBodyStyle}"
-                            Text="{x:Bind ViewModel.Clock.DateText, Mode=OneWay}"
-                            TextWrapping="WrapWholeWords" />
+                            FontFamily="Segoe UI Variable Display"
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource IslandForegroundBrush}"
+                            Text="{x:Bind ViewModel.Clock.WeekdayText, Mode=OneWay}" />
+                        <TextBlock Style="{StaticResource IslandBodyStyle}" Text="{x:Bind ViewModel.Clock.DayText, Mode=OneWay}" />
                     </StackPanel>
                 </Grid>
 

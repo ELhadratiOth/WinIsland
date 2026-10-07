@@ -102,12 +102,7 @@ jobs:
             $zoom.Save("$PWD/visual/$name-zoom.png")
           }
 
-          $variants = [ordered]@{
-            'default'          = ''
-            'keepnc'           = 'keepnc'
-            'plainpresenter'   = 'plainpresenter'
-            'plain-keepnc'     = 'plainpresenter,keepnc'
-          }
+          $variants = [ordered]@{ 'default' = '' }
           foreach ($name in $variants.Keys) {
             Remove-Item $log -ErrorAction SilentlyContinue
             $env:WINISLAND_EXPERIMENT = $variants[$name]

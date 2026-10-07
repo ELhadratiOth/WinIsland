@@ -15,6 +15,8 @@ public sealed class ClockModule : IslandModule
     private readonly OneShotTimer _minuteTimer;
     private string _timeText = string.Empty;
     private string _dateText = string.Empty;
+    private string _weekdayText = string.Empty;
+    private string _dayText = string.Empty;
 
     public ClockModule(TimeProvider time, IUiDispatcher dispatcher)
         : base(ModuleId, "Clock", "\uE823")
@@ -42,12 +44,28 @@ public sealed class ClockModule : IslandModule
     public override Geometry.DipSize GetSize(Layout.IslandSize size) =>
         size == Layout.IslandSize.Expanded ? new Geometry.DipSize(340, 96) : base.GetSize(size);
 
+    /// <summary>e.g. "Wednesday".</summary>
+    public string WeekdayText
+    {
+        get => _weekdayText;
+        private set => SetProperty(ref _weekdayText, value);
+    }
+
+    /// <summary>e.g. "October 7".</summary>
+    public string DayText
+    {
+        get => _dayText;
+        private set => SetProperty(ref _dayText, value);
+    }
+
     /// <summary>Re-reads the time; also called when the system clock, time zone or locale changes.</summary>
     public void Refresh()
     {
         DateTimeOffset now = _time.GetLocalNow();
         TimeText = now.ToString("t", CultureInfo.CurrentCulture);
         DateText = now.ToString("dddd, MMMM d", CultureInfo.CurrentCulture);
+        WeekdayText = now.ToString("dddd", CultureInfo.CurrentCulture);
+        DayText = now.ToString(CultureInfo.CurrentCulture.DateTimeFormat.MonthDayPattern, CultureInfo.CurrentCulture);
         CompactText = TimeText;
 
         TimeSpan untilNextMinute = TimeSpan.FromMinutes(1) - TimeSpan.FromTicks(now.TimeOfDay.Ticks % TimeSpan.TicksPerMinute);
