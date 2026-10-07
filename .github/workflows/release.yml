@@ -69,7 +69,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = '${{ steps.version.outputs.tag }}'
-          $ghArgs = @($tag, 'dist/*.zip', 'dist/SHA256SUMS.txt',
+          # PowerShell does not expand wildcards for native commands, so list the assets explicitly.
+          $assets = @(Get-ChildItem dist -File | ForEach-Object { $_.FullName })
+          $ghArgs = @($tag) + $assets + @(
                     '--title', "WinIsland $tag",
                     '--notes-file', '.github/RELEASE_NOTES.md',
                     '--target', $env:GITHUB_SHA)
