@@ -37,6 +37,22 @@
     <PackageReference Include="WinUIEx" />
   </ItemGroup>
 
+  <!--
+    `dotnet publish` of an unpackaged WinUI app omits the app's own resource index (WinIsland.pri)
+    and compiled XAML (*.xbf), so InitializeComponent fails with "XAML parsing failed" in the
+    published app while the build output works. Copy them from the build output after publishing.
+  -->
+  <Target Name="PublishXamlResources" AfterTargets="Publish">
+    <ItemGroup>
+      <_XamlResourceToPublish Include="$(OutDir)$(AssemblyName).pri" />
+      <_XamlResourceToPublish Include="$(OutDir)**\*.xbf" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_XamlResourceToPublish)"
+          DestinationFiles="@(_XamlResourceToPublish->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Published XAML resources: @(_XamlResourceToPublish->'%(Filename)%(Extension)', ', ')" />
+  </Target>
+
   <ItemGroup>
     <ProjectReference Include="..\WinIsland.Core\WinIsland.Core.csproj" />
     <ProjectReference Include="..\WinIsland.Platform.Windows\WinIsland.Platform.Windows.csproj" />

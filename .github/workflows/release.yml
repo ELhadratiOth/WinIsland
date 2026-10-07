@@ -56,6 +56,10 @@ jobs:
             # Self-contained: runs on a clean Windows 10/11 machine without installing .NET or the Windows App SDK.
             dotnet publish src/WinIsland.App -c Release -p:Platform=$arch -r $rid --self-contained true -p:Version=$v -o $out
             if ($LASTEXITCODE -ne 0) { throw "Publish failed for $rid" }
+            # Without these the app starts but cannot load its UI ("XAML parsing failed").
+            foreach ($required in @('WinIsland.exe', 'WinIsland.pri', 'App.xbf', 'IslandWindow.xbf')) {
+              if (-not (Test-Path (Join-Path $out $required))) { throw "$required missing from $rid publish output" }
+            }
             Compress-Archive -Path "$out/*" -DestinationPath "dist/WinIsland-$v-$rid.zip" -CompressionLevel Optimal
           }
           Get-ChildItem dist/*.zip | ForEach-Object {
