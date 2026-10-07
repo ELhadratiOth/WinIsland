@@ -21,6 +21,10 @@ app on `windows-latest`, and uploads the build as an artifact.
 Settings live in `%LOCALAPPDATA%\WinIsland\settings.json`. Common settings are also in the
 tray menu. Default hotkey: **Win+Alt+I** toggles interactive mode.
 
+The tray icon (in the **^** overflow on Windows 11) appears even if the island fails to start.
+It always offers **Open log file** and **Exit WinIsland**. The log is at
+`%LOCALAPPDATA%\WinIsland\winisland.log`; if startup fails, an error box also points to it.
+
 ## Layout
 
 ```
