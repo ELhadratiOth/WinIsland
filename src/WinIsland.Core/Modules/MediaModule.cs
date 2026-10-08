@@ -33,6 +33,10 @@ public sealed class MediaModule : IslandModule
     private string _sourceName = string.Empty;
     private byte[]? _artwork;
     private uint _accentColor = AccentPicker.Neutral;
+    private bool _canShuffle;
+    private bool _isShuffleActive;
+    private bool _canRepeat;
+    private MediaRepeatMode _repeatMode;
 
     public MediaModule(IMediaSource source, TimeProvider time, IUiDispatcher dispatcher)
         : base(ModuleId, "Media", "\uEC4F")
@@ -45,6 +49,8 @@ public sealed class MediaModule : IslandModule
         TogglePlayPauseCommand = new AsyncRelayCommand(_ => _source.TogglePlayPauseAsync(), onError: LogError);
         NextCommand = new AsyncRelayCommand(_ => _source.NextAsync(), () => _snapshot?.CanGoNext ?? false, LogError);
         PreviousCommand = new AsyncRelayCommand(_ => _source.PreviousAsync(), () => _snapshot?.CanGoPrevious ?? false, LogError);
+        ToggleShuffleCommand = new AsyncRelayCommand(_ => ToggleShuffleAsync(), () => CanShuffle, LogError);
+        CycleRepeatCommand = new AsyncRelayCommand(_ => CycleRepeatAsync(), () => CanRepeat, LogError);
 
         _source.Changed += OnSourceChanged;
         Apply(_source.Current);
@@ -126,6 +132,43 @@ public sealed class MediaModule : IslandModule
         private set => SetProperty(ref _accentColor, value);
     }
 
+    /// <summary>True when the player accepts shuffle changes (many browser tabs don't).</summary>
+    public bool CanShuffle
+    {
+        get => _canShuffle;
+        private set => SetProperty(ref _canShuffle, value);
+    }
+
+    public bool IsShuffleActive
+    {
+        get => _isShuffleActive;
+        private set => SetProperty(ref _isShuffleActive, value);
+    }
+
+    public bool CanRepeat
+    {
+        get => _canRepeat;
+        private set => SetProperty(ref _canRepeat, value);
+    }
+
+    public MediaRepeatMode RepeatMode
+    {
+        get => _repeatMode;
+        private set
+        {
+            if (SetProperty(ref _repeatMode, value))
+            {
+                OnPropertyChanged(nameof(IsRepeatActive));
+                OnPropertyChanged(nameof(RepeatGlyph));
+            }
+        }
+    }
+
+    public bool IsRepeatActive => _repeatMode != MediaRepeatMode.None;
+
+    /// <summary>Segoe Fluent Icons RepeatOne for a single track, RepeatAll otherwise.</summary>
+    public string RepeatGlyph => _repeatMode == MediaRepeatMode.Track ? "\uE8ED" : "\uE8EE";
+
     public override DipSize GetSize(IslandSize size) => size switch
     {
         IslandSize.Compact => IslandMetrics.CompactWide,
@@ -160,6 +203,18 @@ public sealed class MediaModule : IslandModule
     public AsyncRelayCommand NextCommand { get; }
 
     public AsyncRelayCommand PreviousCommand { get; }
+
+    public AsyncRelayCommand ToggleShuffleCommand { get; }
+
+    /// <summary>Off → repeat all → repeat one → off, like Spotify and Apple Music.</summary>
+    public AsyncRelayCommand CycleRepeatCommand { get; }
+
+    public static MediaRepeatMode NextRepeatMode(MediaRepeatMode mode) => mode switch
+    {
+        MediaRepeatMode.None => MediaRepeatMode.List,
+        MediaRepeatMode.List => MediaRepeatMode.Track,
+        _ => MediaRepeatMode.None,
+    };
 
     protected override void OnViewActiveChanged(bool active) => UpdateProgress();
 
@@ -199,8 +254,15 @@ public sealed class MediaModule : IslandModule
         CompactPriority = IsPlaying ? ModulePriority.Media : ModulePriority.Unavailable;
         InteractivePriority = hasMedia ? ModulePriority.Media : ModulePriority.Unavailable;
 
+        CanShuffle = hasMedia && snapshot!.CanShuffle;
+        IsShuffleActive = hasMedia && snapshot!.IsShuffleActive;
+        CanRepeat = hasMedia && snapshot!.CanRepeat;
+        RepeatMode = hasMedia ? snapshot!.RepeatMode : MediaRepeatMode.None;
+
         NextCommand.NotifyCanExecuteChanged();
         PreviousCommand.NotifyCanExecuteChanged();
+        ToggleShuffleCommand.NotifyCanExecuteChanged();
+        CycleRepeatCommand.NotifyCanExecuteChanged();
         UpdateProgress();
 
         bool trackChanged = hasMedia && snapshot!.IsPlaying &&
@@ -209,6 +271,19 @@ public sealed class MediaModule : IslandModule
         {
             RequestAttention(TrackChangeAttention);
         }
+    }
+
+    // The new state shows immediately; the player's own change event confirms (or reverts) it.
+    private Task ToggleShuffleAsync()
+    {
+        IsShuffleActive = !IsShuffleActive;
+        return _source.SetShuffleAsync(IsShuffleActive);
+    }
+
+    private Task CycleRepeatAsync()
+    {
+        RepeatMode = NextRepeatMode(RepeatMode);
+        return _source.SetRepeatModeAsync(RepeatMode);
     }
 
     private void TickProgress() => UpdateProgress();

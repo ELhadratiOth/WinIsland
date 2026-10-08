@@ -33,5 +33,8 @@ internal static class Converters
 
     public static Visibility CollapsedWhen(bool value) => value ? Visibility.Collapsed : Visibility.Visible;
 
+    /// <summary>Dims a control the current player doesn't support instead of hiding it.</summary>
+    public static double EnabledOpacity(bool enabled) => enabled ? 1.0 : 0.3;
+
     public static Color Transparent => Colors.Transparent;
 }

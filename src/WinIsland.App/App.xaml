@@ -68,6 +68,11 @@
                 <Setter Property="Height" Value="40" />
                 <Setter Property="CornerRadius" Value="20" />
             </Style>
+            <Style x:Key="IslandModeButton" TargetType="Button" BasedOn="{StaticResource IslandTransportButton}">
+                <Setter Property="Width" Value="38" />
+                <Setter Property="Height" Value="38" />
+                <Setter Property="CornerRadius" Value="19" />
+            </Style>
             <Style x:Key="IslandSendButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
                 <Setter Property="Background" Value="{StaticResource IslandClaudeBrush}" />
                 <Setter Property="Foreground" Value="#FF1A0F0B" />

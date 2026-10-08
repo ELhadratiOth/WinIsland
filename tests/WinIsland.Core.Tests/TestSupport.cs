@@ -49,6 +49,22 @@ internal sealed class FakeMediaSource : IMediaSource
     public Task NextAsync() => Task.CompletedTask;
 
     public Task PreviousAsync() => Task.CompletedTask;
+
+    public List<bool> ShuffleRequests { get; } = [];
+
+    public List<MediaRepeatMode> RepeatRequests { get; } = [];
+
+    public Task SetShuffleAsync(bool active)
+    {
+        ShuffleRequests.Add(active);
+        return Task.CompletedTask;
+    }
+
+    public Task SetRepeatModeAsync(MediaRepeatMode mode)
+    {
+        RepeatRequests.Add(mode);
+        return Task.CompletedTask;
+    }
 }
 
 internal static class Eventually

@@ -278,31 +278,89 @@
                             Text="{x:Bind ViewModel.Media.DurationText, Mode=OneWay}" />
                     </Grid>
 
-                    <!-- Transport -->
-                    <StackPanel
-                        Grid.Row="2"
-                        HorizontalAlignment="Center"
-                        Orientation="Horizontal"
-                        Spacing="22">
+                    <!-- Transport: shuffle · previous · play/pause · next · repeat -->
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
                         <Button
-                            AutomationProperties.Name="Previous"
-                            Command="{x:Bind ViewModel.Media.PreviousCommand}"
-                            Style="{StaticResource IslandTransportButton}">
-                            <FontIcon FontSize="18" Glyph="&#xE892;" />
+                            Grid.Column="0"
+                            AutomationProperties.Name="Shuffle"
+                            Command="{x:Bind ViewModel.Media.ToggleShuffleCommand}"
+                            Opacity="{x:Bind local:Converters.EnabledOpacity(ViewModel.Media.CanShuffle), Mode=OneWay}"
+                            Style="{StaticResource IslandModeButton}">
+                            <Grid Height="30">
+                                <FontIcon
+                                    FontSize="15"
+                                    Foreground="{StaticResource IslandSecondaryBrush}"
+                                    Glyph="&#xE8B1;"
+                                    Visibility="{x:Bind local:Converters.CollapsedWhen(ViewModel.Media.IsShuffleActive), Mode=OneWay}" />
+                                <FontIcon
+                                    FontSize="15"
+                                    Foreground="{x:Bind AccentBrush}"
+                                    Glyph="&#xE8B1;"
+                                    Visibility="{x:Bind ViewModel.Media.IsShuffleActive, Mode=OneWay}" />
+                                <Ellipse
+                                    Width="4"
+                                    Height="4"
+                                    VerticalAlignment="Bottom"
+                                    Fill="{x:Bind AccentBrush}"
+                                    Visibility="{x:Bind ViewModel.Media.IsShuffleActive, Mode=OneWay}" />
+                            </Grid>
                         </Button>
+                        <StackPanel
+                            Grid.Column="2"
+                            Orientation="Horizontal"
+                            Spacing="22">
+                            <Button
+                                AutomationProperties.Name="Previous"
+                                Command="{x:Bind ViewModel.Media.PreviousCommand}"
+                                Style="{StaticResource IslandTransportButton}">
+                                <FontIcon FontSize="18" Glyph="&#xE892;" />
+                            </Button>
+                            <Button
+                                AutomationProperties.Name="Play or pause"
+                                Command="{x:Bind ViewModel.Media.TogglePlayPauseCommand}"
+                                Style="{StaticResource IslandTransportButton}">
+                                <FontIcon FontSize="24" Glyph="{x:Bind ViewModel.Media.PlayPauseGlyph, Mode=OneWay}" />
+                            </Button>
+                            <Button
+                                AutomationProperties.Name="Next"
+                                Command="{x:Bind ViewModel.Media.NextCommand}"
+                                Style="{StaticResource IslandTransportButton}">
+                                <FontIcon FontSize="18" Glyph="&#xE893;" />
+                            </Button>
+                        </StackPanel>
                         <Button
-                            AutomationProperties.Name="Play or pause"
-                            Command="{x:Bind ViewModel.Media.TogglePlayPauseCommand}"
-                            Style="{StaticResource IslandTransportButton}">
-                            <FontIcon FontSize="24" Glyph="{x:Bind ViewModel.Media.PlayPauseGlyph, Mode=OneWay}" />
+                            Grid.Column="4"
+                            AutomationProperties.Name="Repeat"
+                            Command="{x:Bind ViewModel.Media.CycleRepeatCommand}"
+                            Opacity="{x:Bind local:Converters.EnabledOpacity(ViewModel.Media.CanRepeat), Mode=OneWay}"
+                            Style="{StaticResource IslandModeButton}">
+                            <Grid Height="30">
+                                <FontIcon
+                                    FontSize="15"
+                                    Foreground="{StaticResource IslandSecondaryBrush}"
+                                    Glyph="{x:Bind ViewModel.Media.RepeatGlyph, Mode=OneWay}"
+                                    Visibility="{x:Bind local:Converters.CollapsedWhen(ViewModel.Media.IsRepeatActive), Mode=OneWay}" />
+                                <FontIcon
+                                    FontSize="15"
+                                    Foreground="{x:Bind AccentBrush}"
+                                    Glyph="{x:Bind ViewModel.Media.RepeatGlyph, Mode=OneWay}"
+                                    Visibility="{x:Bind ViewModel.Media.IsRepeatActive, Mode=OneWay}" />
+                                <Ellipse
+                                    Width="4"
+                                    Height="4"
+                                    VerticalAlignment="Bottom"
+                                    Fill="{x:Bind AccentBrush}"
+                                    Visibility="{x:Bind ViewModel.Media.IsRepeatActive, Mode=OneWay}" />
+                            </Grid>
                         </Button>
-                        <Button
-                            AutomationProperties.Name="Next"
-                            Command="{x:Bind ViewModel.Media.NextCommand}"
-                            Style="{StaticResource IslandTransportButton}">
-                            <FontIcon FontSize="18" Glyph="&#xE893;" />
-                        </Button>
-                    </StackPanel>
+                    </Grid>
                 </Grid>
 
                 <!-- ============ Expanded: Claude Code notice ============ -->

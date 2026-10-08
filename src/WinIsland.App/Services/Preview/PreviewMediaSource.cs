@@ -28,4 +28,24 @@ internal sealed class PreviewMediaSource : IMediaSource
     public Task NextAsync() => Task.CompletedTask;
 
     public Task PreviousAsync() => Task.CompletedTask;
+
+    public Task SetShuffleAsync(bool active)
+    {
+        if (Current is { } c)
+        {
+            Set(c with { IsShuffleActive = active });
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task SetRepeatModeAsync(MediaRepeatMode mode)
+    {
+        if (Current is { } c)
+        {
+            Set(c with { RepeatMode = mode });
+        }
+
+        return Task.CompletedTask;
+    }
 }

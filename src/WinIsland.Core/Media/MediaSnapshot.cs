@@ -15,7 +15,11 @@ public sealed record MediaSnapshot(
     TimeSpan Duration,
     DateTimeOffset PositionSampledAt,
     MediaArtwork? Artwork = null,
-    string? Album = null)
+    string? Album = null,
+    bool CanShuffle = false,
+    bool IsShuffleActive = false,
+    bool CanRepeat = false,
+    MediaRepeatMode RepeatMode = MediaRepeatMode.None)
 {
     public TimeSpan PositionAt(DateTimeOffset now)
     {

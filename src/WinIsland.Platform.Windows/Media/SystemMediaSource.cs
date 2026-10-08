@@ -1,3 +1,4 @@
+using Windows.Media;
 using Windows.Media.Control;
 using WinIsland.Core.Diagnostics;
 using WinIsland.Core.Integrations;
@@ -76,6 +77,15 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
     public Task NextAsync() => Invoke(s => s.TrySkipNextAsync().AsTask());
 
     public Task PreviousAsync() => Invoke(s => s.TrySkipPreviousAsync().AsTask());
+
+    public Task SetShuffleAsync(bool active) => Invoke(s => s.TryChangeShuffleActiveAsync(active).AsTask());
+
+    public Task SetRepeatModeAsync(MediaRepeatMode mode) => Invoke(s => s.TryChangeAutoRepeatModeAsync(mode switch
+    {
+        MediaRepeatMode.Track => MediaPlaybackAutoRepeatMode.Track,
+        MediaRepeatMode.List => MediaPlaybackAutoRepeatMode.List,
+        _ => MediaPlaybackAutoRepeatMode.None,
+    }).AsTask());
 
     private Task Invoke(Func<GlobalSystemMediaTransportControlsSession, Task<bool>> action)
     {
@@ -183,7 +193,16 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
                 timeline.EndTime - timeline.StartTime,
                 sampled,
                 artwork,
-                album);
+                album,
+                playback.Controls.IsShuffleEnabled,
+                playback.IsShuffleActive ?? false,
+                playback.Controls.IsRepeatEnabled,
+                playback.AutoRepeatMode switch
+                {
+                    MediaPlaybackAutoRepeatMode.Track => MediaRepeatMode.Track,
+                    MediaPlaybackAutoRepeatMode.List => MediaRepeatMode.List,
+                    _ => MediaRepeatMode.None,
+                });
 
             lock (_gate)
             {

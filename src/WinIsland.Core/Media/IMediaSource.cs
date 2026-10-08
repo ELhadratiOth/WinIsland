@@ -14,4 +14,8 @@ public interface IMediaSource
     Task NextAsync();
 
     Task PreviousAsync();
+
+    Task SetShuffleAsync(bool active);
+
+    Task SetRepeatModeAsync(MediaRepeatMode mode);
 }
