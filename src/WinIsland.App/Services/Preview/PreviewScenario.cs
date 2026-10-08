@@ -143,6 +143,7 @@ internal sealed class PreviewScenario
             Reactions.Clear();
             Media.Set(null);
             Calendar.Clear(); // the meeting is over: the plain clock is back
+            target.PreviewStopTimer();
         });
     }
 
@@ -244,6 +245,8 @@ internal interface IPreviewTarget
     void PreviewDismiss();
 
     void PreviewStartTimer();
+
+    void PreviewStopTimer();
 
     void PreviewShowLyrics(bool show);
 

@@ -328,6 +328,8 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _state.SelectModule(TimerModule.ModuleId);
     }
 
+    void Preview.IPreviewTarget.PreviewStopTimer() => _timerModule.ResetCommand.Execute(null);
+
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
