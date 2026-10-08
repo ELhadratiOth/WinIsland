@@ -19,6 +19,12 @@ internal sealed class PreviewCalendar : ICalendarSource
 
     public event EventHandler? Changed;
 
+    public void Clear()
+    {
+        Events = [];
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>A meeting starting in five minutes, plus the rest of the day.</summary>
     public void MeetingSoon()
     {

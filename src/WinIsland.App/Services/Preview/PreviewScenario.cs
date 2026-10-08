@@ -142,6 +142,7 @@ internal sealed class PreviewScenario
             target.PreviewDismiss();
             Reactions.Clear();
             Media.Set(null);
+            Calendar.Clear(); // the meeting is over: the plain clock is back
         });
     }
 
