@@ -9,6 +9,20 @@ public static class ArtworkLoader
 {
     private const uint Size = 160;
 
+    /// <summary>Decodes encoded image bytes (JPEG/PNG…), e.g. downloaded cover art.</summary>
+    public static async Task<MediaArtwork?> LoadAsync(byte[] encoded, CancellationToken cancellationToken = default)
+    {
+        using var stream = new InMemoryRandomAccessStream();
+        using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
+        {
+            writer.WriteBytes(encoded);
+            await writer.StoreAsync().AsTask(cancellationToken).ConfigureAwait(false);
+            writer.DetachStream();
+        }
+
+        return await LoadAsync(RandomAccessStreamReference.CreateFromStream(stream), cancellationToken).ConfigureAwait(false);
+    }
+
     public static async Task<MediaArtwork?> LoadAsync(IRandomAccessStreamReference? thumbnail, CancellationToken cancellationToken = default)
     {
         if (thumbnail is null)

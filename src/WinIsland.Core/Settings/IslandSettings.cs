@@ -21,6 +21,12 @@ public sealed record IslandSettings
 
     public double TopMarginDip { get; init; } = 6;
 
+    /// <summary>
+    /// When the playing app provides no cover art, look it up by artist and title with Apple's
+    /// public iTunes Search API (sends only those two strings).
+    /// </summary>
+    public bool OnlineArtworkLookup { get; init; } = true;
+
     /// <summary>Executable names (e.g. "eldenring.exe") always treated as games.</summary>
     public IReadOnlyList<string> GameProcesses { get; init; } = [];
 

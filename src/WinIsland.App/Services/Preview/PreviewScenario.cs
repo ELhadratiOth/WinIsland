@@ -70,8 +70,9 @@ internal sealed class PreviewScenario
         }
 
         return new MediaSnapshot(
-            "Midnight City", "M83", "Preview", IsPlaying: true, CanGoNext: true, CanGoPrevious: true,
-            Position: TimeSpan.FromSeconds(83), Duration: TimeSpan.FromSeconds(243), PositionSampledAt: DateTimeOffset.UtcNow, Artwork: artwork);
+            "Midnight City", "M83", "Spotify.exe", IsPlaying: true, CanGoNext: true, CanGoPrevious: true,
+            Position: TimeSpan.FromSeconds(83), Duration: TimeSpan.FromSeconds(243), PositionSampledAt: DateTimeOffset.UtcNow,
+            Artwork: artwork, Album: "Hurry Up, We're Dreaming");
     }
 
     private void CreateClaudeSessions()

@@ -97,7 +97,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _placementOptions = new PlacementOptions { TopMarginDip = _settings.TopMarginDip };
         ApplyGameSettings();
 
-        var systemMedia = preview ? null : new SystemMediaSource(_time);
+        var systemMedia = preview ? null : new SystemMediaSource(_time, () => _settings.OnlineArtworkLookup);
         _media = (IMediaSource?)_preview?.Media ?? systemMedia!;
         _claudeSessions = new ClaudeSessionMonitor(
             _preview is null ? new ClaudeSessionMonitorOptions() : new ClaudeSessionMonitorOptions { ProjectsDirectory = _preview.ClaudeProjectsDirectory },
@@ -584,6 +584,9 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
                 break;
             case TrayMenu.Command.ToggleHover:
                 UpdateSettings(s => s with { HoverToInteract = !s.HoverToInteract });
+                break;
+            case TrayMenu.Command.ToggleOnlineArtwork:
+                UpdateSettings(s => s with { OnlineArtworkLookup = !s.OnlineArtworkLookup });
                 break;
             case TrayMenu.Command.ToggleStartup:
                 StartupRegistration.SetEnabled(!StartupRegistration.IsEnabled());

@@ -13,6 +13,7 @@ internal static class TrayMenu
     private const int HoverId = 300;
     private const int StartupId = 301;
     private const int HiddenId = 302;
+    private const int OnlineArtworkId = 303;
 
     public static IReadOnlyList<TrayMenuItem> Build(IslandSettings settings, bool startsWithWindows, bool userHidden) =>
     [
@@ -35,6 +36,7 @@ internal static class TrayMenu
             ],
         },
         new TrayMenuItem(HoverId, "Expand on hover", settings.HoverToInteract),
+        new TrayMenuItem(OnlineArtworkId, "Find missing cover art online", settings.OnlineArtworkLookup),
         new TrayMenuItem(StartupId, "Start with Windows", startsWithWindows),
         TrayMenuItem.Separator,
         new TrayMenuItem(HiddenId, userHidden ? "Show island" : "Hide island"),
@@ -47,6 +49,7 @@ internal static class TrayMenu
         HoverId => new Command.ToggleHover(),
         StartupId => new Command.ToggleStartup(),
         HiddenId => new Command.ToggleHidden(),
+        OnlineArtworkId => new Command.ToggleOnlineArtwork(),
         _ => null,
     };
 
@@ -64,5 +67,7 @@ internal static class TrayMenu
         public sealed record ToggleStartup : Command;
 
         public sealed record ToggleHidden : Command;
+
+        public sealed record ToggleOnlineArtwork : Command;
     }
 }

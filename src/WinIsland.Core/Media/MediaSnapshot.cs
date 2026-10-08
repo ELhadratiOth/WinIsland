@@ -14,7 +14,8 @@ public sealed record MediaSnapshot(
     TimeSpan Position,
     TimeSpan Duration,
     DateTimeOffset PositionSampledAt,
-    MediaArtwork? Artwork = null)
+    MediaArtwork? Artwork = null,
+    string? Album = null)
 {
     public TimeSpan PositionAt(DateTimeOffset now)
     {

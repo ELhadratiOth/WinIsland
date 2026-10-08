@@ -29,6 +29,8 @@ public sealed class MediaModule : IslandModule
     private double _progress;
     private string _positionText = string.Empty;
     private string _durationText = string.Empty;
+    private string _album = string.Empty;
+    private string _sourceName = string.Empty;
     private byte[]? _artwork;
     private uint _accentColor = AccentPicker.Neutral;
 
@@ -72,6 +74,36 @@ public sealed class MediaModule : IslandModule
         }
     }
 
+    public string Album
+    {
+        get => _album;
+        private set
+        {
+            if (SetProperty(ref _album, value))
+            {
+                OnPropertyChanged(nameof(HasAlbum));
+            }
+        }
+    }
+
+    public bool HasAlbum => _album.Length > 0;
+
+    /// <summary>Friendly name of the playing app, e.g. "Spotify".</summary>
+    public string SourceName
+    {
+        get => _sourceName;
+        private set
+        {
+            if (SetProperty(ref _sourceName, value))
+            {
+                OnPropertyChanged(nameof(SourceCaption));
+            }
+        }
+    }
+
+    /// <summary>"PLAYING ON SPOTIFY" (or "NOW PLAYING" when the app is unknown).</summary>
+    public string SourceCaption => _sourceName.Length > 0 ? $"PLAYING ON {_sourceName.ToUpperInvariant()}" : "NOW PLAYING";
+
     /// <summary>Downscaled cover art (PNG/JPEG bytes), or null when the player provides none.</summary>
     public byte[]? Artwork
     {
@@ -97,7 +129,7 @@ public sealed class MediaModule : IslandModule
     public override DipSize GetSize(IslandSize size) => size switch
     {
         IslandSize.Compact => IslandMetrics.CompactWide,
-        IslandSize.Expanded => new DipSize(420, 164),
+        IslandSize.Expanded => new DipSize(460, 196),
         _ => base.GetSize(size),
     };
 
@@ -158,6 +190,8 @@ public sealed class MediaModule : IslandModule
         Artist = snapshot?.Artist ?? string.Empty;
         IsPlaying = hasMedia && snapshot!.IsPlaying;
         CompactText = Title;
+        Album = snapshot?.Album ?? string.Empty;
+        SourceName = MediaSourceNames.Friendly(snapshot?.SourceAppId);
         Artwork = snapshot?.Artwork?.Image;
         AccentColor = snapshot?.Artwork?.AccentArgb ?? AccentPicker.Neutral;
 

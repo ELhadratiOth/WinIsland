@@ -20,9 +20,13 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
     private string? _artworkKey;
     private MediaArtwork? _artwork;
 
-    public SystemMediaSource(TimeProvider time)
+    private readonly Func<bool> _onlineLookupEnabled;
+    private readonly OnlineArtworkLookup _onlineLookup = new();
+
+    public SystemMediaSource(TimeProvider time, Func<bool>? onlineLookupEnabled = null)
     {
         _time = time ?? throw new ArgumentNullException(nameof(time));
+        _onlineLookupEnabled = onlineLookupEnabled ?? (() => false);
     }
 
     public event EventHandler? Changed;
@@ -147,12 +151,14 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
             string title = previous?.Title ?? string.Empty;
             string artist = previous?.Artist ?? string.Empty;
             MediaArtwork? artwork = previous?.Artwork;
+            string? album = previous?.Album;
             if (includeProperties || previous is null)
             {
                 GlobalSystemMediaTransportControlsSessionMediaProperties properties =
                     await session.TryGetMediaPropertiesAsync().AsTask().ConfigureAwait(false);
                 title = properties?.Title ?? string.Empty;
                 artist = properties?.Artist ?? string.Empty;
+                album = string.IsNullOrWhiteSpace(properties?.AlbumTitle) ? null : properties.AlbumTitle;
                 artwork = await GetArtworkAsync(session.SourceAppUserModelId, title, artist, properties).ConfigureAwait(false);
             }
 
@@ -176,7 +182,8 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
                 timeline.Position,
                 timeline.EndTime - timeline.StartTime,
                 sampled,
-                artwork);
+                artwork,
+                album);
 
             lock (_gate)
             {
@@ -213,6 +220,12 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
         catch (Exception ex)
         {
             AppLog.Warn(nameof(SystemMediaSource), "Could not load cover art", ex);
+        }
+
+        // The player gave no cover (common for browser tabs): look up the real one online.
+        if (artwork is null && _onlineLookupEnabled())
+        {
+            artwork = await _onlineLookup.FindAsync(artist, title).ConfigureAwait(false);
         }
 
         _artworkKey = key;

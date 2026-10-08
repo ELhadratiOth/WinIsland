@@ -26,9 +26,9 @@
             <!-- Soft accent glow behind the expanded player, tinted from the cover art. -->
             <Ellipse
                 x:Name="AmbientGlow"
-                Width="320"
-                Height="220"
-                Margin="-120,-110,0,0"
+                Width="360"
+                Height="260"
+                Margin="-110,-110,0,0"
                 HorizontalAlignment="Left"
                 VerticalAlignment="Top"
                 IsHitTestVisible="False"
@@ -172,23 +172,26 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <Grid ColumnSpacing="14">
+                    <!-- Poster + real track metadata -->
+                    <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Border
-                            Width="56"
-                            Height="56"
+                            Width="84"
+                            Height="84"
                             Background="{StaticResource IslandArtPlaceholderBrush}"
-                            CornerRadius="14">
+                            BorderBrush="#1FFFFFFF"
+                            BorderThickness="1"
+                            CornerRadius="18">
                             <Grid>
                                 <FontIcon
-                                    FontSize="22"
+                                    FontSize="30"
                                     Foreground="{StaticResource IslandSecondaryBrush}"
                                     Glyph="&#xEC4F;" />
-                                <Border CornerRadius="14" Visibility="{x:Bind ViewModel.Media.HasArtwork, Mode=OneWay}">
+                                <Border CornerRadius="17" Visibility="{x:Bind ViewModel.Media.HasArtwork, Mode=OneWay}">
                                     <Border.Background>
                                         <ImageBrush ImageSource="{x:Bind local:Converters.ToImage(ViewModel.Media.Artwork), Mode=OneWay}" Stretch="UniformToFill" />
                                     </Border.Background>
@@ -200,24 +203,44 @@
                             VerticalAlignment="Center"
                             Spacing="1">
                             <TextBlock
+                                Margin="0,0,0,3"
+                                FontFamily="Segoe UI Variable Text"
+                                FontSize="10"
+                                FontWeight="SemiBold"
+                                CharacterSpacing="80"
+                                Foreground="{x:Bind AccentBrush}"
+                                MaxLines="1"
+                                Text="{x:Bind ViewModel.Media.SourceCaption, Mode=OneWay}"
+                                TextTrimming="CharacterEllipsis" />
+                            <TextBlock
                                 FontFamily="Segoe UI Variable Display"
-                                FontSize="16"
+                                FontSize="18"
                                 FontWeight="SemiBold"
                                 Foreground="{StaticResource IslandForegroundBrush}"
                                 MaxLines="1"
                                 Text="{x:Bind ViewModel.Media.Title, Mode=OneWay}"
                                 TextTrimming="CharacterEllipsis" />
                             <TextBlock
-                                Style="{StaticResource IslandBodyStyle}"
+                                FontFamily="Segoe UI Variable Text"
+                                FontSize="14"
+                                Foreground="#FFD1D1D6"
                                 MaxLines="1"
                                 Text="{x:Bind ViewModel.Media.Artist, Mode=OneWay}"
                                 TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                FontFamily="Segoe UI Variable Text"
+                                FontSize="12"
+                                Foreground="{StaticResource IslandSecondaryBrush}"
+                                MaxLines="1"
+                                Text="{x:Bind ViewModel.Media.Album, Mode=OneWay}"
+                                TextTrimming="CharacterEllipsis"
+                                Visibility="{x:Bind ViewModel.Media.HasAlbum, Mode=OneWay}" />
                         </StackPanel>
                         <StackPanel
                             x:Name="ExpandedBars"
                             Grid.Column="2"
-                            Margin="0,0,4,0"
-                            VerticalAlignment="Center"
+                            Margin="0,6,2,0"
+                            VerticalAlignment="Top"
                             Orientation="Horizontal"
                             Spacing="3">
                             <Rectangle Width="3.5" Height="22" Fill="{x:Bind AccentBrush}" RadiusX="1.75" RadiusY="1.75" />

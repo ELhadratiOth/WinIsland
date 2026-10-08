@@ -23,7 +23,11 @@ Use the tray icon to change settings, enable **Start with Windows**, or exit.
   Layouts and shell overlays.
 - **Modules:**
   - Clock.
-  - Now playing, with controls (any app using Windows media controls).
+  - Now playing, with controls (any app using Windows media controls). The player shows the
+    real cover art, title, artist, album and source app (e.g. "Playing on Spotify"). When the app
+    provides no cover (some browser tabs), it is looked up online by artist and title through
+    Apple's public iTunes Search API. Only those two strings are sent; turn it off in the tray
+    menu with **Find missing cover art online**.
   - Local Claude Code sessions, with a prompt box.
 - **Lightweight.** Event-driven with no polling, GPU-composited animations, and integrations
   that load in the background and degrade gracefully when offline.
