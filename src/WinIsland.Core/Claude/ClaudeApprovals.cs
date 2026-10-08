@@ -83,6 +83,9 @@ public interface IClaudeHookServer
 
     /// <summary>Raised on a background thread.</summary>
     event EventHandler<ClaudeNotice>? NoticeReceived;
+
+    /// <summary>Raised on a background thread with the plan limits from Claude Code's status line.</summary>
+    event EventHandler<ClaudeRateLimits>? RateLimitsReceived;
 }
 
 /// <summary>Claude Code hook JSON in and out.</summary>
@@ -178,6 +181,28 @@ public static class ClaudeHookPayload
 public static class ClaudeHooksInstaller
 {
     public const string Marker = "--claude-hook";
+    public const string StatusLineMarker = "--claude-statusline";
+
+    /// <summary>True when ~/.claude/settings.json has a status line that isn't WinIsland's.</summary>
+    public static bool HasCustomStatusLine(string settingsPath)
+    {
+        try
+        {
+            return File.Exists(settingsPath) && Load(settingsPath)["statusLine"] is JsonObject line &&
+                !(line["command"]?.GetValue<string>() ?? string.Empty).Contains(StatusLineMarker, StringComparison.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Status lines are always run through a shell: quote the path for Git Bash when it has spaces.</summary>
+    internal static string StatusLineCommand(string exePath)
+    {
+        string path = exePath.Replace('\\', '/');
+        return path.Contains(' ', StringComparison.Ordinal) ? $"\"{path}\" {StatusLineMarker}" : $"{path} {StatusLineMarker}";
+    }
 
     public static string DefaultSettingsPath()
     {
@@ -225,6 +250,23 @@ public static class ClaudeHooksInstaller
         {
             Add(hooks, "PermissionRequest", null, Handler(exePath, "permission", 300));
             Add(hooks, "Notification", "idle_prompt", Handler(exePath, "notify", 10));
+        }
+
+        // The status line carries the plan limits (Pro/Max). Never replace a status line the
+        // user set up themselves; only add ours when there is none, and remove only ours.
+        bool ourStatusLine = root["statusLine"]?["command"]?.GetValue<string>()?.Contains(StatusLineMarker, StringComparison.Ordinal) ?? false;
+        if (install && (root["statusLine"] is null || ourStatusLine))
+        {
+            root["statusLine"] = new JsonObject
+            {
+                ["type"] = "command",
+                ["command"] = StatusLineCommand(exePath),
+                ["padding"] = 0,
+            };
+        }
+        else if (!install && ourStatusLine)
+        {
+            root.Remove("statusLine");
         }
 
         foreach ((string name, JsonNode? value) in hooks.ToList())
@@ -312,5 +354,88 @@ public static class ClaudeHooksInstaller
         string temp = settingsPath + ".tmp";
         File.WriteAllText(temp, updated);
         File.Move(temp, settingsPath, overwrite: true);
+    }
+}
+
+/// <summary>
+/// Plan usage limits (Pro / Max) as Claude Code reports them to its status line command:
+/// percentage used of the 5-hour and 7-day windows, and when each resets.
+/// </summary>
+public sealed record ClaudeRateLimits(double? FiveHourPercent, DateTimeOffset? FiveHourResets, double? WeekPercent, DateTimeOffset? WeekResets);
+
+/// <summary>Claude Code's status line input (stdin JSON) in, a compact status line out.</summary>
+public static class ClaudeStatusLine
+{
+    /// <summary>The documented <c>rate_limits</c> block, or null when absent (API keys, before the first reply).</summary>
+    public static ClaudeRateLimits? ParseLimits(string json)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty("rate_limits", out JsonElement limits) || limits.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            (double? Percent, DateTimeOffset? Resets) Window(string name)
+            {
+                if (!limits.TryGetProperty(name, out JsonElement w) || w.ValueKind != JsonValueKind.Object)
+                {
+                    return (null, null);
+                }
+
+                double? percent = w.TryGetProperty("used_percentage", out JsonElement p) && p.ValueKind == JsonValueKind.Number ? p.GetDouble() : null;
+                DateTimeOffset? resets = w.TryGetProperty("resets_at", out JsonElement r) && r.ValueKind == JsonValueKind.Number
+                    ? DateTimeOffset.FromUnixTimeSeconds(r.GetInt64())
+                    : null;
+                return (percent, resets);
+            }
+
+            var five = Window("five_hour");
+            var week = Window("seven_day");
+            return five.Percent is null && week.Percent is null ? null : new ClaudeRateLimits(five.Percent, five.Resets, week.Percent, week.Resets);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>What the terminal shows: "Opus · 5h 23% · week 41%".</summary>
+    public static string Render(string json)
+    {
+        string model = string.Empty;
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(json);
+            if (document.RootElement.TryGetProperty("model", out JsonElement m) && m.TryGetProperty("display_name", out JsonElement name))
+            {
+                model = name.GetString() ?? string.Empty;
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        var parts = new List<string>();
+        if (model.Length > 0)
+        {
+            parts.Add(model);
+        }
+
+        if (ParseLimits(json) is { } limits)
+        {
+            if (limits.FiveHourPercent is { } five)
+            {
+                parts.Add(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"5h {five:0}%"));
+            }
+
+            if (limits.WeekPercent is { } week)
+            {
+                parts.Add(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"week {week:0}%"));
+            }
+        }
+
+        return string.Join(" · ", parts);
     }
 }

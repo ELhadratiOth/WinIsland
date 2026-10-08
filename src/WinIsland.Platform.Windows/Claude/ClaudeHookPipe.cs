@@ -31,6 +31,8 @@ public sealed class ClaudeHookServer : IClaudeHookServer, IIntegration
 
     public event EventHandler<ClaudeNotice>? NoticeReceived;
 
+    public event EventHandler<ClaudeRateLimits>? RateLimitsReceived;
+
     public string Name => "Claude Code approvals";
 
     public bool RequiresNetwork => false;
@@ -99,6 +101,16 @@ public sealed class ClaudeHookServer : IClaudeHookServer, IIntegration
                 JsonNode? envelope = JsonNode.Parse(line);
                 string kind = envelope?["kind"]?.GetValue<string>() ?? string.Empty;
                 string payload = envelope?["payload"]?.ToJsonString() ?? "{}";
+                if (kind == "statusline")
+                {
+                    if (ClaudeStatusLine.ParseLimits(payload) is { } limits)
+                    {
+                        RateLimitsReceived?.Invoke(this, limits);
+                    }
+
+                    return;
+                }
+
                 if (kind == "notify")
                 {
                     if (ClaudeHookPayload.ParseNotice(payload) is { } notice)
@@ -161,8 +173,16 @@ public static class ClaudeHookClient
             string payload = input.ReadToEnd();
             JsonNode? parsed = JsonNode.Parse(string.IsNullOrWhiteSpace(payload) ? "{}" : payload);
 
+            // Status line: always print the line Claude Code shows, then hand the limits to the
+            // island if it is running (never wait for it).
+            if (kind == "statusline")
+            {
+                output.Write(ClaudeStatusLine.Render(payload));
+                output.Flush();
+            }
+
             using var pipe = new NamedPipeClientStream(".", ClaudeHookPipe.Name, PipeDirection.InOut, PipeOptions.CurrentUserOnly);
-            pipe.Connect(500);
+            pipe.Connect(kind == "statusline" ? 150 : 500);
 
             byte[] request = Encoding.UTF8.GetBytes(new JsonObject { ["kind"] = kind, ["payload"] = parsed }.ToJsonString() + "\n");
             pipe.Write(request);

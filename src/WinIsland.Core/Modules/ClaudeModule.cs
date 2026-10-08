@@ -25,6 +25,9 @@ public sealed class ClaudeModule : IslandModule
     private readonly ClaudeUsageTracker? _usage;
     private string _usageToday = string.Empty;
     private string _usageWindow = string.Empty;
+    private ClaudeRateLimits? _limits;
+    private OneShotTimer? _limitsTimer;
+    private readonly HashSet<(int Threshold, DateTimeOffset? Window)> _limitWarnings = [];
 
     public ClaudeModule(ClaudeSessionMonitor monitor, IClaudeMessenger messenger, IUiDispatcher dispatcher, TimeProvider? time = null, ClaudeUsageTracker? usage = null)
         : base(ModuleId, "Claude Code", "\uE99A")
@@ -132,10 +135,114 @@ public sealed class ClaudeModule : IslandModule
 
     public bool HasUsage => _usageToday.Length > 0;
 
+    // ---- Plan limits (Pro / Max), from Claude Code's status line ----
+
+    public bool HasLimits => _limits is { FiveHourPercent: not null } or { WeekPercent: not null };
+
+    public bool HasFiveHourLimit => _limits?.FiveHourPercent is not null;
+
+    public bool HasWeekLimit => _limits?.WeekPercent is not null;
+
+    /// <summary>"23% · resets 3:00 PM".</summary>
+    public string FiveHourLimitText => _limits is { FiveHourPercent: { } p } l ? $"{p:0}%{Resets(l.FiveHourResets, false)}" : string.Empty;
+
+    /// <summary>"41% · resets Mon 9:00 AM".</summary>
+    public string WeekLimitText => _limits is { WeekPercent: { } p } l ? $"{p:0}%{Resets(l.WeekResets, true)}" : string.Empty;
+
+    /// <summary>0–1 for the bars.</summary>
+    public double FiveHourFraction => Math.Clamp((_limits?.FiveHourPercent ?? 0) / 100, 0, 1);
+
+    public double WeekFraction => Math.Clamp((_limits?.WeekPercent ?? 0) / 100, 0, 1);
+
+    /// <summary>Claude orange, then yellow from 80% and red from 95% of the busier window.</summary>
+    public uint LimitAccent => Math.Max(_limits?.FiveHourPercent ?? 0, _limits?.WeekPercent ?? 0) switch
+    {
+        >= 95 => Palette.Red,
+        >= 80 => Palette.Yellow,
+        _ => Palette.Claude,
+    };
+
+    /// <summary>Called (on the UI thread) with the limits Claude Code passed to its status line.</summary>
+    public void ApplyLimits(ClaudeRateLimits limits)
+    {
+        bool had = HasLimits;
+        _limits = limits;
+        RaiseLimits();
+        if (had != HasLimits)
+        {
+            NotifyPresentationChanged();
+        }
+
+        // Warn once per window when it passes 80% and 95%.
+        foreach ((double? percent, DateTimeOffset? window, string label) in new[]
+        {
+            (limits.FiveHourPercent, limits.FiveHourResets, "5-hour"),
+            (limits.WeekPercent, limits.WeekResets, "weekly"),
+        })
+        {
+            foreach (int threshold in new[] { 95, 80 })
+            {
+                if (percent >= threshold && _limitWarnings.Add((threshold, window)))
+                {
+                    AttentionText = $"{percent:0}% of your {label} limit used{Resets(window, label == "weekly")}";
+                    RequestAttention(TimeSpan.FromSeconds(6), threshold >= 95 ? AttentionPriority.Important : AttentionPriority.Normal);
+                    break;
+                }
+            }
+        }
+
+        // Drop a window when it resets (Claude Code does the same).
+        DateTimeOffset? next = new[] { limits.FiveHourResets, limits.WeekResets }.Where(r => r > _time.GetUtcNow()).Min();
+        _limitsTimer ??= new OneShotTimer(_time, _dispatcher, ExpireLimits);
+        if (next is { } at)
+        {
+            _limitsTimer.Start(at - _time.GetUtcNow());
+        }
+    }
+
+    private void ExpireLimits()
+    {
+        if (_limits is not { } l)
+        {
+            return;
+        }
+
+        DateTimeOffset now = _time.GetUtcNow();
+        ApplyLimits(new ClaudeRateLimits(
+            l.FiveHourResets > now ? l.FiveHourPercent : null,
+            l.FiveHourResets > now ? l.FiveHourResets : null,
+            l.WeekResets > now ? l.WeekPercent : null,
+            l.WeekResets > now ? l.WeekResets : null));
+    }
+
+    private void RaiseLimits()
+    {
+        OnPropertyChanged(nameof(HasLimits));
+        OnPropertyChanged(nameof(HasFiveHourLimit));
+        OnPropertyChanged(nameof(HasWeekLimit));
+        OnPropertyChanged(nameof(FiveHourLimitText));
+        OnPropertyChanged(nameof(WeekLimitText));
+        OnPropertyChanged(nameof(FiveHourFraction));
+        OnPropertyChanged(nameof(WeekFraction));
+        OnPropertyChanged(nameof(LimitAccent));
+    }
+
+    private string Resets(DateTimeOffset? at, bool withDay)
+    {
+        if (at is not { } when)
+        {
+            return string.Empty;
+        }
+
+        DateTimeOffset local = TimeZoneInfo.ConvertTime(when, _time.LocalTimeZone);
+        string format = withDay ? "ddd t" : "t";
+        return $" · resets {local.ToString(format, System.Globalization.CultureInfo.CurrentCulture)}";
+    }
+
     public override DipSize GetSize(IslandSize size) => size switch
     {
         IslandSize.Compact => IslandMetrics.CompactWide,
-        IslandSize.Large => IslandMetrics.Large with { Height = Math.Clamp(168 + (HasUsage ? 24 : 0) + (Sessions.Count * 46), 260, 460) },
+        IslandSize.Large => IslandMetrics.Large with { Height = Math.Clamp(168 + (HasUsage ? 24 : 0) + (HasLimits ? 44 : 0) + (Sessions.Count * 46), 260, 500) },
         _ => base.GetSize(size),
     };
 
@@ -149,6 +256,8 @@ public sealed class ClaudeModule : IslandModule
             {
                 _usage.Changed -= OnUsageChanged;
             }
+
+            _limitsTimer?.Dispose();
         }
 
         base.Dispose(disposing);

@@ -221,6 +221,12 @@ public class DeveloperModuleTests
 
         public event EventHandler<ClaudeNotice>? NoticeReceived;
 
+        public event EventHandler<ClaudeRateLimits>? RateLimitsReceived
+        {
+            add { }
+            remove { }
+        }
+
         public void Request(ApprovalRequest request) => PermissionRequested?.Invoke(this, request);
 
         public void Notice(ClaudeNotice notice) => NoticeReceived?.Invoke(this, notice);

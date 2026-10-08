@@ -225,6 +225,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
 
         _calendarModule = new CalendarModule(calendar, shell, _time, _dispatcher);
         _approvalsModule = new ApprovalsModule(hooks, _time, _dispatcher);
+        hooks.RateLimitsReceived += (_, limits) => _dispatcher.TryEnqueue(() => _claudeModule.ApplyLimits(limits));
         _ciModule = new CiModule(ci, shell, _time, _dispatcher);
 
         _clipboardModule = new ClipboardModule(clipboard, _time);

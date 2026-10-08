@@ -258,9 +258,12 @@ public sealed class SettingsViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsClaudeConnected));
         OnPropertyChanged(nameof(IsClaudeDisconnected));
-        ClaudeStatus = IsClaudeConnected
-            ? "Connected. New Claude Code sessions ask here first; \"In terminal\" falls back to the usual prompt."
-            : "Not connected. Claude Code asks for permission in the terminal only.";
+        string settings = ClaudeHooksInstaller.DefaultSettingsPath();
+        ClaudeStatus = !IsClaudeConnected
+            ? "Not connected. Claude Code asks for permission in the terminal only."
+            : ClaudeHooksInstaller.HasCustomStatusLine(settings)
+                ? "Connected. Approvals work; plan limits need WinIsland's status line, but you have your own status line, so it was left alone."
+                : "Connected. Approvals and plan limits (session and weekly %) now reach the island.";
     }
 
     private async Task ConnectSpotifyAsync()

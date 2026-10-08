@@ -64,6 +64,7 @@ internal sealed class PreviewScenario
             Media.SetSessions(new MediaSessionInfo("Spotify.exe", "Spotify", true, true), new MediaSessionInfo("MSEdge", "Microsoft Edge", false, false));
             Media.Set(await SongAsync());
         });
+        At(queue, 2.0, () => Hooks.Limits(37, 62));
         At(queue, 9.5, target.PreviewActivate);
         At(queue, 10.6, () => target.PreviewShowLyrics(true));
         At(queue, 12.0, () =>

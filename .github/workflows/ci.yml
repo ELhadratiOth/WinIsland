@@ -94,6 +94,14 @@ jobs:
           if ($p.ExitCode -ne 0 -or -not [string]::IsNullOrEmpty($out) -or $watch.ElapsedMilliseconds -gt 8000) { throw 'Hook mode misbehaved' }
           if (Get-Process WinIsland -ErrorAction SilentlyContinue) { throw 'Hook mode started the island' }
 
+          # Status line mode prints the line (model + plan limits) even without the island.
+          Set-Content hook/status.json '{"model":{"display_name":"Opus"},"rate_limits":{"five_hour":{"used_percentage":23.4,"resets_at":1791460800},"seven_day":{"used_percentage":41.2,"resets_at":1791720000}}}' -NoNewline
+          $s = Start-Process (Resolve-Path 'publish/release/WinIsland.exe').Path -ArgumentList '--claude-statusline' `
+                 -RedirectStandardInput hook/status.json -RedirectStandardOutput hook/status.txt -RedirectStandardError hook/status-err.txt -PassThru -Wait
+          $line = Get-Content hook/status.txt -Raw
+          Write-Host "statusline exit=$($s.ExitCode) output='$line'"
+          if ($s.ExitCode -ne 0 -or $line -ne 'Opus · 5h 23% · week 41%') { throw 'Status line mode misbehaved' }
+
       - name: Visual capture (window configurations)
         shell: pwsh
         continue-on-error: true

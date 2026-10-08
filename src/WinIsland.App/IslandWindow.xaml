@@ -533,15 +533,56 @@
                         </Border>
                     </Grid>
 
-                    <!-- Token usage from the local transcripts (today + current 5-hour window). -->
-                    <StackPanel
-                        Grid.Row="1"
-                        Margin="2,-4,0,0"
-                        Orientation="Horizontal"
-                        Spacing="10"
-                        Visibility="{x:Bind ViewModel.Claude.HasUsage, Mode=OneWay}">
-                        <TextBlock Style="{StaticResource IslandTimeStyle}" Text="{x:Bind ViewModel.Claude.UsageToday, Mode=OneWay}" />
-                        <TextBlock Style="{StaticResource IslandTimeStyle}" Foreground="{StaticResource IslandTertiaryBrush}" Text="{x:Bind ViewModel.Claude.UsageWindow, Mode=OneWay}" />
+                    <StackPanel Grid.Row="1" Margin="2,-4,0,0" Spacing="8">
+                        <!-- Plan limits (Pro/Max) from Claude Code's status line, like /usage. -->
+                        <Grid ColumnSpacing="16" Visibility="{x:Bind ViewModel.Claude.HasLimits, Mode=OneWay}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid ColumnSpacing="8" Visibility="{x:Bind ViewModel.Claude.HasFiveHourLimit, Mode=OneWay}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="52" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Style="{StaticResource IslandTimeStyle}" Text="Session" />
+                                <StackPanel Grid.Column="1" Spacing="3">
+                                    <Grid Height="4" Background="{StaticResource IslandTrackBrush}" CornerRadius="2">
+                                        <Rectangle Fill="{x:Bind local:Converters.ToBrush(ViewModel.Claude.LimitAccent), Mode=OneWay}" RadiusX="2" RadiusY="2">
+                                            <Rectangle.RenderTransform>
+                                                <ScaleTransform ScaleX="{x:Bind ViewModel.Claude.FiveHourFraction, Mode=OneWay}" />
+                                            </Rectangle.RenderTransform>
+                                        </Rectangle>
+                                    </Grid>
+                                    <TextBlock FontSize="10.5" Foreground="{StaticResource IslandTertiaryBrush}" Text="{x:Bind ViewModel.Claude.FiveHourLimitText, Mode=OneWay}" />
+                                </StackPanel>
+                            </Grid>
+                            <Grid Grid.Column="1" ColumnSpacing="8" Visibility="{x:Bind ViewModel.Claude.HasWeekLimit, Mode=OneWay}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="52" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Style="{StaticResource IslandTimeStyle}" Text="Week" />
+                                <StackPanel Grid.Column="1" Spacing="3">
+                                    <Grid Height="4" Background="{StaticResource IslandTrackBrush}" CornerRadius="2">
+                                        <Rectangle Fill="{x:Bind local:Converters.ToBrush(ViewModel.Claude.LimitAccent), Mode=OneWay}" RadiusX="2" RadiusY="2">
+                                            <Rectangle.RenderTransform>
+                                                <ScaleTransform ScaleX="{x:Bind ViewModel.Claude.WeekFraction, Mode=OneWay}" />
+                                            </Rectangle.RenderTransform>
+                                        </Rectangle>
+                                    </Grid>
+                                    <TextBlock FontSize="10.5" Foreground="{StaticResource IslandTertiaryBrush}" Text="{x:Bind ViewModel.Claude.WeekLimitText, Mode=OneWay}" />
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                        <!-- Token usage from the local transcripts (today + current 5-hour window). -->
+                        <StackPanel
+                            Orientation="Horizontal"
+                            Spacing="10"
+                            Visibility="{x:Bind ViewModel.Claude.HasUsage, Mode=OneWay}">
+                            <TextBlock Style="{StaticResource IslandTimeStyle}" Text="{x:Bind ViewModel.Claude.UsageToday, Mode=OneWay}" />
+                            <TextBlock Style="{StaticResource IslandTimeStyle}" Foreground="{StaticResource IslandTertiaryBrush}" Text="{x:Bind ViewModel.Claude.UsageWindow, Mode=OneWay}" />
+                        </StackPanel>
                     </StackPanel>
 
                     <ListView

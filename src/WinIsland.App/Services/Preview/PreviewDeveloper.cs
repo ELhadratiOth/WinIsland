@@ -13,6 +13,14 @@ internal sealed class PreviewHookServer : IClaudeHookServer
         remove { }
     }
 
+    public event EventHandler<ClaudeRateLimits>? RateLimitsReceived;
+
+    public void Limits(double fiveHour, double week)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        RateLimitsReceived?.Invoke(this, new ClaudeRateLimits(fiveHour, now.AddHours(2.4), week, now.AddDays(3.2)));
+    }
+
     public ApprovalRequest Request(string tool, string summary, string project)
     {
         var request = new ApprovalRequest(tool, summary, project, null);

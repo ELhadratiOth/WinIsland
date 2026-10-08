@@ -30,7 +30,7 @@ Use the tray icon to change settings, enable **Start with Windows**, or exit.
 | --- | --- |
 | **Clock + weather** | Time and date; temperature and conditions from Open-Meteo (city or Windows location). |
 | **Now playing** | Real cover art, title, artist, album and app. Shuffle, repeat, drag to seek, choose between players, time-synced **lyrics** (lrclib.net) and a **like** button for Spotify Liked Songs (connect your own Spotify app in Settings). |
-| **Claude Code** | Working/idle sessions, a prompt box, today's tokens and the current 5-hour window. |
+| **Claude Code** | Working/idle sessions, a prompt box, your plan limits like `/usage` (session and weekly %, with reset times and a warning at 80% / 95%), and today's tokens. |
 | **Claude approvals** | Permission prompts appear on the island with Allow / Deny / In terminal (Settings › Claude Code › Connect). |
 | **Calendar** | Your next meeting from an ICS feed: shown 10 minutes before, reminders at 5 minutes and at the start, **Join** for Teams / Zoom / Meet / Webex. |
 | **Builds** | GitHub Actions for the repositories you list: live while building, green/red when done. |
@@ -57,8 +57,9 @@ encrypted for your Windows account (DPAPI).
 - Explorer file-copy progress isn't exposed by Windows; the Downloads module covers browser
   downloads.
 - Brightness works on built-in displays (laptops, tablets), not external monitors.
-- Claude usage costs are estimates at public API prices; subscription limits aren't published,
-  so the island shows the 5-hour window and when it resets.
+- Claude usage costs are estimates at public API prices. Plan limits (session and weekly %, like
+  `/usage`) come from Claude Code's status line, so they need a Pro or Max plan, WinIsland as the
+  status line (Settings › Claude Code › Connect), and an open Claude Code session to update.
 - Sending a message to a Claude Code session requires the native `claude.exe` on `PATH`.
 
 Verify downloads against `SHA256SUMS.txt`.

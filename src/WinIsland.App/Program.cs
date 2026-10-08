@@ -16,8 +16,12 @@ public static class Program
         int hook = Array.IndexOf(args, "--claude-hook");
         if (hook >= 0)
         {
-            string kind = hook + 1 < args.Length ? args[hook + 1] : "permission";
-            return ClaudeHookClient.Run(kind, Console.In, Console.Out);
+            return RunHook(hook + 1 < args.Length ? args[hook + 1] : "permission");
+        }
+
+        if (args.Contains("--claude-statusline"))
+        {
+            return RunHook("statusline");
         }
 
         WinRT.ComWrappersSupport.InitializeComWrappers();
@@ -28,5 +32,14 @@ public static class Program
             _ = new App();
         });
         return 0;
+    }
+
+    /// <summary>Claude Code speaks UTF-8 on stdin/stdout regardless of the console code page.</summary>
+    private static int RunHook(string kind)
+    {
+        var utf8 = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        using var input = new StreamReader(Console.OpenStandardInput(), utf8);
+        using var output = new StreamWriter(Console.OpenStandardOutput(), utf8);
+        return ClaudeHookClient.Run(kind, input, output);
     }
 }
