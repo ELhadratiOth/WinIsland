@@ -9,9 +9,9 @@ on:
         description: Version to release (e.g. 0.1.0). Creates tag v<version>.
         required: true
       prerelease:
-        description: Mark as pre-release
+        description: Mark as pre-release (normal releases become "Latest")
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: write

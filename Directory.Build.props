@@ -8,7 +8,7 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Overridden by the release workflow with -p:Version=<tag>. -->
-    <Version>0.2.0</Version>
+    <Version>0.2.2</Version>
     <Company>WinIsland</Company>
     <Product>WinIsland</Product>
   </PropertyGroup>

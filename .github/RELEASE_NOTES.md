@@ -1,8 +1,8 @@
 A native Dynamic Island for Windows 10/11, built with C# / .NET 10 / WinUI 3.
 
-> **Pre-release.** The core logic is unit-tested and the app builds in CI, but window behaviour
-> (transparency, click-through, focus hand-off, fullscreen hiding) still needs testing on real
-> Windows desktops. Please report anything that misbehaves.
+Every build is unit-tested and launched on Windows in CI, which also photographs each island
+state. If something misbehaves on your desktop, please open an issue with the log
+(tray › Open log file).
 
 ## Install
 
