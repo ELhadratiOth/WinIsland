@@ -235,7 +235,8 @@ public sealed class ClaudeModule : IslandModule
         }
 
         DateTimeOffset local = TimeZoneInfo.ConvertTime(when, _time.LocalTimeZone);
-        string format = withDay ? "ddd t" : "t";
+        // The weekly reset is days away: the day is enough (and fits the half-width bar label).
+        string format = withDay ? "dddd" : "t";
         return $" · resets {local.ToString(format, System.Globalization.CultureInfo.CurrentCulture)}";
     }
 
