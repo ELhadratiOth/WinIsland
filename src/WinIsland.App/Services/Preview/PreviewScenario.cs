@@ -16,7 +16,8 @@ namespace WinIsland.App.Services.Preview;
 /// 29 controls · 31 Pomodoro timer · 34 back to compact (timer) · 36 a download finishes ·
 /// 39 clipboard history · 41.5 file shelf · 44 back to compact · 45 Claude asks for approval ·
 /// 47.5 interactive (approve) · 51 a build starts · 53.5 it passes · 58 a meeting in 5 minutes ·
-/// 61 compact (meeting countdown) · 64 end. Weather shows next to the clock throughout.
+/// 61 compact (meeting countdown) · 66.5 plugged in (charging) · 69 focus mode on (controls) ·
+/// 72 focus off · 74 end. Weather shows next to the clock throughout.
 /// </summary>
 internal sealed class PreviewScenario
 {
@@ -51,6 +52,8 @@ internal sealed class PreviewScenario
     public PreviewWeather Weather { get; } = new();
 
     public PreviewCalendar Calendar { get; } = new();
+
+    public PreviewLibrary Library { get; } = new();
 
     public string ClaudeProjectsDirectory { get; }
 
@@ -108,6 +111,18 @@ internal sealed class PreviewScenario
         At(queue, 53.5, () => Ci.Set(Runs(Core.GitHub.RunState.Succeeded)));
         At(queue, 58.0, Calendar.MeetingSoon);
         At(queue, 61.0, target.PreviewDismiss);
+        At(queue, 66.5, Power.PlugIn);
+        At(queue, 69.0, () =>
+        {
+            target.PreviewFocus(true);
+            target.PreviewActivate();
+            target.PreviewSelect("controls");
+        });
+        At(queue, 72.0, () =>
+        {
+            target.PreviewDismiss();
+            target.PreviewFocus(false);
+        });
     }
 
     private void At(DispatcherQueue queue, double seconds, Action action)
@@ -208,4 +223,6 @@ internal interface IPreviewTarget
     void PreviewShowLyrics(bool show);
 
     void PreviewShelf(params string[] paths);
+
+    void PreviewFocus(bool on);
 }

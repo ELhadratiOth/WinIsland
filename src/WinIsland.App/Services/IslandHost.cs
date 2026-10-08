@@ -147,7 +147,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _clockModule = new ClockModule(_time, _dispatcher, weather, () => _settings.WeatherFahrenheit);
         _spotify = preview ? null : new SpotifyLibrary(() => _settings.SpotifyClientId);
         ILyricsProvider lyrics = preview ? new Preview.PreviewLyrics() : new LrcLibClient(() => _settings.OnlineLyrics);
-        _mediaModule = new MediaModule(_media, _time, _dispatcher, lyrics, _spotify);
+        _mediaModule = new MediaModule(_media, _time, _dispatcher, lyrics, (IMusicLibrary?)_preview?.Library ?? _spotify);
         _usage = new ClaudeUsageTracker(_preview?.ClaudeProjectsDirectory ?? ClaudeSessionMonitorOptions.DefaultProjectsDirectory(), _time);
         _claudeModule = new ClaudeModule(_claudeSessions, new ClaudeCliMessenger(), _dispatcher, _time, _usage);
 
@@ -295,6 +295,8 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
     void Preview.IPreviewTarget.PreviewShowLyrics(bool show) => _mediaModule.ShowLyrics = show;
 
     void Preview.IPreviewTarget.PreviewShelf(params string[] paths) => _shelfModule.Add(paths);
+
+    void Preview.IPreviewTarget.PreviewFocus(bool on) => UpdateSettings(s => s with { FocusMode = on });
 
     void Preview.IPreviewTarget.PreviewStartTimer()
     {

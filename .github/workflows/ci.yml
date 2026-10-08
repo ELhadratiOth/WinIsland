@@ -142,7 +142,8 @@ jobs:
             '09-mic-compact' = 25.9; '10-privacy-expanded' = 28.0; '11-controls' = 30.4; '12-timer' = 33.2; '13-timer-compact' = 35.6
             '14-download-done' = 37.0; '15-clipboard' = 40.5; '16-shelf' = 43.0
             '17-approval-notice' = 46.3; '18-approval' = 49.0; '19-build-running' = 52.5; '20-build-passed' = 55.0
-            '21-meeting-notice' = 59.0; '22-meeting-compact' = 67.0
+            '21-meeting-notice' = 59.0; '22-meeting-compact' = 65.5
+            '23-charging' = 67.3; '24-focus-controls' = 71.0
           }
           foreach ($name in $shots.Keys) {
             $wait = $shots[$name] - ((Get-Date) - $start).TotalSeconds

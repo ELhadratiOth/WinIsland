@@ -53,12 +53,14 @@ internal sealed class PreviewBrightness : IBrightnessControl
 
 internal sealed class PreviewPower : IPowerSource
 {
-    public PowerStatus Current => new(true, 76, false, false, false);
+    public PowerStatus Current { get; private set; } = new(true, 76, false, false, false);
 
-    public event EventHandler? Changed
+    public event EventHandler? Changed;
+
+    public void PlugIn()
     {
-        add { }
-        remove { }
+        Current = Current with { IsPluggedIn = true, IsCharging = true };
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 }
 

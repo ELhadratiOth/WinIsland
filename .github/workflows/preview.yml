@@ -50,7 +50,7 @@ jobs:
           $clock = [System.Diagnostics.Stopwatch]::StartNew()
           $index = 0
           $timestamps = New-Object System.Collections.Generic.List[string]
-          while ($clock.Elapsed.TotalSeconds -lt 69) {
+          while ($clock.Elapsed.TotalSeconds -lt 75) {
             $graphics.CopyFromScreen($x, 0, 0, 0, $bitmap.Size)
             $bitmap.Save(("frames/f{0:D4}.png" -f $index), [System.Drawing.Imaging.ImageFormat]::Png)
             $timestamps.Add(("{0:D4} {1}" -f $index, [int]$clock.Elapsed.TotalMilliseconds))
