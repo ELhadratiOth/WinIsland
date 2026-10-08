@@ -33,6 +33,9 @@ public sealed record IslandSettings
     /// <summary>Client ID of the user's own Spotify developer app (for "Liked Songs"). Empty: off.</summary>
     public string SpotifyClientId { get; init; } = string.Empty;
 
+    /// <summary>GitHub repositories ("owner/name") whose Actions runs appear on the island.</summary>
+    public IReadOnlyList<string> GitHubRepos { get; init; } = [];
+
     /// <summary>Focus mode: only the clock, timers, recording indicators and approvals may show.</summary>
     public bool FocusMode { get; init; }
 

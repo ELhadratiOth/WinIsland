@@ -46,7 +46,7 @@ public sealed class ControlsModule : IslandModule
     private bool _focusMode;
 
     public ControlsModule(IAudioEndpoint speakers, IAudioEndpoint microphone, IBrightnessControl brightness, IPowerSource power, IUiDispatcher dispatcher)
-        : base(ModuleId, "Controls", "")
+        : base(ModuleId, "Controls", "\uE995")
     {
         _speakers = speakers ?? throw new ArgumentNullException(nameof(speakers));
         _microphone = microphone ?? throw new ArgumentNullException(nameof(microphone));
@@ -164,7 +164,7 @@ public sealed class ControlsModule : IslandModule
         }
     }
 
-    public string MicGlyph => _isMicMuted ? "" : "";
+    public string MicGlyph => _isMicMuted ? "\uEC54" : "\uE720";
 
     public string MicLabel => _isMicMuted ? "Mic off" : "Mic on";
 
@@ -244,8 +244,8 @@ public sealed class ControlsModule : IslandModule
     };
 
     internal static string VolumeIcon(double volume, bool muted) => muted || volume <= 0
-        ? ""
-        : volume < 34 ? "" : volume < 67 ? "" : "";
+        ? "\uE74F"
+        : volume < 34 ? "\uE993" : volume < 67 ? "\uE994" : "\uE995";
 
     internal static uint BatteryColor(PowerStatus status) =>
         status.IsPluggedIn ? Palette.Green
@@ -377,9 +377,9 @@ public sealed class ControlsModule : IslandModule
     {
         (string glyph, string label, double value, string text, bool bar, uint accent) = _osd switch
         {
-            OsdKind.Brightness => ("", "Brightness", (double)_brightnessLevel, Percent(_brightnessLevel), true, Palette.White),
+            OsdKind.Brightness => ("\uE706", "Brightness", (double)_brightnessLevel, Percent(_brightnessLevel), true, Palette.White),
             OsdKind.Microphone => (MicGlyph, _isMicMuted ? "Microphone muted" : "Microphone on", 0d, string.Empty, false, _isMicMuted ? Palette.Red : Palette.White),
-            OsdKind.Battery => (_powerStatus.IsPluggedIn ? "" : "", _powerStatus.IsPluggedIn ? "Charging" : "Low battery", _powerStatus.Percent, Percent(_powerStatus.Percent), true, BatteryColor(_powerStatus)),
+            OsdKind.Battery => (_powerStatus.IsPluggedIn ? "\uE945" : "\uE83F", _powerStatus.IsPluggedIn ? "Charging" : "Low battery", _powerStatus.Percent, Percent(_powerStatus.Percent), true, BatteryColor(_powerStatus)),
             _ => (VolumeGlyph, "Volume", _isMuted ? 0 : _volume, _isMuted ? "Muted" : Percent(_volume), true, Palette.White),
         };
 

@@ -21,7 +21,7 @@ public sealed class ClipboardModule : IslandModule
     private readonly TimeProvider _time;
 
     public ClipboardModule(IClipboardService clipboard, TimeProvider time)
-        : base(ModuleId, "Clipboard", "")
+        : base(ModuleId, "Clipboard", "\uE77F")
     {
         _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
         _time = time ?? throw new ArgumentNullException(nameof(time));
@@ -135,7 +135,7 @@ public sealed class ClipboardItem : ObservableObject
         IsLink = Uri.TryCreate(text.Trim(), UriKind.Absolute, out Uri? uri) && uri.Scheme is "http" or "https";
         int lines = text.Split('\n').Length;
         Kind = IsLink ? "Link" : lines > 1 ? $"{lines} lines" : $"{text.Length} characters";
-        Glyph = IsLink ? "" : lines > 1 ? "" : "";
+        Glyph = IsLink ? "\uE71B" : lines > 1 ? "\uE8A5" : "\uE8C8";
         Refresh(now);
     }
 

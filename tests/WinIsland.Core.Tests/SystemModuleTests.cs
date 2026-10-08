@@ -49,7 +49,7 @@ public class SystemModuleTests
         _speakers.IsMuted = true;
         _speakers.Raise(external: true);
 
-        Assert.Equal("", controls.VolumeGlyph);
+        Assert.Equal("\uE74F", controls.VolumeGlyph);
         Assert.Equal("Muted", controls.OsdText);
     }
 

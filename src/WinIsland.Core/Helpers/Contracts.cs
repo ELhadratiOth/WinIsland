@@ -60,16 +60,16 @@ public static class SizeText
     /// <summary>Segoe Fluent Icons glyph for a file, by extension.</summary>
     public static string GlyphFor(string path) => Path.GetExtension(path).ToLowerInvariant() switch
     {
-        "" when Directory.Exists(path) => "",
-        ".png" or ".jpg" or ".jpeg" or ".gif" or ".webp" or ".bmp" or ".heic" or ".svg" => "",
-        ".mp4" or ".mov" or ".mkv" or ".avi" or ".webm" => "",
-        ".mp3" or ".wav" or ".flac" or ".m4a" or ".ogg" => "",
-        ".zip" or ".7z" or ".rar" or ".tar" or ".gz" => "",
-        ".pdf" => "",
-        ".exe" or ".msi" or ".msix" or ".appx" => "",
-        ".doc" or ".docx" or ".txt" or ".md" or ".rtf" => "",
-        ".xls" or ".xlsx" or ".csv" => "",
-        ".cs" or ".js" or ".ts" or ".py" or ".json" or ".xml" or ".html" or ".css" => "",
-        _ => "",
+        "" when Directory.Exists(path) => "\uE8B7",
+        ".png" or ".jpg" or ".jpeg" or ".gif" or ".webp" or ".bmp" or ".heic" or ".svg" => "\uEB9F",
+        ".mp4" or ".mov" or ".mkv" or ".avi" or ".webm" => "\uE714",
+        ".mp3" or ".wav" or ".flac" or ".m4a" or ".ogg" => "\uE8D6",
+        ".zip" or ".7z" or ".rar" or ".tar" or ".gz" => "\uF012",
+        ".pdf" => "\uEA90",
+        ".exe" or ".msi" or ".msix" or ".appx" => "\uECAA",
+        ".doc" or ".docx" or ".txt" or ".md" or ".rtf" => "\uE8A5",
+        ".xls" or ".xlsx" or ".csv" => "\uE80A",
+        ".cs" or ".js" or ".ts" or ".py" or ".json" or ".xml" or ".html" or ".css" => "\uE943",
+        _ => "\uE7C3",
     };
 }

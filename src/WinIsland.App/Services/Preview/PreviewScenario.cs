@@ -14,7 +14,8 @@ namespace WinIsland.App.Services.Preview;
 /// 7.5 compact media · 9.5 interactive media · 10.6 lyrics · 12 Claude panel · 15 expanded clock · 18 back to compact ·
 /// 20 volume keys (OSD) · 22.5 Teams starts using the microphone · 26.5 interactive (privacy) ·
 /// 29 controls · 31 Pomodoro timer · 34 back to compact (timer) · 36 a download finishes ·
-/// 39 clipboard history · 41.5 file shelf · 44 back to compact · 46 end.
+/// 39 clipboard history · 41.5 file shelf · 44 back to compact · 45 Claude asks for approval ·
+/// 47.5 interactive (approve) · 51 a build starts · 53.5 it passes · 58 end.
 /// </summary>
 internal sealed class PreviewScenario
 {
@@ -41,6 +42,10 @@ internal sealed class PreviewScenario
     public PreviewClipboard Clipboard { get; } = new();
 
     public PreviewDownloads Downloads { get; } = new();
+
+    public PreviewHookServer Hooks { get; } = new();
+
+    public PreviewCi Ci { get; } = new();
 
     public string ClaudeProjectsDirectory { get; }
 
@@ -86,6 +91,16 @@ internal sealed class PreviewScenario
         });
         At(queue, 41.5, () => target.PreviewSelect("shelf"));
         At(queue, 44.0, target.PreviewDismiss);
+        Core.Claude.ApprovalRequest? approval = null;
+        At(queue, 45.0, () => approval = Hooks.Request("Bash", "npm run deploy -- --env production", "backend-api"));
+        At(queue, 47.5, target.PreviewActivate);
+        At(queue, 50.0, () =>
+        {
+            approval?.Resolve(Core.Claude.ApprovalDecision.Allow);
+            target.PreviewDismiss();
+        });
+        At(queue, 51.0, () => Ci.Set(Runs(Core.GitHub.RunState.Running)));
+        At(queue, 53.5, () => Ci.Set(Runs(Core.GitHub.RunState.Succeeded)));
     }
 
     private void At(DispatcherQueue queue, double seconds, Action action)
@@ -129,6 +144,17 @@ internal sealed class PreviewScenario
             CanShuffle: true, IsShuffleActive: true, CanRepeat: true, RepeatMode: MediaRepeatMode.None);
     }
 
+    private static Core.GitHub.WorkflowRun[] Runs(Core.GitHub.RunState latest)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        return
+        [
+            new(3, "ELhadratiOth/WinIsland", "CI", "main", "Island: approvals and builds", latest, "https://github.com/ELhadratiOth/WinIsland/actions", now),
+            new(2, "ELhadratiOth/WinIsland", "Release", "main", "Release v0.2.0", Core.GitHub.RunState.Succeeded, "https://github.com/ELhadratiOth/WinIsland/actions", now.AddMinutes(-35)),
+            new(1, "ELhadratiOth/website", "Deploy", "main", "Update landing page", Core.GitHub.RunState.Failed, "https://github.com/ELhadratiOth/website/actions", now.AddHours(-3)),
+        ];
+    }
+
     private void CreateClaudeSessions()
     {
         if (Directory.Exists(ClaudeProjectsDirectory))
@@ -141,12 +167,22 @@ internal sealed class PreviewScenario
         Session("data-pipeline", "c3", TimeSpan.FromMinutes(14));
     }
 
+    /// <summary>An assistant line with token usage, so the Claude panel shows today's usage.</summary>
+    private static string UsageLine(string id, TimeSpan age)
+    {
+        string timestamp = (DateTimeOffset.UtcNow - age).ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+        long cacheRead = id == "a1" ? 1_250_000 : 640_000;
+        return "{\"type\":\"assistant\",\"timestamp\":\"" + timestamp + "\",\"message\":{\"id\":\"msg_" + id +
+            "\",\"model\":\"claude-sonnet-4-5\",\"usage\":{\"input_tokens\":5200,\"output_tokens\":18400,\"cache_creation_input_tokens\":42000,\"cache_read_input_tokens\":" +
+            cacheRead.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}}}\n";
+    }
+
     private void Session(string project, string id, TimeSpan age)
     {
         string dir = Path.Combine(ClaudeProjectsDirectory, $"C--work-{project}");
         Directory.CreateDirectory(dir);
         string file = Path.Combine(dir, $"{id}.jsonl");
-        File.WriteAllText(file, $$"""{"type":"user","cwd":"C:\\work\\{{project}}"}""" + "\n");
+        File.WriteAllText(file, $$"""{"type":"user","cwd":"C:\\work\\{{project}}"}""" + "\n" + UsageLine(id, age));
         File.SetLastWriteTimeUtc(file, DateTime.UtcNow - age);
     }
 }

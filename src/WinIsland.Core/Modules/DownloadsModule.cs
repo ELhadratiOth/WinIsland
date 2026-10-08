@@ -23,7 +23,7 @@ public sealed class DownloadsModule : IslandModule
     private CompletedItem? _latest;
 
     public DownloadsModule(IDownloadSource source, IShellLauncher shell, IUiDispatcher dispatcher)
-        : base(ModuleId, "Downloads", "")
+        : base(ModuleId, "Downloads", "\uE896")
     {
         _source = source ?? throw new ArgumentNullException(nameof(source));
         _shell = shell ?? throw new ArgumentNullException(nameof(shell));

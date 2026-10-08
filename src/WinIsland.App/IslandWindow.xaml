@@ -447,6 +447,7 @@
                     Visibility="{x:Bind ViewModel.ShowClaudeLarge, Mode=OneWay}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -487,9 +488,20 @@
                         </Border>
                     </Grid>
 
+                    <!-- Token usage from the local transcripts (today + current 5-hour window). -->
+                    <StackPanel
+                        Grid.Row="1"
+                        Margin="2,-4,0,0"
+                        Orientation="Horizontal"
+                        Spacing="10"
+                        Visibility="{x:Bind ViewModel.Claude.HasUsage, Mode=OneWay}">
+                        <TextBlock Style="{StaticResource IslandTimeStyle}" Text="{x:Bind ViewModel.Claude.UsageToday, Mode=OneWay}" />
+                        <TextBlock Style="{StaticResource IslandTimeStyle}" Foreground="{StaticResource IslandTertiaryBrush}" Text="{x:Bind ViewModel.Claude.UsageWindow, Mode=OneWay}" />
+                    </StackPanel>
+
                     <ListView
                         x:Name="SessionList"
-                        Grid.Row="1"
+                        Grid.Row="2"
                         Margin="-6,0"
                         ItemContainerStyle="{StaticResource SessionItemStyle}"
                         ItemsSource="{x:Bind ViewModel.Claude.Sessions}"
@@ -547,7 +559,7 @@
                         </ListView.ItemTemplate>
                     </ListView>
 
-                    <Grid Grid.Row="2" ColumnSpacing="8">
+                    <Grid Grid.Row="3" ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
@@ -570,7 +582,7 @@
                     </Grid>
 
                     <TextBlock
-                        Grid.Row="3"
+                        Grid.Row="4"
                         Margin="4,0,0,0"
                         Style="{StaticResource IslandCaptionStyle}"
                         MaxLines="1"

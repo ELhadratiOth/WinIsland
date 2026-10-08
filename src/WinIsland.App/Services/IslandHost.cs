@@ -5,6 +5,7 @@ using WinIsland.Core.Diagnostics;
 using WinIsland.Core.Display;
 using WinIsland.Core.Helpers;
 using WinIsland.Core.Geometry;
+using WinIsland.Core.GitHub;
 using WinIsland.Core.Integrations;
 using WinIsland.Core.Interaction;
 using WinIsland.Core.Layout;
@@ -18,7 +19,10 @@ using WinIsland.Core.Visibility;
 using WinIsland.Platform.Windows.Audio;
 using WinIsland.Platform.Windows.Devices;
 using WinIsland.Platform.Windows.Display;
+using WinIsland.Platform.Windows.Claude;
 using WinIsland.Platform.Windows.Foreground;
+using WinIsland.Platform.Windows.GitHub;
+using WinIsland.Platform.Windows.Security;
 using WinIsland.Platform.Windows.Helpers;
 using WinIsland.Platform.Windows.Input;
 using WinIsland.Platform.Windows.Media;
@@ -74,6 +78,10 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
     private readonly DownloadsModule _downloadsModule;
     private readonly MessageWindow? _helperWindow;
     private readonly ClipboardMonitor? _clipboardMonitor;
+    private readonly ApprovalsModule _approvalsModule;
+    private readonly CiModule _ciModule;
+    private readonly GitHubActionsClient? _github;
+    private readonly ClaudeUsageTracker _usage;
     private SettingsWindow? _settingsWindow;
     private SettingsViewModel? _settingsViewModel;
     private readonly IslandStateManager _state;
@@ -124,7 +132,8 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _spotify = preview ? null : new SpotifyLibrary(() => _settings.SpotifyClientId);
         ILyricsProvider lyrics = preview ? new Preview.PreviewLyrics() : new LrcLibClient(() => _settings.OnlineLyrics);
         _mediaModule = new MediaModule(_media, _time, _dispatcher, lyrics, _spotify);
-        _claudeModule = new ClaudeModule(_claudeSessions, new ClaudeCliMessenger(), _dispatcher, _time);
+        _usage = new ClaudeUsageTracker(_preview?.ClaudeProjectsDirectory ?? ClaudeSessionMonitorOptions.DefaultProjectsDirectory(), _time);
+        _claudeModule = new ClaudeModule(_claudeSessions, new ClaudeCliMessenger(), _dispatcher, _time, _usage);
 
         // System devices: Core Audio, WMI brightness, battery, microphone/camera use.
         var integrations = new List<IIntegration>();
@@ -170,13 +179,32 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
             (clipboard, downloads, shell) = (_clipboardMonitor, downloadsWatcher, new ShellLauncher());
         }
 
+        // Developer: Claude Code approvals (hook pipe) and GitHub Actions.
+        IClaudeHookServer hooks;
+        ICiSource ci;
+        if (_preview is not null)
+        {
+            (hooks, ci) = (_preview.Hooks, _preview.Ci);
+        }
+        else
+        {
+            var hookServer = new ClaudeHookServer();
+            _github = new GitHubActionsClient(() => _settings.GitHubRepos, GitHubToken, _time);
+            integrations.AddRange([hookServer, _github]);
+            (hooks, ci) = (hookServer, _github);
+        }
+
+        integrations.Add(_usage);
+        _approvalsModule = new ApprovalsModule(hooks, _time, _dispatcher);
+        _ciModule = new CiModule(ci, shell, _time, _dispatcher);
+
         _clipboardModule = new ClipboardModule(clipboard, _time);
         _shelfModule = new ShelfModule(shell);
         _downloadsModule = new DownloadsModule(downloads, shell, _dispatcher);
 
         // Order = switcher order; the clock goes first as the fallback.
         _state = new IslandStateManager(
-            [_clockModule, _mediaModule, _claudeModule, _privacyModule, _timerModule, _downloadsModule, _clipboardModule, _shelfModule, _controlsModule],
+            [_clockModule, _mediaModule, _claudeModule, _approvalsModule, _privacyModule, _timerModule, _ciModule, _downloadsModule, _clipboardModule, _shelfModule, _controlsModule],
             _time,
             _dispatcher);
         _interaction = new InteractionController(_time, _dispatcher, _settings.ToInteractionOptions());
@@ -276,6 +304,8 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _clipboardModule.Dispose();
         _shelfModule.Dispose();
         _downloadsModule.Dispose();
+        _approvalsModule.Dispose();
+        _ciModule.Dispose();
         _connectivity.Dispose();
         _spotify?.Dispose();
         _settingsWindow?.Close();
@@ -570,6 +600,12 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         }
     }
 
+    /// <summary>A token saved in settings (DPAPI), else GITHUB_TOKEN / GH_TOKEN; public repos work without one.</summary>
+    private static string? GitHubToken() =>
+        SecretStore.Read("github") ??
+        Environment.GetEnvironmentVariable("GITHUB_TOKEN") ??
+        Environment.GetEnvironmentVariable("GH_TOKEN");
+
     private bool IsModuleEnabled(string id) => !_settings.DisabledModules.Contains(id, StringComparer.OrdinalIgnoreCase);
 
     private void OnHotkeyPressed(object? sender, int id)
@@ -676,6 +712,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         UpdatePointerWatcher();
         Reevaluate();
         _settingsViewModel?.Refresh();
+        _github?.Refresh();
         _ = SaveSettingsAsync(_settings);
     }
 
@@ -700,7 +737,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
     {
         if (_settingsWindow is null)
         {
-            _settingsViewModel = new SettingsViewModel(() => _settings, UpdateSettings, _state.Modules, _spotify);
+            _settingsViewModel = new SettingsViewModel(() => _settings, UpdateSettings, _state.Modules, _spotify, () => _github?.Refresh());
             _settingsWindow = new SettingsWindow(_settingsViewModel);
             _settingsWindow.Closed += (_, _) =>
             {

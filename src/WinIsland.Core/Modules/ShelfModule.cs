@@ -18,7 +18,7 @@ public sealed class ShelfModule : IslandModule
     private bool _isDropTarget;
 
     public ShelfModule(IShellLauncher shell)
-        : base(ModuleId, "Shelf", "")
+        : base(ModuleId, "Shelf", "\uE7B8")
     {
         _shell = shell ?? throw new ArgumentNullException(nameof(shell));
         ClearCommand = new RelayCommand(Clear);

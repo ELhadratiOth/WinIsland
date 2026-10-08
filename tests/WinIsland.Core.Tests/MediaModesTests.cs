@@ -23,7 +23,7 @@ public class MediaModesTests
         Assert.True(media.IsShuffleActive);
         Assert.True(media.IsRepeatActive);
         Assert.Equal(MediaRepeatMode.Track, media.RepeatMode);
-        Assert.Equal("", media.RepeatGlyph);
+        Assert.Equal("\uE8ED", media.RepeatGlyph);
     }
 
     [Fact]
@@ -46,7 +46,7 @@ public class MediaModesTests
 
         media.CycleRepeatCommand.Execute(null);
         Assert.Equal(MediaRepeatMode.List, media.RepeatMode);
-        Assert.Equal("", media.RepeatGlyph);
+        Assert.Equal("\uE8EE", media.RepeatGlyph);
         media.CycleRepeatCommand.Execute(null);
         media.CycleRepeatCommand.Execute(null);
 

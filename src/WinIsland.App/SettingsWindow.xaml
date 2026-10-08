@@ -182,6 +182,45 @@
                         </StackPanel>
                     </StackPanel>
                 </Border>
+
+                <!-- ===== Claude Code ===== -->
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Claude Code" />
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel Padding="0,12,0,14" Spacing="8">
+                        <TextBlock Text="Approve Claude Code from the island" />
+                        <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="Adds a PermissionRequest hook to ~/.claude/settings.json (your other settings are kept, and a backup is made). Permission prompts then appear on the island with Allow, Deny or In terminal. If WinIsland isn't running, Claude Code asks in the terminal as usual." />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button
+                                Command="{x:Bind ViewModel.ConnectClaudeCommand}"
+                                Content="Connect"
+                                Style="{StaticResource AccentButtonStyle}"
+                                Visibility="{x:Bind ViewModel.IsClaudeDisconnected, Mode=OneWay}" />
+                            <Button
+                                Command="{x:Bind ViewModel.DisconnectClaudeCommand}"
+                                Content="Disconnect"
+                                Visibility="{x:Bind ViewModel.IsClaudeConnected, Mode=OneWay}" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="{x:Bind ViewModel.ClaudeStatus, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- ===== GitHub ===== -->
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="GitHub Actions" />
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel Padding="0,12,0,14" Spacing="8">
+                        <TextBlock Text="Repositories" />
+                        <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="One per line, like owner/name. Builds that start and finish appear on the island." />
+                        <TextBox
+                            MinHeight="72"
+                            AcceptsReturn="True"
+                            PlaceholderText="ELhadratiOth/WinIsland"
+                            Text="{x:Bind ViewModel.GitHubRepos, Mode=TwoWay}"
+                            TextWrapping="Wrap" />
+                        <TextBlock Margin="0,8,0,0" Text="Access token (for private repositories)" />
+                        <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="A fine-grained token with read-only Actions access. Stored encrypted for your Windows account; GITHUB_TOKEN or GH_TOKEN also work." />
+                        <PasswordBox Password="{x:Bind ViewModel.GitHubToken, Mode=TwoWay}" PlaceholderText="github_pat_…" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </ScrollViewer>
     </Grid>

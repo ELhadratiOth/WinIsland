@@ -22,10 +22,19 @@ public sealed class ClaudeModule : IslandModule
     private string _attentionText = string.Empty;
     private int _activeCount;
     private bool _isSending;
+    private readonly ClaudeUsageTracker? _usage;
+    private string _usageToday = string.Empty;
+    private string _usageWindow = string.Empty;
 
-    public ClaudeModule(ClaudeSessionMonitor monitor, IClaudeMessenger messenger, IUiDispatcher dispatcher, TimeProvider? time = null)
+    public ClaudeModule(ClaudeSessionMonitor monitor, IClaudeMessenger messenger, IUiDispatcher dispatcher, TimeProvider? time = null, ClaudeUsageTracker? usage = null)
         : base(ModuleId, "Claude Code", "\uE99A")
     {
+        _usage = usage;
+        if (_usage is not null)
+        {
+            _usage.Changed += OnUsageChanged;
+        }
+
         _time = time ?? TimeProvider.System;
         _monitor = monitor ?? throw new ArgumentNullException(nameof(monitor));
         _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
@@ -107,10 +116,26 @@ public sealed class ClaudeModule : IslandModule
 
     public AsyncRelayCommand SendCommand { get; }
 
+    /// <summary>"Today 3.4M tokens · ≈$5.20".</summary>
+    public string UsageToday
+    {
+        get => _usageToday;
+        private set => SetProperty(ref _usageToday, value);
+    }
+
+    /// <summary>"This window 1.1M · resets 3:00 PM".</summary>
+    public string UsageWindow
+    {
+        get => _usageWindow;
+        private set => SetProperty(ref _usageWindow, value);
+    }
+
+    public bool HasUsage => _usageToday.Length > 0;
+
     public override DipSize GetSize(IslandSize size) => size switch
     {
         IslandSize.Compact => IslandMetrics.CompactWide,
-        IslandSize.Large => IslandMetrics.Large with { Height = Math.Clamp(168 + (Sessions.Count * 46), 260, 440) },
+        IslandSize.Large => IslandMetrics.Large with { Height = Math.Clamp(168 + (HasUsage ? 24 : 0) + (Sessions.Count * 46), 260, 460) },
         _ => base.GetSize(size),
     };
 
@@ -120,9 +145,44 @@ public sealed class ClaudeModule : IslandModule
         {
             _monitor.SessionsChanged -= OnSessionsChanged;
             _monitor.SessionBecameIdle -= OnSessionBecameIdle;
+            if (_usage is not null)
+            {
+                _usage.Changed -= OnUsageChanged;
+            }
         }
 
         base.Dispose(disposing);
+    }
+
+    protected override void OnViewActiveChanged(bool active)
+    {
+        // Day and window boundaries pass silently; refresh when the panel opens.
+        if (active)
+        {
+            _usage?.Recompute();
+        }
+    }
+
+    private void OnUsageChanged(object? sender, EventArgs e)
+    {
+        UsageSummary summary = _usage!.Summary;
+        _dispatcher.TryEnqueue(() => ApplyUsage(summary));
+    }
+
+    private void ApplyUsage(UsageSummary summary)
+    {
+        bool had = HasUsage;
+        UsageToday = summary.TodayTokens == 0
+            ? string.Empty
+            : $"Today {UsageText.Tokens(summary.TodayTokens)} tokens" + (summary.TodayCost is { } cost ? string.Create(System.Globalization.CultureInfo.CurrentCulture, $" · ≈${cost:0.00}") : string.Empty);
+        UsageWindow = summary.WindowResetsAt is { } resets
+            ? $"5-hour window {UsageText.Tokens(summary.WindowTokens)} · resets {resets.ToLocalTime().ToString("t", System.Globalization.CultureInfo.CurrentCulture)}"
+            : string.Empty;
+        OnPropertyChanged(nameof(HasUsage));
+        if (had != HasUsage)
+        {
+            NotifyPresentationChanged();
+        }
     }
 
     private void OnSessionsChanged(object? sender, EventArgs e)

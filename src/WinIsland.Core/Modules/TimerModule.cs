@@ -45,7 +45,7 @@ public sealed class TimerModule : IslandModule
     private double _progress;
 
     public TimerModule(TimeProvider time, IUiDispatcher dispatcher)
-        : base(ModuleId, "Timer", "")
+        : base(ModuleId, "Timer", "\uE916")
     {
         _time = time ?? throw new ArgumentNullException(nameof(time));
         _tick = new OneShotTimer(time, dispatcher, Update);
@@ -120,7 +120,7 @@ public sealed class TimerModule : IslandModule
     /// <summary>Presets are offered for a countdown that hasn't started.</summary>
     public bool ShowPresets => _mode == TimerMode.Timer && _state == TimerRunState.Idle;
 
-    public string StartPauseGlyph => IsRunning ? "" : "";
+    public string StartPauseGlyph => IsRunning ? "\uE769" : "\uE768";
 
     public string StartPauseLabel => IsRunning ? "Pause" : _state == TimerRunState.Paused ? "Resume" : "Start";
 

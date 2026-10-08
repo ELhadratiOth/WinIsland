@@ -31,6 +31,11 @@ internal static class Converters
 
     public static SolidColorBrush ToBrush(uint argb) => new(ToColor(argb));
 
+    /// <summary>The same colour at 15% opacity (status badges).</summary>
+    public static SolidColorBrush ToSoftBrush(uint argb) => new(ToColor((argb & 0x00FFFFFF) | 0x26000000));
+
+    public static string Upper(string? text) => (text ?? string.Empty).ToUpperInvariant();
+
     public static Visibility VisibleWhen(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
 
     public static Visibility CollapsedWhen(bool value) => value ? Visibility.Collapsed : Visibility.Visible;

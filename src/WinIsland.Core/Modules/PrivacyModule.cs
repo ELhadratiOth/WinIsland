@@ -22,7 +22,7 @@ public sealed class PrivacyModule : IslandModule
     private bool _isMicMuted;
 
     public PrivacyModule(IPrivacySource source, IAudioEndpoint microphone, IUiDispatcher dispatcher)
-        : base(ModuleId, "In use", "")
+        : base(ModuleId, "In use", "\uE720")
     {
         _source = source ?? throw new ArgumentNullException(nameof(source));
         _microphone = microphone ?? throw new ArgumentNullException(nameof(microphone));
@@ -59,7 +59,7 @@ public sealed class PrivacyModule : IslandModule
         }
     }
 
-    public string MicButtonGlyph => _isMicMuted ? "" : "";
+    public string MicButtonGlyph => _isMicMuted ? "\uEC54" : "\uE720";
 
     public string MicButtonLabel => _isMicMuted ? "Unmute" : "Mute";
 

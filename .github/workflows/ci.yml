@@ -78,6 +78,18 @@ jobs:
           $results | Format-Table | Out-String | Write-Host
           if ($results.Values -contains $false) { throw 'Smoke test failed' }
 
+      - name: Claude hook mode (no island running = no answer, fast exit)
+        shell: pwsh
+        run: |
+          Get-Process WinIsland -ErrorAction SilentlyContinue | Stop-Process -Force
+          $json = '{"session_id":"s","cwd":"C:\\work\\demo","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"echo hi"}}'
+          $watch = [System.Diagnostics.Stopwatch]::StartNew()
+          $out = $json | & (Resolve-Path 'publish/release/WinIsland.exe') --claude-hook permission
+          $code = $LASTEXITCODE
+          Write-Host "exit=$code output='$out' took=$($watch.ElapsedMilliseconds)ms"
+          if ($code -ne 0 -or -not [string]::IsNullOrEmpty("$out") -or $watch.ElapsedMilliseconds -gt 8000) { throw 'Hook mode misbehaved' }
+          if (Get-Process WinIsland -ErrorAction SilentlyContinue) { throw 'Hook mode started the island' }
+
       - name: Visual capture (window configurations)
         shell: pwsh
         continue-on-error: true
@@ -125,6 +137,7 @@ jobs:
             '05-claude-panel' = 14.0; '06-clock-expanded' = 16.5; '07-volume-osd' = 20.6; '08-mic-notice' = 23.5
             '09-mic-compact' = 25.9; '10-privacy-expanded' = 28.0; '11-controls' = 30.4; '12-timer' = 33.2; '13-timer-compact' = 35.6
             '14-download-done' = 37.0; '15-clipboard' = 40.5; '16-shelf' = 43.0
+            '17-approval-notice' = 46.3; '18-approval' = 49.0; '19-build-running' = 52.5; '20-build-passed' = 55.0
           }
           foreach ($name in $shots.Keys) {
             $wait = $shots[$name] - ((Get-Date) - $start).TotalSeconds

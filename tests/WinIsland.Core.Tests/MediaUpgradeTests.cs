@@ -120,7 +120,7 @@ public class MediaUpgradeTests
         await Eventually.TrueAsync(() => media.CanLike, "track found");
 
         Assert.True(media.IsLiked);
-        Assert.Equal("", media.LikeGlyph);
+        Assert.Equal("\uEB52", media.LikeGlyph);
         media.ToggleLikeCommand.Execute(null);
         await Eventually.TrueAsync(() => !library.Saved, "unliked");
         Assert.False(media.IsLiked);
