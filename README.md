@@ -25,6 +25,24 @@ The tray icon (in the **^** overflow on Windows 11) appears even if the island f
 It always offers **Open log file** and **Exit WinIsland**. The log is at
 `%LOCALAPPDATA%\WinIsland\winisland.log`; if startup fails, an error box also points to it.
 
+## Features
+
+Clock with weather · now playing (cover art, shuffle/repeat, seek, player picker, synced lyrics,
+Spotify likes) · Claude Code sessions, usage and **approvals** · calendar with Join · GitHub
+Actions builds · volume/brightness OSD and quick controls · microphone/camera indicator ·
+timer/stopwatch/Pomodoro · downloads · clipboard history · file shelf · focus mode.
+See [.github/RELEASE_NOTES.md](.github/RELEASE_NOTES.md) for details and privacy notes.
+
+Each module lives in `src/WinIsland.Core/Modules` (logic, unit-tested), its Windows source in
+`src/WinIsland.Platform.Windows`, and its view in `src/WinIsland.App/Views`.
+
+### Claude Code approvals
+
+Settings › Claude Code › **Connect** adds a `PermissionRequest` hook to
+`~/.claude/settings.json` that runs `WinIsland.exe --claude-hook permission`. The hook forwards
+the request over a per-user named pipe to the island; if the island isn't running, or you pick
+**In terminal**, it prints nothing and Claude Code asks as usual.
+
 ## Layout
 
 ```
