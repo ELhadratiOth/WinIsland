@@ -36,6 +36,13 @@ public static class MediaSourceNames
         ("windowsterminal", "Terminal"),
     ];
 
+    private static readonly string[] Browsers = ["chrome", "msedge", "firefox", "brave", "opera", "vivaldi"];
+
+    public static bool IsSpotify(string? appId) => appId?.Contains("spotify", StringComparison.OrdinalIgnoreCase) == true;
+
+    public static bool IsBrowser(string? appId) =>
+        !string.IsNullOrEmpty(appId) && Browsers.Any(b => appId.Contains(b, StringComparison.OrdinalIgnoreCase));
+
     public static string Friendly(string? appId)
     {
         if (string.IsNullOrWhiteSpace(appId))

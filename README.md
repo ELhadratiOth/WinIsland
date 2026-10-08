@@ -28,7 +28,7 @@ It always offers **Open log file** and **Exit WinIsland**. The log is at
 ## Features
 
 Clock with weather · now playing (cover art, shuffle/repeat, seek, player picker, synced lyrics,
-Spotify likes) · Claude Code sessions, usage and **approvals** · calendar with Join · GitHub
+Spotify likes, YouTube 👍/👎 through a small browser extension) · Claude Code sessions, usage and **approvals** · calendar with Join · GitHub
 Actions builds · volume/brightness OSD and quick controls · microphone/camera indicator ·
 timer/stopwatch/Pomodoro · downloads · clipboard history · file shelf · focus mode.
 See [.github/RELEASE_NOTES.md](.github/RELEASE_NOTES.md) for details and privacy notes.
@@ -42,6 +42,21 @@ Settings › Claude Code › **Connect** adds a `PermissionRequest` hook to
 `~/.claude/settings.json` that runs `WinIsland.exe --claude-hook permission`. The hook forwards
 the request over a per-user named pipe to the island; if the island isn't running, or you pick
 **In terminal**, it prints nothing and Claude Code asks as usual.
+
+### Claude plan limits
+
+The Claude panel shows your 5-hour and weekly usage like `/usage`. WinIsland asks Claude's usage
+endpoint (`api.anthropic.com/api/oauth/usage`) with the OAuth sign-in Claude Code keeps in
+`~/.claude/.credentials.json` (or `$CLAUDE_CONFIG_DIR`, or `~/.config/claude`): read-only, the token is
+sent only to api.anthropic.com, and it is never refreshed or stored by WinIsland. Token counts come
+from Claude Code's transcripts in `~/.claude/projects` and `~/.config/claude/projects`.
+Settings › Claude Code › *Show my plan limits* turns it off.
+
+### YouTube 👍 / 👎
+
+Browsers don't let other apps press a page's buttons, so `extension/` holds a tiny extension for
+`youtube.com` / `music.youtube.com`. Load it unpacked (see `extension/README.md`); it talks only to
+WinIsland on `127.0.0.1:43822`, which answers browser extensions only.
 
 ## Layout
 

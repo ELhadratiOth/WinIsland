@@ -89,17 +89,22 @@ public sealed class ClaudeUsageTracker : IIntegration
     public static readonly TimeSpan WindowLength = TimeSpan.FromHours(5);
     private static readonly TimeSpan Retention = TimeSpan.FromHours(30);
 
-    private readonly string _projectsDirectory;
+    private readonly IReadOnlyList<string> _projectsDirectories;
     private readonly TimeProvider _time;
     private readonly Lock _gate = new();
     private readonly Dictionary<string, long> _offsets = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, UsageEntry> _entries = new(StringComparer.Ordinal);
-    private FileSystemWatcher? _watcher;
+    private readonly List<FileSystemWatcher> _watchers = [];
     private UsageSummary _summary = UsageSummary.Empty;
 
     public ClaudeUsageTracker(string projectsDirectory, TimeProvider time)
+        : this([projectsDirectory], time)
     {
-        _projectsDirectory = projectsDirectory;
+    }
+
+    public ClaudeUsageTracker(IReadOnlyList<string> projectsDirectories, TimeProvider time)
+    {
+        _projectsDirectories = projectsDirectories ?? throw new ArgumentNullException(nameof(projectsDirectories));
         _time = time ?? throw new ArgumentNullException(nameof(time));
     }
 
@@ -114,31 +119,37 @@ public sealed class ClaudeUsageTracker : IIntegration
 
     public Task StartAsync(CancellationToken cancellationToken) => Task.Run(() =>
     {
-        if (!Directory.Exists(_projectsDirectory))
-        {
-            return;
-        }
-
         DateTime cutoff = _time.GetUtcNow().UtcDateTime - Retention;
-        foreach (string file in Directory.EnumerateFiles(_projectsDirectory, "*.jsonl", SearchOption.AllDirectories))
+        foreach (string directory in _projectsDirectories.Where(Directory.Exists))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (File.GetLastWriteTimeUtc(file) > cutoff)
+            foreach (string file in Directory.EnumerateFiles(directory, "*.jsonl", SearchOption.AllDirectories))
             {
-                ReadNew(file);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (File.GetLastWriteTimeUtc(file) > cutoff)
+                {
+                    try
+                    {
+                        ReadNew(file);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        AppLog.Warn(nameof(ClaudeUsageTracker), "Reading a transcript failed", ex);
+                    }
+                }
             }
-        }
 
-        lock (_gate)
-        {
-            _watcher = new FileSystemWatcher(_projectsDirectory, "*.jsonl")
+            lock (_gate)
             {
-                IncludeSubdirectories = true,
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
-            };
-            _watcher.Changed += (_, e) => OnFileChanged(e.FullPath);
-            _watcher.Created += (_, e) => OnFileChanged(e.FullPath);
-            _watcher.EnableRaisingEvents = true;
+                var watcher = new FileSystemWatcher(directory, "*.jsonl")
+                {
+                    IncludeSubdirectories = true,
+                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
+                };
+                watcher.Changed += (_, e) => OnFileChanged(e.FullPath);
+                watcher.Created += (_, e) => OnFileChanged(e.FullPath);
+                watcher.EnableRaisingEvents = true;
+                _watchers.Add(watcher);
+            }
         }
 
         Recompute();
@@ -148,8 +159,12 @@ public sealed class ClaudeUsageTracker : IIntegration
     {
         lock (_gate)
         {
-            _watcher?.Dispose();
-            _watcher = null;
+            foreach (FileSystemWatcher watcher in _watchers)
+            {
+                watcher.Dispose();
+            }
+
+            _watchers.Clear();
         }
 
         return Task.CompletedTask;

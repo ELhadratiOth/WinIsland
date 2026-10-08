@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "WinIsland for YouTube",
+  "version": "0.1.0",
+  "description": "Lets the WinIsland island like and dislike the YouTube / YouTube Music video that is playing. Talks only to WinIsland on this PC (127.0.0.1).",
+  "permissions": ["alarms"],
+  "host_permissions": ["http://127.0.0.1:43822/*"],
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://music.youtube.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": { "id": "winisland@elhadratioth.github.io", "strict_min_version": "115.0" }
+  }
+}

@@ -103,6 +103,12 @@ public sealed class SettingsViewModel : ObservableObject
         set => Update(s => s with { OnlineArtworkLookup = value });
     }
 
+    public bool ClaudePlanLimits
+    {
+        get => S.ClaudePlanLimits;
+        set => Update(s => s with { ClaudePlanLimits = value });
+    }
+
     public bool OnlineLyrics
     {
         get => S.OnlineLyrics;

@@ -20,6 +20,11 @@ public sealed class MediaModule : IslandModule
 
     private readonly ILyricsProvider? _lyricsProvider;
     private readonly IMusicLibrary? _library;
+    private readonly IBrowserReactions? _reactions;
+    private bool _youtubeHint;
+    private bool _isSpotify;
+    private bool _isBrowser;
+    private string _reactionStatus = string.Empty;
     private readonly OneShotTimer _lyricsTimer;
     private CancellationTokenSource? _trackCts;
     private string _trackKey = string.Empty;
@@ -52,11 +57,12 @@ public sealed class MediaModule : IslandModule
     private bool _canRepeat;
     private MediaRepeatMode _repeatMode;
 
-    public MediaModule(IMediaSource source, TimeProvider time, IUiDispatcher dispatcher, ILyricsProvider? lyrics = null, IMusicLibrary? library = null)
+    public MediaModule(IMediaSource source, TimeProvider time, IUiDispatcher dispatcher, ILyricsProvider? lyrics = null, IMusicLibrary? library = null, IBrowserReactions? reactions = null)
         : base(ModuleId, "Media", "\uEC4F")
     {
         _lyricsProvider = lyrics;
         _library = library;
+        _reactions = reactions;
         _source = source ?? throw new ArgumentNullException(nameof(source));
         _time = time ?? throw new ArgumentNullException(nameof(time));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
@@ -69,11 +75,18 @@ public sealed class MediaModule : IslandModule
         CycleRepeatCommand = new AsyncRelayCommand(_ => CycleRepeatAsync(), () => CanRepeat, LogError);
         _lyricsTimer = new OneShotTimer(time, dispatcher, UpdateLyricLine);
         ToggleLyricsCommand = new RelayCommand(() => ShowLyrics = !ShowLyrics, () => _lyricsProvider is not null);
-        ToggleLikeCommand = new AsyncRelayCommand(_ => ToggleLikeAsync(), () => CanLike, LogError);
+        ToggleLikeCommand = new AsyncRelayCommand(_ => ToggleLikeAsync(), () => ShowHeart, LogError);
+        ThumbUpCommand = new AsyncRelayCommand(_ => ReactAsync(BrowserReaction.Like), () => ShowThumbs, LogError);
+        ThumbDownCommand = new AsyncRelayCommand(_ => ReactAsync(BrowserReaction.Dislike), () => ShowThumbs, LogError);
         SelectSessionCommand = new RelayCommandOf<string>(id => _ = Run(_source.SelectSessionAsync(id)));
         if (_library is not null)
         {
             _library.ConnectionChanged += OnLibraryConnectionChanged;
+        }
+
+        if (_reactions is not null)
+        {
+            _reactions.Changed += OnReactionsChanged;
         }
 
         _source.Changed += OnSourceChanged;
@@ -195,11 +208,15 @@ public sealed class MediaModule : IslandModule
 
     public override DipSize GetSize(IslandSize size) => size switch
     {
-        IslandSize.Compact => IslandMetrics.CompactWide,
+        // Room for the time (and temperature) between the cover and the waveform.
+        IslandSize.Compact => IslandMetrics.CompactWide with { Width = Clock?.HasWeather == true ? 276 : 244 },
         IslandSize.Expanded => new DipSize(460, 206),
         IslandSize.Large => new DipSize(460, 300),
         _ => base.GetSize(size),
     };
+
+    /// <summary>The clock whose time and weather share the compact pill while music plays.</summary>
+    public ClockModule? Clock { get; set; }
 
     /// <summary>The lyrics view is the media module's large size.</summary>
     public override IslandSize InteractiveSize => _showLyrics ? IslandSize.Large : IslandSize.Expanded;
@@ -301,7 +318,13 @@ public sealed class MediaModule : IslandModule
     /// <summary>Full text for lyrics without timestamps.</summary>
     public string LyricsPlainText => _lyrics is { IsSynced: false } l ? string.Join("\n", l.Lines.Select(x => x.Text)) : string.Empty;
 
-    // ---- Like (Spotify "Liked Songs") ----
+    // ---- Like ----
+
+    /// <summary>Asked (on the UI thread) when the heart is pressed before Spotify is connected.</summary>
+    public Action? SpotifyConnectRequested { get; set; }
+
+    /// <summary>The heart shows whenever Spotify is the player; it saves to Liked Songs once connected.</summary>
+    public bool ShowHeart => _isSpotify;
 
     public bool CanLike => _trackId is not null && (_library?.IsConnected ?? false);
 
@@ -320,7 +343,45 @@ public sealed class MediaModule : IslandModule
     /// <summary>Segoe Fluent Icons HeartFill / Heart.</summary>
     public string LikeGlyph => _isLiked ? "\uEB52" : "\uEB51";
 
+    public string LikeToolTip => _library?.IsConnected == true
+        ? (_isLiked ? "Remove from Liked Songs" : "Add to Liked Songs")
+        : "Connect Spotify to like songs";
+
     public AsyncRelayCommand ToggleLikeCommand { get; }
+
+    // ---- Like / dislike for YouTube in a browser ----
+
+    /// <summary>👍/👎 show for a browser playing YouTube (reported by the extension, or spotted in a window title).</summary>
+    public bool ShowThumbs => _isBrowser && (_youtubeHint || ReactionState is not null);
+
+    private BrowserReactionState? ReactionState =>
+        _reactions?.Current is { } s && BrowserReactionProtocol.TitlesMatch(s.Title, _snapshot?.Title) ? s : null;
+
+    public bool IsThumbUp => ReactionState?.Liked ?? false;
+
+    public bool IsThumbDown => ReactionState?.Disliked ?? false;
+
+    /// <summary>What happened to the last press, e.g. how to get the extension.</summary>
+    public string ReactionStatus
+    {
+        get => _reactionStatus;
+        private set
+        {
+            if (SetProperty(ref _reactionStatus, value))
+            {
+                OnPropertyChanged(nameof(ThumbUpToolTip));
+                OnPropertyChanged(nameof(ThumbDownToolTip));
+            }
+        }
+    }
+
+    public string ThumbUpToolTip => _reactionStatus.Length > 0 ? _reactionStatus : "Like";
+
+    public string ThumbDownToolTip => _reactionStatus.Length > 0 ? _reactionStatus : "Dislike";
+
+    public AsyncRelayCommand ThumbUpCommand { get; }
+
+    public AsyncRelayCommand ThumbDownCommand { get; }
 
     /// <summary>Segoe Fluent Icons Pause / Play.</summary>
     public string PlayPauseGlyph => IsPlaying ? "\uE769" : "\uE768";
@@ -381,6 +442,11 @@ public sealed class MediaModule : IslandModule
             {
                 _library.ConnectionChanged -= OnLibraryConnectionChanged;
             }
+
+            if (_reactions is not null)
+            {
+                _reactions.Changed -= OnReactionsChanged;
+            }
         }
 
         base.Dispose(disposing);
@@ -415,6 +481,10 @@ public sealed class MediaModule : IslandModule
         IsAvailable = hasMedia;
         CompactPriority = IsPlaying ? ModulePriority.Media : ModulePriority.Unavailable;
         InteractivePriority = hasMedia ? ModulePriority.Media : ModulePriority.Unavailable;
+
+        _isSpotify = hasMedia && MediaSourceNames.IsSpotify(snapshot!.SourceAppId);
+        _isBrowser = hasMedia && MediaSourceNames.IsBrowser(snapshot!.SourceAppId);
+        NotifyReactionsChanged();
 
         CanShuffle = hasMedia && snapshot!.CanShuffle;
         IsShuffleActive = hasMedia && snapshot!.IsShuffleActive;
@@ -472,6 +542,9 @@ public sealed class MediaModule : IslandModule
         SetLyrics(null, loading: false);
         SetTrackId(null);
         IsLiked = false;
+        _youtubeHint = false;
+        ReactionStatus = string.Empty;
+        NotifyReactionsChanged();
         if (snapshot is null)
         {
             return;
@@ -479,6 +552,11 @@ public sealed class MediaModule : IslandModule
 
         var cts = new CancellationTokenSource();
         _trackCts = cts;
+        if (_isBrowser && _reactions is not null)
+        {
+            _ = ProbeYouTubeAsync(snapshot.Title, cts.Token);
+        }
+
         if (_lyricsProvider is not null)
         {
             SetLyrics(null, loading: true);
@@ -542,7 +620,13 @@ public sealed class MediaModule : IslandModule
 
     private async Task ToggleLikeAsync()
     {
-        if (_trackId is not { } id || _library is null)
+        if (_library is null || !_library.IsConnected)
+        {
+            SpotifyConnectRequested?.Invoke();
+            return;
+        }
+
+        if (_trackId is not { } id)
         {
             return;
         }
@@ -564,12 +648,63 @@ public sealed class MediaModule : IslandModule
     {
         // Connecting mid-song: look the current track up right away.
         OnPropertyChanged(nameof(CanLike));
+        OnPropertyChanged(nameof(LikeToolTip));
         ToggleLikeCommand.NotifyCanExecuteChanged();
         if (_library is { IsConnected: true } && _snapshot is { } snapshot && _trackId is null && _trackCts is { } cts)
         {
             _ = LoadLikeAsync(snapshot, cts.Token);
         }
     });
+
+    private void OnReactionsChanged(object? sender, EventArgs e) => _dispatcher.TryEnqueue(NotifyReactionsChanged);
+
+    private void NotifyReactionsChanged()
+    {
+        OnPropertyChanged(nameof(ShowHeart));
+        OnPropertyChanged(nameof(LikeToolTip));
+        OnPropertyChanged(nameof(ShowThumbs));
+        OnPropertyChanged(nameof(IsThumbUp));
+        OnPropertyChanged(nameof(IsThumbDown));
+        ToggleLikeCommand.NotifyCanExecuteChanged();
+        ThumbUpCommand.NotifyCanExecuteChanged();
+        ThumbDownCommand.NotifyCanExecuteChanged();
+    }
+
+    private async Task ProbeYouTubeAsync(string title, CancellationToken token)
+    {
+        try
+        {
+            bool found = await _reactions!.LooksLikeYouTubeAsync(title, token).ConfigureAwait(false);
+            _dispatcher.TryEnqueue(() =>
+            {
+                if (!token.IsCancellationRequested && found != _youtubeHint)
+                {
+                    _youtubeHint = found;
+                    NotifyReactionsChanged();
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn(nameof(MediaModule), "Looking for YouTube failed", ex);
+        }
+    }
+
+    private async Task ReactAsync(BrowserReaction reaction)
+    {
+        if (_reactions is null)
+        {
+            return;
+        }
+
+        bool sent = await _reactions.SendAsync(reaction, CancellationToken.None).ConfigureAwait(true);
+        ReactionStatus = sent
+            ? string.Empty
+            : "Install the WinIsland browser extension (the extension folder next to WinIsland.exe) to like and dislike from the island.";
+    }
 
     private void SetTrackId(string? id)
     {

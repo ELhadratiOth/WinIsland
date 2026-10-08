@@ -168,6 +168,12 @@ internal static unsafe partial class NativeMethods
     [LibraryImport("user32.dll")]
     public static partial int GetClientRect(nint hWnd, RECT* lpRect);
 
+    [LibraryImport("user32.dll")]
+    public static partial int EnumWindows(delegate* unmanaged<nint, nint, int> lpEnumFunc, nint lParam);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetWindowTextW")]
+    public static partial int GetWindowText(nint hWnd, char* lpString, int nMaxCount);
+
     [LibraryImport("user32.dll", EntryPoint = "GetClassNameW")]
     public static partial int GetClassName(nint hWnd, char* lpClassName, int nMaxCount);
 

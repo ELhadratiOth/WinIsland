@@ -58,5 +58,10 @@ internal static class Converters
 
     public static SolidColorBrush ChipForeground(bool selected) => selected ? SelectedChipText : NormalChipText;
 
+    private static readonly SolidColorBrush ThumbOff = new(Color.FromArgb(0xFF, 0x8E, 0x8E, 0x93));
+
+    /// <summary>A thumb lights up in the cover's accent colour once pressed.</summary>
+    public static Brush ThumbBrush(bool pressed, Brush accent) => pressed ? accent : ThumbOff;
+
     public static Color Transparent => Colors.Transparent;
 }

@@ -152,6 +152,7 @@ jobs:
             '17-approval-notice' = 46.3; '18-approval' = 49.0; '19-build-running' = 52.5; '20-build-passed' = 55.0
             '21-meeting-notice' = 59.0; '22-meeting-compact' = 65.5
             '23-charging' = 67.3; '24-focus-controls' = 71.0
+            '25-youtube-thumbs' = 76.4; '26-youtube-liked' = 78.2; '27-clock-compact' = 81.0
           }
           foreach ($name in $shots.Keys) {
             $wait = $shots[$name] - ((Get-Date) - $start).TotalSeconds

@@ -17,7 +17,7 @@ namespace WinIsland.App.Services.Preview;
 /// 39 clipboard history · 41.5 file shelf · 44 back to compact · 45 Claude asks for approval ·
 /// 47.5 interactive (approve) · 51 a build starts · 53.5 it passes · 58 a meeting in 5 minutes ·
 /// 61 compact (meeting countdown) · 66.5 plugged in (charging) · 69 focus mode on (controls) ·
-/// 72 focus off · 74 end. Weather shows next to the clock throughout.
+/// 72 focus off · 74 YouTube in a browser (👍/👎) · 78 back to the clock (compact, symmetric) · 82 end. Weather shows next to the clock throughout.
 /// </summary>
 internal sealed class PreviewScenario
 {
@@ -54,6 +54,8 @@ internal sealed class PreviewScenario
     public PreviewCalendar Calendar { get; } = new();
 
     public PreviewLibrary Library { get; } = new();
+
+    public PreviewReactions Reactions { get; } = new();
 
     public string ClaudeProjectsDirectory { get; }
 
@@ -124,6 +126,23 @@ internal sealed class PreviewScenario
             target.PreviewDismiss();
             target.PreviewFocus(false);
         });
+        At(queue, 74.0, () =>
+        {
+            Reactions.Report("Lofi hip hop radio - beats to relax/study to", "Lofi Girl", liked: false);
+            Media.Set(YouTube());
+        });
+        At(queue, 75.0, () =>
+        {
+            target.PreviewActivate();
+            target.PreviewSelect("media");
+        });
+        At(queue, 77.0, () => Reactions.Report("Lofi hip hop radio - beats to relax/study to", "Lofi Girl", liked: true));
+        At(queue, 79.0, () =>
+        {
+            target.PreviewDismiss();
+            Reactions.Clear();
+            Media.Set(null);
+        });
     }
 
     private void At(DispatcherQueue queue, double seconds, Action action)
@@ -166,6 +185,10 @@ internal sealed class PreviewScenario
             Artwork: artwork, Album: "Hurry Up, We're Dreaming",
             CanShuffle: true, IsShuffleActive: true, CanRepeat: true, RepeatMode: MediaRepeatMode.None, CanSeek: true);
     }
+
+    private static MediaSnapshot YouTube() => new(
+        "Lofi hip hop radio - beats to relax/study to", "Lofi Girl", "Chrome", IsPlaying: true, CanGoNext: false, CanGoPrevious: false,
+        Position: TimeSpan.FromSeconds(1210), Duration: TimeSpan.Zero, PositionSampledAt: DateTimeOffset.UtcNow);
 
     private static Core.GitHub.WorkflowRun[] Runs(Core.GitHub.RunState latest)
     {

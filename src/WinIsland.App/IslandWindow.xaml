@@ -54,27 +54,49 @@
                 <!-- ============ Compact: clock ============ -->
                 <Grid
                     x:Name="CompactClockLayer"
-                    Padding="16,0"
+                    Padding="12,0"
                     Visibility="{x:Bind ViewModel.ShowClockCompact, Mode=OneWay}">
+                    <!-- Without weather the time sits in the middle. -->
                     <TextBlock
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
                         Style="{StaticResource IslandCompactTextStyle}"
-                        Text="{x:Bind ViewModel.Clock.TimeText, Mode=OneWay}" />
-                    <StackPanel
-                        HorizontalAlignment="Left"
-                        VerticalAlignment="Center"
-                        Orientation="Horizontal"
-                        Spacing="4"
-                        Visibility="{x:Bind ViewModel.Clock.HasWeather, Mode=OneWay}">
-                        <TextBlock FontSize="13" Text="{x:Bind ViewModel.Clock.WeatherEmoji, Mode=OneWay}" />
+                        Text="{x:Bind ViewModel.Clock.TimeText, Mode=OneWay}"
+                        Visibility="{x:Bind local:Converters.CollapsedWhen(ViewModel.Clock.HasWeather), Mode=OneWay}" />
+                    <!-- With weather: two equal halves, temperature and time centred in each, so the pair is symmetric. -->
+                    <Grid Visibility="{x:Bind ViewModel.Clock.HasWeather, Mode=OneWay}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal"
+                            Spacing="4">
+                            <TextBlock FontSize="13" Text="{x:Bind ViewModel.Clock.WeatherEmoji, Mode=OneWay}" />
+                            <TextBlock
+                                FontFamily="Segoe UI Variable Display"
+                                FontSize="14"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource IslandSecondaryBrush}"
+                                Text="{x:Bind ViewModel.Clock.WeatherTemperature, Mode=OneWay}" />
+                        </StackPanel>
                         <TextBlock
-                            FontFamily="Segoe UI Variable Display"
-                            FontSize="13"
-                            FontWeight="SemiBold"
-                            Foreground="{StaticResource IslandSecondaryBrush}"
-                            Text="{x:Bind ViewModel.Clock.WeatherTemperature, Mode=OneWay}" />
-                    </StackPanel>
+                            Grid.Column="1"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource IslandCompactTextStyle}"
+                            Text="{x:Bind ViewModel.Clock.TimeText, Mode=OneWay}" />
+                        <Rectangle
+                            Grid.ColumnSpan="2"
+                            Width="1"
+                            Height="14"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Fill="{StaticResource IslandTertiaryBrush}"
+                            Opacity="0.5" />
+                    </Grid>
                     <Ellipse
                         Width="6"
                         Height="6"
@@ -103,6 +125,29 @@
                             </Border.Background>
                         </Border>
                     </Border>
+                    <!-- The time (and temperature) stay visible while music plays. -->
+                    <StackPanel
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Orientation="Horizontal"
+                        Spacing="6">
+                        <TextBlock
+                            Style="{StaticResource IslandCompactTextStyle}"
+                            FontSize="13"
+                            Text="{x:Bind ViewModel.Clock.TimeText, Mode=OneWay}" />
+                        <StackPanel
+                            Orientation="Horizontal"
+                            Spacing="3"
+                            Visibility="{x:Bind ViewModel.Clock.HasWeather, Mode=OneWay}">
+                            <TextBlock FontSize="12" Text="{x:Bind ViewModel.Clock.WeatherEmoji, Mode=OneWay}" />
+                            <TextBlock
+                                FontFamily="Segoe UI Variable Display"
+                                FontSize="13"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource IslandSecondaryBrush}"
+                                Text="{x:Bind ViewModel.Clock.WeatherTemperature, Mode=OneWay}" />
+                        </StackPanel>
+                    </StackPanel>
                     <StackPanel
                         x:Name="CompactBars"
                         HorizontalAlignment="Right"
@@ -181,7 +226,8 @@
                                 FontSize="11"
                                 Foreground="{StaticResource IslandTertiaryBrush}"
                                 MaxLines="1"
-                                Text="{x:Bind ViewModel.Clock.WeatherPlace, Mode=OneWay}" />
+                                Text="{x:Bind ViewModel.Clock.WeatherPlace, Mode=OneWay}"
+                                TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                     </Grid>
                     <TextBlock
@@ -313,9 +359,26 @@
                                 AutomationProperties.Name="Like"
                                 Command="{x:Bind ViewModel.Media.ToggleLikeCommand}"
                                 Style="{StaticResource IslandModeButton}"
-                                ToolTipService.ToolTip="Add to Liked Songs"
-                                Visibility="{x:Bind ViewModel.Media.CanLike, Mode=OneWay}">
+                                ToolTipService.ToolTip="{x:Bind ViewModel.Media.LikeToolTip, Mode=OneWay}"
+                                Visibility="{x:Bind ViewModel.Media.ShowHeart, Mode=OneWay}">
                                 <FontIcon FontSize="14" Foreground="{x:Bind AccentBrush}" Glyph="{x:Bind ViewModel.Media.LikeGlyph, Mode=OneWay}" />
+                            </Button>
+                            <!-- YouTube in a browser: thumbs up / down (pressed through the WinIsland extension). -->
+                            <Button
+                                AutomationProperties.Name="Like video"
+                                Command="{x:Bind ViewModel.Media.ThumbUpCommand}"
+                                Style="{StaticResource IslandModeButton}"
+                                ToolTipService.ToolTip="{x:Bind ViewModel.Media.ThumbUpToolTip, Mode=OneWay}"
+                                Visibility="{x:Bind ViewModel.Media.ShowThumbs, Mode=OneWay}">
+                                <FontIcon FontSize="14" Foreground="{x:Bind local:Converters.ThumbBrush(ViewModel.Media.IsThumbUp, AccentBrush), Mode=OneWay}" Glyph="&#xE8E1;" />
+                            </Button>
+                            <Button
+                                AutomationProperties.Name="Dislike video"
+                                Command="{x:Bind ViewModel.Media.ThumbDownCommand}"
+                                Style="{StaticResource IslandModeButton}"
+                                ToolTipService.ToolTip="{x:Bind ViewModel.Media.ThumbDownToolTip, Mode=OneWay}"
+                                Visibility="{x:Bind ViewModel.Media.ShowThumbs, Mode=OneWay}">
+                                <FontIcon FontSize="14" Foreground="{x:Bind local:Converters.ThumbBrush(ViewModel.Media.IsThumbDown, AccentBrush), Mode=OneWay}" Glyph="&#xE8E0;" />
                             </Button>
                         </StackPanel>
                         <StackPanel

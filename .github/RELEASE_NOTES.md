@@ -28,9 +28,9 @@ Use the tray icon to change settings, enable **Start with Windows**, or exit.
 
 | | What it does |
 | --- | --- |
-| **Clock + weather** | Time and date; temperature and conditions from Open-Meteo (city or Windows location). |
-| **Now playing** | Real cover art, title, artist, album and app. Shuffle, repeat, drag to seek, choose between players, time-synced **lyrics** (lrclib.net) and a **like** button for Spotify Liked Songs (connect your own Spotify app in Settings). |
-| **Claude Code** | Working/idle sessions, a prompt box, your plan limits like `/usage` (session and weekly %, with reset times and a warning at 80% / 95%), and today's tokens. |
+| **Clock + weather** | Time and date; temperature and conditions from Open-Meteo, with your city and country (typed, Windows location, or approximate from your IP). The time and temperature stay on the compact pill while music plays. |
+| **Now playing** | Real cover art, title, artist, album and app. Shuffle, repeat, drag to seek, choose between players, time-synced **lyrics** (lrclib.net) a **heart** for Spotify Liked Songs (connect your own Spotify app in Settings) and **👍 / 👎 for YouTube** in your browser (install the small extension in the `extension` folder). |
+| **Claude Code** | Working/idle sessions, a prompt box, your plan limits exactly like `/usage` (session and weekly %, with reset times and a warning at 80% / 95%; no session needed) and today's tokens. |
 | **Claude approvals** | Permission prompts appear on the island with Allow / Deny / In terminal (Settings › Claude Code › Connect). |
 | **Calendar** | Your next meeting from an ICS feed: shown 10 minutes before, reminders at 5 minutes and at the start, **Join** for Teams / Zoom / Meet / Webex. |
 | **Builds** | GitHub Actions for the repositories you list: live while building, green/red when done. |
@@ -45,7 +45,9 @@ Use the tray icon to change settings, enable **Start with Windows**, or exit.
 ### Privacy
 
 Nothing leaves your PC unless you turn it on: cover-art and lyrics lookups send only artist,
-title (and album/length for lyrics); weather sends a city or rounded coordinates; Spotify,
+title (and album/length for lyrics); weather sends a city or rounded coordinates (without a city
+and without Windows location, geojs.io is asked for your approximate location, which reveals your IP
+to that service); plan limits send your Claude Code token to api.anthropic.com only; Spotify,
 GitHub and calendar links are used only after you add them, and their tokens/links are stored
 encrypted for your Windows account (DPAPI).
 
@@ -58,8 +60,12 @@ encrypted for your Windows account (DPAPI).
   downloads.
 - Brightness works on built-in displays (laptops, tablets), not external monitors.
 - Claude usage costs are estimates at public API prices. Plan limits (session and weekly %, like
-  `/usage`) come from Claude Code's status line, so they need a Pro or Max plan, WinIsland as the
-  status line (Settings › Claude Code › Connect), and an open Claude Code session to update.
+  `/usage`) are asked from Claude's usage endpoint with the sign-in Claude Code keeps in
+  `~/.claude/.credentials.json` (read-only; switch it off in Settings › Claude Code). They need a
+  Pro or Max plan and Claude Code signed in; if the sign-in has lapsed, run Claude Code once.
+  Connecting WinIsland as Claude Code's status line adds a second, session-based source.
+- Liking from the island on YouTube needs the browser extension (load the `extension` folder in
+  `chrome://extensions` with Developer mode). Spotify's heart needs your own Spotify app (Settings).
 - Sending a message to a Claude Code session requires the native `claude.exe` on `PATH`.
 
 Verify downloads against `SHA256SUMS.txt`.

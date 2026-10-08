@@ -21,6 +21,7 @@ public sealed class OpenMeteoWeather : IWeatherSource, IIntegration
     private CancellationTokenSource? _wake;
     private WeatherInfo? _current;
     private (string Query, double Lat, double Lon, string Name)? _resolved;
+    private (double Lat, double Lon, string Name)? _named;
 
     public OpenMeteoWeather(Func<bool> enabled, Func<string> place, TimeProvider time)
     {
@@ -114,7 +115,9 @@ public sealed class OpenMeteoWeather : IWeatherSource, IIntegration
         }
         else
         {
-            location = await DeviceLocationAsync().ConfigureAwait(false);
+            // Windows location when allowed (precise, named by a reverse lookup), otherwise the
+            // approximate location of the IP address.
+            location = await DeviceLocationAsync(token).ConfigureAwait(false) ?? await IpLocationAsync(token).ConfigureAwait(false);
         }
 
         if (location is not { } l)
@@ -127,7 +130,7 @@ public sealed class OpenMeteoWeather : IWeatherSource, IIntegration
     }
 
     /// <summary>Windows location, only if the user allows desktop apps to use it (city-level is enough).</summary>
-    private static async Task<(double, double, string)?> DeviceLocationAsync()
+    private async Task<(double, double, string)?> DeviceLocationAsync(CancellationToken token)
     {
         try
         {
@@ -138,13 +141,41 @@ public sealed class OpenMeteoWeather : IWeatherSource, IIntegration
 
             var locator = new Geolocator { DesiredAccuracy = PositionAccuracy.Default, DesiredAccuracyInMeters = 5000 };
             Geoposition position = await locator.GetGeopositionAsync(TimeSpan.FromHours(1), TimeSpan.FromSeconds(10));
-            return (position.Coordinate.Point.Position.Latitude, position.Coordinate.Point.Position.Longitude, string.Empty);
+            double lat = position.Coordinate.Point.Position.Latitude;
+            double lon = position.Coordinate.Point.Position.Longitude;
+            return (lat, lon, await PlaceNameAsync(lat, lon, token).ConfigureAwait(false));
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or TimeoutException or System.Runtime.InteropServices.COMException)
         {
             return null;
         }
     }
+
+    private async Task<string> PlaceNameAsync(double lat, double lon, CancellationToken token)
+    {
+        // Same neighbourhood as last time: no need to ask again.
+        if (_named is { } n && Math.Abs(n.Lat - lat) < 0.05 && Math.Abs(n.Lon - lon) < 0.05)
+        {
+            return n.Name;
+        }
+
+        try
+        {
+            string name = OpenMeteo.ParseReverseGeocode(await Http.GetStringAsync(OpenMeteo.BuildReverseGeocodeUri(lat, lon), token).ConfigureAwait(false));
+            _named = (lat, lon, name);
+            return name;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            AppLog.Info(nameof(OpenMeteoWeather), $"Place name unavailable: {ex.GetType().Name}");
+            return string.Empty;
+        }
+    }
+
+    private static async Task<(double, double, string)?> IpLocationAsync(CancellationToken token) =>
+        OpenMeteo.ParseIpLocation(await Http.GetStringAsync(OpenMeteo.IpLocationUri, token).ConfigureAwait(false)) is { } ip
+            ? (ip.Latitude, ip.Longitude, ip.Name)
+            : null;
 
     private void Publish(WeatherInfo? info)
     {

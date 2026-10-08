@@ -20,14 +20,9 @@ public sealed record ClaudeSessionMonitorOptions
     /// <summary>Coalesces bursts of transcript writes into a single rescan.</summary>
     public TimeSpan Debounce { get; init; } = TimeSpan.FromMilliseconds(400);
 
-    public static string DefaultProjectsDirectory()
-    {
-        string? configDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
-        string root = !string.IsNullOrWhiteSpace(configDir)
-            ? configDir
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude");
-        return Path.Combine(root, "projects");
-    }
+    public static string DefaultProjectsDirectory() =>
+        ClaudePaths.CurrentProjectsDirectories().FirstOrDefault(d => !d.Contains("local-agent-mode-sessions", StringComparison.OrdinalIgnoreCase))
+        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", "projects");
 }
 
 /// <summary>

@@ -194,7 +194,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="Weather next to the clock" />
-                                <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="From Open-Meteo (free, no account). Leave the city empty to use your Windows location if you allow it." />
+                                <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="From Open-Meteo (free, no account). Leave the city empty to use your Windows location if you allow it, otherwise your approximate location from your IP address (geojs.io)." />
                             </StackPanel>
                             <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ViewModel.ShowWeather, Mode=TwoWay}" />
                         </Grid>
@@ -229,6 +229,18 @@
                 <!-- ===== Claude Code ===== -->
                 <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Claude Code" />
                 <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <Grid Style="{StaticResource RowStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Show my plan limits (like /usage)" />
+                                <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="Asks Claude's usage endpoint for your 5-hour and weekly percentages every few minutes, using the sign-in Claude Code already keeps in .credentials.json (the same request /usage makes). The token goes only to api.anthropic.com and is never stored or changed by WinIsland." />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ViewModel.ClaudePlanLimits, Mode=TwoWay}" />
+                        </Grid>
                     <StackPanel Padding="0,12,0,14" Spacing="8">
                         <TextBlock Text="Approve Claude Code from the island" />
                         <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="Adds a PermissionRequest hook to ~/.claude/settings.json (your other settings are kept, and a backup is made). Permission prompts then appear on the island with Allow, Deny or In terminal. If WinIsland isn't running, Claude Code asks in the terminal as usual. It also sets WinIsland as Claude Code's status line (unless you already have your own), which is how your plan limits (Pro/Max, the same numbers as /usage) reach the island." />
@@ -244,6 +256,7 @@
                                 Visibility="{x:Bind ViewModel.IsClaudeConnected, Mode=OneWay}" />
                         </StackPanel>
                         <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="{x:Bind ViewModel.ClaudeStatus, Mode=OneWay}" />
+                    </StackPanel>
                     </StackPanel>
                 </Border>
 

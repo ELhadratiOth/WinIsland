@@ -30,6 +30,9 @@ public sealed record IslandSettings
     /// <summary>Time-synced lyrics from lrclib.net (sends only artist, title, album and duration).</summary>
     public bool OnlineLyrics { get; init; } = true;
 
+    /// <summary>Plan limits (5-hour / weekly %) from Claude's usage endpoint, using Claude Code's local sign-in.</summary>
+    public bool ClaudePlanLimits { get; init; } = true;
+
     /// <summary>Client ID of the user's own Spotify developer app (for "Liked Songs"). Empty: off.</summary>
     public string SpotifyClientId { get; init; } = string.Empty;
 

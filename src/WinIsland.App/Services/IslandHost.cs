@@ -18,6 +18,7 @@ using WinIsland.Core.Threading;
 using WinIsland.Core.ViewModels;
 using WinIsland.Core.Visibility;
 using WinIsland.Platform.Windows.Audio;
+using WinIsland.Platform.Windows.Browser;
 using WinIsland.Platform.Windows.Devices;
 using WinIsland.Platform.Windows.Display;
 using WinIsland.Platform.Windows.Claude;
@@ -87,6 +88,8 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
     private readonly ApprovalsModule _approvalsModule;
     private readonly CiModule _ciModule;
     private readonly GitHubActionsClient? _github;
+    private readonly ClaudeLimitsClient? _claudeLimits;
+    private readonly BrowserBridge? _browserBridge;
     private readonly ClaudeUsageTracker _usage;
     private readonly CalendarModule _calendarModule;
     private readonly OpenMeteoWeather? _weather;
@@ -153,8 +156,13 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _clockModule = new ClockModule(_time, _dispatcher, weather, () => _settings.WeatherFahrenheit);
         _spotify = preview ? null : new SpotifyLibrary(() => _settings.SpotifyClientId);
         ILyricsProvider lyrics = preview ? new Preview.PreviewLyrics() : new LrcLibClient(() => _settings.OnlineLyrics);
-        _mediaModule = new MediaModule(_media, _time, _dispatcher, lyrics, (IMusicLibrary?)_preview?.Library ?? _spotify);
-        _usage = new ClaudeUsageTracker(_preview?.ClaudeProjectsDirectory ?? ClaudeSessionMonitorOptions.DefaultProjectsDirectory(), _time);
+        _browserBridge = preview ? null : new BrowserBridge(_time);
+        _mediaModule = new MediaModule(_media, _time, _dispatcher, lyrics, (IMusicLibrary?)_preview?.Library ?? _spotify, (IBrowserReactions?)_preview?.Reactions ?? _browserBridge)
+        {
+            Clock = _clockModule,
+            SpotifyConnectRequested = OpenSettings,
+        };
+        _usage = new ClaudeUsageTracker(_preview is null ? ClaudePaths.CurrentProjectsDirectories() : [_preview.ClaudeProjectsDirectory], _time);
         _claudeModule = new ClaudeModule(_claudeSessions, new ClaudeCliMessenger(), _dispatcher, _time, _usage);
 
         // System devices: Core Audio, WMI brightness, battery, microphone/camera use.
@@ -212,11 +220,18 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         {
             var hookServer = new ClaudeHookServer();
             _github = new GitHubActionsClient(() => _settings.GitHubRepos, GitHubToken, _time);
-            integrations.AddRange([hookServer, _github]);
+            _claudeLimits = new ClaudeLimitsClient(() => _settings.ClaudePlanLimits, _time);
+            _claudeLimits.Updated += (_, limits) => _dispatcher.TryEnqueue(() => _claudeModule.ApplyLimits(limits));
+            integrations.AddRange([hookServer, _github, _claudeLimits]);
             (hooks, ci) = (hookServer, _github);
         }
 
         integrations.Add(_usage);
+        if (_browserBridge is not null)
+        {
+            integrations.Add(_browserBridge);
+        }
+
         ICalendarSource calendar;
         if (_preview is not null)
         {
@@ -472,6 +487,12 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
 
         _viewModel.Apply(state);
         Render();
+
+        // Opening the Claude panel is the moment fresh plan limits matter (rate-limited to once a minute).
+        if (state.Mode == InteractionMode.Interactive && state.ModuleId == ClaudeModule.ModuleId)
+        {
+            _claudeLimits?.Refresh();
+        }
     }
 
     private void Render()
@@ -677,6 +698,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
     private void RefreshOnline()
     {
         _github?.Refresh();
+        _claudeLimits?.Refresh();
         _weather?.Refresh();
         _calendar?.Refresh();
     }

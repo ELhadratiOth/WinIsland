@@ -77,7 +77,7 @@ public class DesignModelTests
 
         source.Set(new MediaSnapshot("Song", "Artist", "app", true, true, true, TimeSpan.Zero, TimeSpan.FromMinutes(3), time.GetUtcNow(), new MediaArtwork([1, 2, 3], 0xFF336699)));
 
-        Assert.Equal(IslandMetrics.CompactWide, media.GetSize(IslandSize.Compact));
+        Assert.Equal(IslandMetrics.CompactWide with { Width = 244 }, media.GetSize(IslandSize.Compact));
         Assert.True(media.HasArtwork);
         Assert.Equal(0xFF336699u, media.AccentColor);
     }

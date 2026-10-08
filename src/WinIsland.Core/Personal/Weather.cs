@@ -33,7 +33,49 @@ public static class OpenMeteo
         }
 
         JsonElement first = results[0];
-        return (first.GetProperty("latitude").GetDouble(), first.GetProperty("longitude").GetDouble(), first.GetProperty("name").GetString() ?? string.Empty);
+        string country = first.TryGetProperty("country", out JsonElement c) ? c.GetString() ?? string.Empty : string.Empty;
+        return (first.GetProperty("latitude").GetDouble(), first.GetProperty("longitude").GetDouble(), Place(first.GetProperty("name").GetString(), country));
+    }
+
+    /// <summary>"Casablanca, Morocco"; whichever part is missing is left out.</summary>
+    public static string Place(string? city, string? country) =>
+        string.Join(", ", new[] { city, country }.Where(part => !string.IsNullOrWhiteSpace(part)).Select(part => part!.Trim()).Distinct(StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>BigDataCloud's keyless reverse geocoding: "city, country" for a coordinate.</summary>
+    public static Uri BuildReverseGeocodeUri(double latitude, double longitude) => new(string.Create(
+        CultureInfo.InvariantCulture,
+        $"https://api.bigdatacloud.net/data/reverse-geocode-client?latitude={latitude:0.###}&longitude={longitude:0.###}&localityLanguage=en"));
+
+    public static string ParseReverseGeocode(string json)
+    {
+        using JsonDocument document = JsonDocument.Parse(json);
+        JsonElement root = document.RootElement;
+        string? Text(string name) => root.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        string? city = !string.IsNullOrWhiteSpace(Text("city")) ? Text("city") : Text("locality");
+        return Place(city, Text("countryName"));
+    }
+
+    /// <summary>GeoJS: approximate location from the IP address, no permission needed.</summary>
+    public static readonly Uri IpLocationUri = new("https://get.geojs.io/v1/ip/geo.json");
+
+    public static (double Latitude, double Longitude, string Name)? ParseIpLocation(string json)
+    {
+        using JsonDocument document = JsonDocument.Parse(json);
+        JsonElement root = document.RootElement;
+        static bool Number(JsonElement e, string name, out double value)
+        {
+            value = 0;
+            return e.TryGetProperty(name, out JsonElement v) &&
+                (v.ValueKind == JsonValueKind.Number ? v.TryGetDouble(out value) : double.TryParse(v.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out value));
+        }
+
+        if (!Number(root, "latitude", out double lat) || !Number(root, "longitude", out double lon))
+        {
+            return null;
+        }
+
+        string? Text(string name) => root.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        return (lat, lon, Place(Text("city"), Text("country")));
     }
 
     public static WeatherInfo? ParseForecast(string json, string place)

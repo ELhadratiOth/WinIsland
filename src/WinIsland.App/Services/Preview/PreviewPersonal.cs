@@ -4,7 +4,7 @@ namespace WinIsland.App.Services.Preview;
 
 internal sealed class PreviewWeather : IWeatherSource
 {
-    public WeatherInfo? Current { get; } = new(21.4, 2, true, 24.2, 15.8, "Casablanca");
+    public WeatherInfo? Current { get; } = new(21.4, 2, true, 24.2, 15.8, "Casablanca, Morocco");
 
     public event EventHandler? Changed
     {
