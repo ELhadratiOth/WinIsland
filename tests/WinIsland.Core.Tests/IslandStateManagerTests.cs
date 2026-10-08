@@ -174,6 +174,22 @@ public class IslandStateManagerTests
         Assert.Contains(_clock, _manager.SwitcherModules());
     }
 
+    [Fact]
+    public void The_island_is_at_least_as_wide_as_its_switcher()
+    {
+        var many = Enumerable.Range(0, 12).Select(i => new TestModule($"m{i}", IslandSize.Expanded)).ToList();
+        foreach (TestModule m in many)
+        {
+            m.Set(available: true, compact: ModulePriority.Unavailable, interactive: ModulePriority.Background);
+        }
+
+        using var manager = new IslandStateManager([_clock, .. many], _time, _dispatcher);
+        manager.SetMode(InteractionMode.Interactive);
+
+        Assert.Equal(ClockModule.ModuleId, manager.State.ModuleId);
+        Assert.Equal(IslandMetrics.SwitcherMinWidth(13), manager.State.SizeDip.Width);
+    }
+
     private sealed class TestModule(string id, IslandSize interactiveSize) : IslandModule(id, id, "x")
     {
         public override IslandSize InteractiveSize => interactiveSize;

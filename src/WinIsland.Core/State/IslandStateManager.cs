@@ -179,10 +179,13 @@ public sealed class IslandStateManager : IDisposable
         }
 
         DipSize sizeDip = module.GetSize(size);
-        bool hasSwitcher = _mode == InteractionMode.Interactive && SwitcherModules().Count() > 1;
+        int chips = _mode == InteractionMode.Interactive ? SwitcherModules().Count() : 0;
+        bool hasSwitcher = chips > 1;
         if (hasSwitcher)
         {
-            sizeDip = sizeDip with { Height = sizeDip.Height + IslandMetrics.SwitcherHeight };
+            sizeDip = new DipSize(
+                Math.Max(sizeDip.Width, IslandMetrics.SwitcherMinWidth(chips)),
+                sizeDip.Height + IslandMetrics.SwitcherHeight);
         }
 
         return new IslandState(_hiddenReason, module.Id, size, sizeDip, _mode, attention is not null, hasSwitcher);

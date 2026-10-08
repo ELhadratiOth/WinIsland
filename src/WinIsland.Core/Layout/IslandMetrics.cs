@@ -15,6 +15,12 @@ public static class IslandMetrics
     /// <summary>Extra height for the module switcher strip shown while interacting.</summary>
     public const double SwitcherHeight = 28;
 
+    /// <summary>Width of one switcher chip including its spacing (30 + 6).</summary>
+    public const double SwitcherChipWidth = 36;
+
+    /// <summary>Narrowest island that fits a switcher with <paramref name="chips"/> chips and side margins.</summary>
+    public static double SwitcherMinWidth(int chips) => (chips * SwitcherChipWidth) + 24;
+
     /// <summary>Extra room (DIPs) around the shape during a transition so a spring overshoot is never clipped.</summary>
     public const double OvershootMargin = 14;
 
