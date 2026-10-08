@@ -22,6 +22,20 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
     private string? _pinnedId;
     private IReadOnlyList<MediaSessionInfo> _sessions = [];
     private MediaArtwork? _artwork;
+    private int _propsEpoch;
+    private int _propsReadEpoch;
+    private CancellationTokenSource? _settleCts;
+    private ITimer? _resync;
+    private string? _trackKey;
+    private DateTimeOffset _trackChangedAt;
+    private DateTimeOffset? _staleTimelineUntil;
+
+    // Players (Spotify above all) announce a new track before the cover and timeline are ready,
+    // so a track change is re-read a few times while things settle.
+    private static readonly TimeSpan[] SettleDelays = [TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1300), TimeSpan.FromMilliseconds(3000)];
+
+    // Safety net for players that forget to raise timeline events; only runs while something plays.
+    private static readonly TimeSpan ResyncInterval = TimeSpan.FromSeconds(12);
 
     private readonly Func<bool> _onlineLookupEnabled;
     private readonly OnlineArtworkLookup _onlineLookup = new();
@@ -70,6 +84,9 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
 
             DetachSession();
             _version++;
+            _settleCts?.Cancel();
+            _resync?.Dispose();
+            _resync = null;
         }
 
         Publish(null);
@@ -202,6 +219,7 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
         {
             DetachSession();
             _session = session;
+            _propsEpoch++;
             if (session is not null)
             {
                 session.MediaPropertiesChanged += OnMediaPropertiesChanged;
@@ -211,6 +229,7 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
         }
 
         _ = RefreshAsync(includeProperties: true);
+        ScheduleSettle();
     }
 
     // Caller holds _gate.
@@ -227,21 +246,63 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
         _session = null;
     }
 
-    private void OnMediaPropertiesChanged(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs args) =>
+    private void OnMediaPropertiesChanged(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs args)
+    {
+        lock (_gate)
+        {
+            _propsEpoch++;
+        }
+
         _ = RefreshAsync(includeProperties: true);
+        ScheduleSettle();
+    }
+
+    private void ScheduleSettle()
+    {
+        var cts = new CancellationTokenSource();
+        lock (_gate)
+        {
+            _settleCts?.Cancel();
+            _settleCts = cts;
+        }
+
+        _ = SettleAsync(cts.Token);
+    }
+
+    private async Task SettleAsync(CancellationToken token)
+    {
+        try
+        {
+            foreach (TimeSpan delay in SettleDelays)
+            {
+                await Task.Delay(delay, _time, token).ConfigureAwait(false);
+                await RefreshAsync(includeProperties: true, forceArtwork: true).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer track change took over.
+        }
+    }
 
     // Playback/timeline changes don't need the (async, heavier) media properties call.
     private void OnPlaybackChanged(GlobalSystemMediaTransportControlsSession sender, object args) =>
         _ = RefreshAsync(includeProperties: false);
 
-    private async Task RefreshAsync(bool includeProperties)
+    private async Task RefreshAsync(bool includeProperties, bool forceArtwork = false)
     {
         GlobalSystemMediaTransportControlsSession? session;
         int version;
+        int epoch;
         lock (_gate)
         {
             session = _session;
             version = ++_version;
+            epoch = _propsEpoch;
+
+            // A property change whose refresh was superseded by a newer one must not be lost:
+            // whoever runs next re-reads the title and cover.
+            includeProperties |= _propsReadEpoch != _propsEpoch;
         }
 
         if (session is null)
@@ -265,7 +326,7 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
                 title = properties?.Title ?? string.Empty;
                 artist = properties?.Artist ?? string.Empty;
                 album = string.IsNullOrWhiteSpace(properties?.AlbumTitle) ? null : properties.AlbumTitle;
-                artwork = await GetArtworkAsync(session.SourceAppUserModelId, title, artist, properties).ConfigureAwait(false);
+                artwork = await GetArtworkAsync(session.SourceAppUserModelId, title, artist, properties, forceArtwork).ConfigureAwait(false);
             }
 
             GlobalSystemMediaTransportControlsSessionPlaybackInfo playback = session.GetPlaybackInfo();
@@ -278,14 +339,41 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
                 sampled = now;
             }
 
+            TimeSpan position = timeline.Position;
+            string appId = session.SourceAppUserModelId ?? string.Empty;
+            string trackKey = $"{appId}|{title}|{artist}";
+            if (trackKey != _trackKey)
+            {
+                bool sameApp = previous is not null && previous.SourceAppId == appId;
+                _trackKey = trackKey;
+                _trackChangedAt = now;
+
+                // The player announced the next song but hasn't refreshed its timeline yet: the old
+                // position would show the new song as nearly over. Start from zero until it reports.
+                if (sameApp && sampled < now - TimeSpan.FromSeconds(1) && previous!.Title != title)
+                {
+                    _staleTimelineUntil = sampled;
+                }
+            }
+
+            if (_staleTimelineUntil is { } stale && sampled <= stale)
+            {
+                position = TimeSpan.Zero;
+                sampled = _trackChangedAt;
+            }
+            else
+            {
+                _staleTimelineUntil = null;
+            }
+
             var snapshot = new MediaSnapshot(
                 title,
                 artist,
-                session.SourceAppUserModelId ?? string.Empty,
+                appId,
                 playback.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing,
                 playback.Controls.IsNextEnabled,
                 playback.Controls.IsPreviousEnabled,
-                timeline.Position,
+                position,
                 timeline.EndTime - timeline.StartTime,
                 sampled,
                 artwork,
@@ -308,6 +396,11 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
                 {
                     return;
                 }
+
+                if (includeProperties)
+                {
+                    _propsReadEpoch = Math.Max(_propsReadEpoch, epoch);
+                }
             }
 
             UpdateSessionList();
@@ -321,10 +414,11 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
     }
 
     /// <summary>Decodes cover art only when the track changes; the result is reused for timeline/playback updates.</summary>
-    private async Task<MediaArtwork?> GetArtworkAsync(string? appId, string title, string artist, GlobalSystemMediaTransportControlsSessionMediaProperties? properties)
+    private async Task<MediaArtwork?> GetArtworkAsync(string? appId, string title, string artist, GlobalSystemMediaTransportControlsSessionMediaProperties? properties, bool force)
     {
         string key = $"{appId}|{title}|{artist}";
-        if (key == _artworkKey)
+        bool sameTrack = key == _artworkKey;
+        if (sameTrack && !force)
         {
             return _artwork;
         }
@@ -345,6 +439,15 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
             artwork = await _onlineLookup.FindAsync(artist, title).ConfigureAwait(false);
         }
 
+        if (sameTrack && _artwork is { } known)
+        {
+            // Re-reads of the same track: keep what we had when nothing better turned up or nothing changed.
+            if (artwork is null || known.Image.AsSpan().SequenceEqual(artwork.Image))
+            {
+                return known;
+            }
+        }
+
         _artworkKey = key;
         _artwork = artwork;
         return artwork;
@@ -352,9 +455,21 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
 
     private void Publish(MediaSnapshot? snapshot)
     {
+        ArmResync(snapshot is { IsPlaying: true });
         if (Interlocked.Exchange(ref _current, snapshot) != snapshot)
         {
             Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private void ArmResync(bool playing)
+    {
+        lock (_gate)
+        {
+            _resync?.Dispose();
+            _resync = playing && _manager is not null
+                ? _time.CreateTimer(_ => _ = RefreshAsync(includeProperties: false), null, ResyncInterval, Timeout.InfiniteTimeSpan)
+                : null;
         }
     }
 }

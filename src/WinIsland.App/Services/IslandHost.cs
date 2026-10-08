@@ -51,6 +51,10 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
     private const int HotkeyId = 0x5749;
     private const double SnapLayoutsZoneDip = 120;
 
+    // After a tab switch the island may shrink under a stationary pointer; the old footprint
+    // keeps counting as "on the island" for this long so it doesn't collapse mid-browse.
+    private static readonly TimeSpan TabSwitchHold = TimeSpan.FromMilliseconds(1800);
+
     // Coalesces bursts (window drags, display reconfiguration) while still reacting within a frame or three.
     private static readonly TimeSpan ReevaluateDelay = TimeSpan.FromMilliseconds(50);
 
@@ -98,6 +102,8 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
     private readonly IslandWindowController _controller;
     private readonly WindowMessageHook _messages;
     private readonly Throttler _reevaluate;
+    private readonly OneShotTimer _holdTimer;
+    private PixelRect? _holdZone;
 
     private IslandSettings _settings;
     private PlacementOptions _placementOptions;
@@ -256,6 +262,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _messages = new WindowMessageHook(_window.Handle);
         _pointer = new PointerHotZoneWatcher(_dispatcher);
         _reevaluate = new Throttler(_time, _dispatcher, ReevaluateDelay, Reevaluate);
+        _holdTimer = new OneShotTimer(_time, _dispatcher, EndTabSwitchHold);
     }
 
     /// <summary>
@@ -316,6 +323,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _disposed = true;
         Unsubscribe();
         _reevaluate.Dispose();
+        _holdTimer.Dispose();
         _pointer.Dispose();
         _foreground.Dispose();
         _hotkey?.Dispose();
@@ -480,7 +488,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
 
         // Clamping on a small display shrinks the island; render what actually fits.
         var target = new DipSize(pill.Width / monitor.Scale, pill.Height / monitor.Scale);
-        _pointer.SetHotZone(pill);
+        _pointer.SetHotZone(HotZoneFor(pill, monitor));
 
         bool firstShow = !_controller.IsShown;
         bool monitorChanged = _renderedMonitor != monitor;
@@ -524,6 +532,32 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         {
             ShowIsland();
         }
+    }
+
+    /// <summary>
+    /// The island's footprint for pointer purposes. While browsing tabs the previous footprint is
+    /// kept too, so a tab that is smaller than the one before doesn't leave the pointer "outside".
+    /// </summary>
+    private PixelRect HotZoneFor(PixelRect pill, MonitorDescriptor monitor)
+    {
+        if (_interaction.Mode != InteractionMode.Interactive)
+        {
+            return pill;
+        }
+
+        if (_renderedBounds is { } previous && previous != pill && _renderedMonitor == monitor)
+        {
+            _holdZone = (_holdZone ?? previous).Union(previous);
+            _holdTimer.Start(TabSwitchHold);
+        }
+
+        return _holdZone is { } hold ? pill.Union(hold) : pill;
+    }
+
+    private void EndTabSwitchHold()
+    {
+        _holdZone = null;
+        Render();
     }
 
     private static PixelRect WindowRectAround(PixelRect pill, DipSize windowSize, MonitorDescriptor monitor)
@@ -583,6 +617,8 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _controller.SetClickThrough(!interactive);
         if (!interactive)
         {
+            _holdZone = null;
+            _holdTimer.Cancel();
             _controller.ReleaseKeyboardFocus();
         }
 

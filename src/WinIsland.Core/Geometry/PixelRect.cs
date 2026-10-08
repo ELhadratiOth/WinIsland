@@ -26,6 +26,19 @@ public readonly record struct PixelRect(int X, int Y, int Width, int Height)
 
     public PixelRect WithY(int y) => this with { Y = y };
 
+    /// <summary>The smallest rectangle containing both; an empty rectangle contributes nothing.</summary>
+    public PixelRect Union(PixelRect other)
+    {
+        if (IsEmpty)
+        {
+            return other;
+        }
+
+        return other.IsEmpty
+            ? this
+            : FromEdges(Math.Min(X, other.X), Math.Min(Y, other.Y), Math.Max(Right, other.Right), Math.Max(Bottom, other.Bottom));
+    }
+
     /// <summary>Moves (never resizes beyond) this rectangle so it lies inside <paramref name="bounds"/>.</summary>
     public PixelRect ClampInside(PixelRect bounds)
     {
