@@ -1,4 +1,5 @@
 using System.Globalization;
+using WinIsland.Core.Personal;
 using WinIsland.Core.Threading;
 
 namespace WinIsland.Core.Modules;
@@ -17,10 +18,23 @@ public sealed class ClockModule : IslandModule
     private string _dateText = string.Empty;
     private string _weekdayText = string.Empty;
     private string _dayText = string.Empty;
+    private readonly IWeatherSource? _weather;
+    private readonly IUiDispatcher _dispatcher;
+    private readonly Func<bool> _fahrenheit;
+    private WeatherInfo? _weatherInfo;
 
-    public ClockModule(TimeProvider time, IUiDispatcher dispatcher)
+    public ClockModule(TimeProvider time, IUiDispatcher dispatcher, IWeatherSource? weather = null, Func<bool>? fahrenheit = null)
         : base(ModuleId, "Clock", "\uE823")
     {
+        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _weather = weather;
+        _fahrenheit = fahrenheit ?? (() => false);
+        if (_weather is not null)
+        {
+            _weather.Changed += OnWeatherChanged;
+            _weatherInfo = _weather.Current;
+        }
+
         _time = time ?? throw new ArgumentNullException(nameof(time));
         _minuteTimer = new OneShotTimer(time, dispatcher, Refresh);
         IsAvailable = true;
@@ -41,8 +55,31 @@ public sealed class ClockModule : IslandModule
         private set => SetProperty(ref _dateText, value);
     }
 
-    public override Geometry.DipSize GetSize(Layout.IslandSize size) =>
-        size == Layout.IslandSize.Expanded ? new Geometry.DipSize(340, 96) : base.GetSize(size);
+    public override Geometry.DipSize GetSize(Layout.IslandSize size) => size switch
+    {
+        Layout.IslandSize.Expanded => new Geometry.DipSize(HasWeather ? 440 : 340, 96),
+        Layout.IslandSize.Compact when HasWeather => new Geometry.DipSize(216, 36),
+        _ => base.GetSize(size),
+    };
+
+    // ---- Weather (Open-Meteo) ----
+
+    public bool HasWeather => _weatherInfo is not null;
+
+    /// <summary>"18°".</summary>
+    public string WeatherTemperature => _weatherInfo is { } w ? OpenMeteo.Temperature(w.TemperatureC, _fahrenheit()) : string.Empty;
+
+    public string WeatherEmoji => _weatherInfo is { } w ? OpenMeteo.Describe(w.Code, w.IsDay).Emoji : string.Empty;
+
+    /// <summary>"Partly cloudy · H 22° L 14°".</summary>
+    public string WeatherSummary => _weatherInfo is { } w
+        ? $"{OpenMeteo.Describe(w.Code, w.IsDay).Text} · H {OpenMeteo.Temperature(w.HighC, _fahrenheit())} L {OpenMeteo.Temperature(w.LowC, _fahrenheit())}"
+        : string.Empty;
+
+    public string WeatherPlace => _weatherInfo?.Place ?? string.Empty;
+
+    /// <summary>Units changed in settings.</summary>
+    public void RefreshWeather() => ApplyWeather(_weatherInfo);
 
     /// <summary>e.g. "Wednesday".</summary>
     public string WeekdayText
@@ -72,11 +109,36 @@ public sealed class ClockModule : IslandModule
         _minuteTimer.Start(untilNextMinute + TimeSpan.FromMilliseconds(20));
     }
 
+    private void OnWeatherChanged(object? sender, EventArgs e)
+    {
+        WeatherInfo? info = _weather!.Current;
+        _dispatcher.TryEnqueue(() => ApplyWeather(info));
+    }
+
+    private void ApplyWeather(WeatherInfo? info)
+    {
+        bool had = HasWeather;
+        _weatherInfo = info;
+        OnPropertyChanged(nameof(HasWeather));
+        OnPropertyChanged(nameof(WeatherTemperature));
+        OnPropertyChanged(nameof(WeatherEmoji));
+        OnPropertyChanged(nameof(WeatherSummary));
+        OnPropertyChanged(nameof(WeatherPlace));
+        if (had != HasWeather)
+        {
+            NotifyPresentationChanged();
+        }
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
             _minuteTimer.Dispose();
+            if (_weather is not null)
+            {
+                _weather.Changed -= OnWeatherChanged;
+            }
         }
 
         base.Dispose(disposing);

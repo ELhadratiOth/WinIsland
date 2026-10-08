@@ -99,7 +99,7 @@ public class DeveloperModuleTests
     }
 
     [Fact]
-    public void Approvals_hold_the_island_until_answered()
+    public async Task Approvals_hold_the_island_until_answered()
     {
         var server = new FakeHookServer();
         using var module = new ApprovalsModule(server, _time, _dispatcher);
@@ -119,7 +119,8 @@ public class DeveloperModuleTests
         Assert.Equal("+1 more waiting", module.MoreText);
 
         module.AllowCommand.Execute(null);
-        Assert.Equal(ApprovalDecision.Allow, first.Decision.Result);
+        Assert.True(first.Decision.IsCompletedSuccessfully);
+        Assert.Equal(ApprovalDecision.Allow, await first.Decision);
         Assert.Equal("Edit a file", module.Title);
 
         // Answered in the terminal instead: Claude Code drops the hook call.

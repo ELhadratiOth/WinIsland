@@ -61,6 +61,20 @@
                         VerticalAlignment="Center"
                         Style="{StaticResource IslandCompactTextStyle}"
                         Text="{x:Bind ViewModel.Clock.TimeText, Mode=OneWay}" />
+                    <StackPanel
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center"
+                        Orientation="Horizontal"
+                        Spacing="4"
+                        Visibility="{x:Bind ViewModel.Clock.HasWeather, Mode=OneWay}">
+                        <TextBlock FontSize="13" Text="{x:Bind ViewModel.Clock.WeatherEmoji, Mode=OneWay}" />
+                        <TextBlock
+                            FontFamily="Segoe UI Variable Display"
+                            FontSize="13"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource IslandSecondaryBrush}"
+                            Text="{x:Bind ViewModel.Clock.WeatherTemperature, Mode=OneWay}" />
+                    </StackPanel>
                     <Ellipse
                         Width="6"
                         Height="6"
@@ -138,7 +152,38 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
+                    <!-- Weather (Open-Meteo) on the right when available. -->
+                    <Grid
+                        Grid.Column="2"
+                        VerticalAlignment="Center"
+                        ColumnSpacing="10"
+                        Visibility="{x:Bind ViewModel.Clock.HasWeather, Mode=OneWay}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock VerticalAlignment="Center" FontSize="26" Text="{x:Bind ViewModel.Clock.WeatherEmoji, Mode=OneWay}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock
+                                FontFamily="Segoe UI Variable Display"
+                                FontSize="20"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource IslandForegroundBrush}"
+                                Text="{x:Bind ViewModel.Clock.WeatherTemperature, Mode=OneWay}" />
+                            <TextBlock
+                                FontSize="11"
+                                Foreground="{StaticResource IslandSecondaryBrush}"
+                                MaxLines="1"
+                                Text="{x:Bind ViewModel.Clock.WeatherSummary, Mode=OneWay}" />
+                            <TextBlock
+                                FontSize="11"
+                                Foreground="{StaticResource IslandTertiaryBrush}"
+                                MaxLines="1"
+                                Text="{x:Bind ViewModel.Clock.WeatherPlace, Mode=OneWay}" />
+                        </StackPanel>
+                    </Grid>
                     <TextBlock
                         VerticalAlignment="Center"
                         FontFamily="Segoe UI Variable Display"

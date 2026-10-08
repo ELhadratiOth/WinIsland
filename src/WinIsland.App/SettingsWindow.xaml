@@ -92,7 +92,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="Focus mode" />
-                                <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="Only the clock, timers, microphone/camera and Claude approvals appear." />
+                                <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="Only the clock, timers, meetings, microphone/camera and Claude approvals appear." />
                             </StackPanel>
                             <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ViewModel.FocusMode, Mode=TwoWay}" />
                         </Grid>
@@ -179,6 +179,49 @@
                                     Visibility="{x:Bind ViewModel.IsSpotifyConnected, Mode=OneWay}" />
                             </Grid>
                             <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="{x:Bind ViewModel.SpotifyStatus, Mode=OneWay}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ===== Weather & calendar ===== -->
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Weather and calendar" />
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <Grid Style="{StaticResource RowStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Weather next to the clock" />
+                                <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="From Open-Meteo (free, no account). Leave the city empty to use your Windows location if you allow it." />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ViewModel.ShowWeather, Mode=TwoWay}" />
+                        </Grid>
+                        <Grid Style="{StaticResource RowStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox
+                                VerticalAlignment="Center"
+                                PlaceholderText="City (e.g. Casablanca)"
+                                Text="{x:Bind ViewModel.WeatherLocation, Mode=TwoWay}" />
+                            <ToggleSwitch
+                                Grid.Column="1"
+                                IsOn="{x:Bind ViewModel.WeatherFahrenheit, Mode=TwoWay}"
+                                OffContent="°C"
+                                OnContent="°F" />
+                        </Grid>
+                        <StackPanel Padding="0,12,0,14" Spacing="8">
+                            <TextBlock Text="Calendar feeds" />
+                            <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="Paste your calendar's private ICS link, one per line. Google Calendar: Settings › your calendar › Secret address in iCal format. Outlook: Settings › Calendar › Shared calendars › Publish a calendar › ICS. The island shows your next meeting 10 minutes before, reminds you at 5 and offers Join for Teams, Zoom, Meet and Webex links. Links are stored encrypted." />
+                            <TextBox
+                                MinHeight="72"
+                                AcceptsReturn="True"
+                                PlaceholderText="https://calendar.google.com/calendar/ical/…/basic.ics"
+                                Text="{x:Bind ViewModel.CalendarFeeds, Mode=TwoWay}"
+                                TextWrapping="Wrap" />
                         </StackPanel>
                     </StackPanel>
                 </Border>

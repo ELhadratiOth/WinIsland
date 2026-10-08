@@ -25,7 +25,7 @@ public sealed class CiModule : IslandModule
     private WorkflowRun? _finished;
 
     public CiModule(ICiSource source, IShellLauncher shell, TimeProvider time, IUiDispatcher dispatcher)
-        : base(ModuleId, "Builds", "")
+        : base(ModuleId, "Builds", "\uE943")
     {
         _source = source ?? throw new ArgumentNullException(nameof(source));
         _shell = shell ?? throw new ArgumentNullException(nameof(shell));
@@ -138,10 +138,10 @@ public sealed record RunItem(string Title, string Detail, string Url, uint Statu
     {
         (uint color, string glyph) = run.State switch
         {
-            RunState.Succeeded => (Palette.Green, ""),
-            RunState.Failed => (Palette.Red, ""),
-            RunState.Running or RunState.Queued => (Palette.Yellow, ""),
-            _ => (0xFF8E8E93u, ""),
+            RunState.Succeeded => (Palette.Green, "\uE73E"),
+            RunState.Failed => (Palette.Red, "\uE711"),
+            RunState.Running or RunState.Queued => (Palette.Yellow, "\uE916"),
+            _ => (0xFF8E8E93u, "\uE738"),
         };
 
         string repo = run.Repo.Split('/')[^1];

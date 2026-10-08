@@ -33,6 +33,14 @@ public sealed record IslandSettings
     /// <summary>Client ID of the user's own Spotify developer app (for "Liked Songs"). Empty: off.</summary>
     public string SpotifyClientId { get; init; } = string.Empty;
 
+    /// <summary>Weather next to the clock (Open-Meteo).</summary>
+    public bool ShowWeather { get; init; } = true;
+
+    /// <summary>City for the weather; empty uses the Windows location if allowed.</summary>
+    public string WeatherLocation { get; init; } = string.Empty;
+
+    public bool WeatherFahrenheit { get; init; } = !System.Globalization.RegionInfo.CurrentRegion.IsMetric;
+
     /// <summary>GitHub repositories ("owner/name") whose Actions runs appear on the island.</summary>
     public IReadOnlyList<string> GitHubRepos { get; init; } = [];
 

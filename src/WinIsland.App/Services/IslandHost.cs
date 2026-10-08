@@ -11,6 +11,7 @@ using WinIsland.Core.Interaction;
 using WinIsland.Core.Layout;
 using WinIsland.Core.Media;
 using WinIsland.Core.Modules;
+using WinIsland.Core.Personal;
 using WinIsland.Core.Settings;
 using WinIsland.Core.State;
 using WinIsland.Core.Threading;
@@ -26,6 +27,7 @@ using WinIsland.Platform.Windows.Security;
 using WinIsland.Platform.Windows.Helpers;
 using WinIsland.Platform.Windows.Input;
 using WinIsland.Platform.Windows.Media;
+using WinIsland.Platform.Windows.Personal;
 using WinIsland.Platform.Windows.Networking;
 using WinIsland.Platform.Windows.Shell;
 using WinIsland.Platform.Windows.Windowing;
@@ -82,6 +84,9 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
     private readonly CiModule _ciModule;
     private readonly GitHubActionsClient? _github;
     private readonly ClaudeUsageTracker _usage;
+    private readonly CalendarModule _calendarModule;
+    private readonly OpenMeteoWeather? _weather;
+    private readonly IcsCalendarClient? _calendar;
     private SettingsWindow? _settingsWindow;
     private SettingsViewModel? _settingsViewModel;
     private readonly IslandStateManager _state;
@@ -128,7 +133,18 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
             _time);
 
         // The clock goes first: it is the fallback module when nothing else has content.
-        _clockModule = new ClockModule(_time, _dispatcher);
+        IWeatherSource weather;
+        if (_preview is not null)
+        {
+            weather = _preview.Weather;
+        }
+        else
+        {
+            _weather = new OpenMeteoWeather(() => _settings.ShowWeather, () => _settings.WeatherLocation, _time);
+            weather = _weather;
+        }
+
+        _clockModule = new ClockModule(_time, _dispatcher, weather, () => _settings.WeatherFahrenheit);
         _spotify = preview ? null : new SpotifyLibrary(() => _settings.SpotifyClientId);
         ILyricsProvider lyrics = preview ? new Preview.PreviewLyrics() : new LrcLibClient(() => _settings.OnlineLyrics);
         _mediaModule = new MediaModule(_media, _time, _dispatcher, lyrics, _spotify);
@@ -195,6 +211,19 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         }
 
         integrations.Add(_usage);
+        ICalendarSource calendar;
+        if (_preview is not null)
+        {
+            calendar = _preview.Calendar;
+        }
+        else
+        {
+            _calendar = new IcsCalendarClient(CalendarFeeds, _time);
+            integrations.AddRange([_weather!, _calendar]);
+            calendar = _calendar;
+        }
+
+        _calendarModule = new CalendarModule(calendar, shell, _time, _dispatcher);
         _approvalsModule = new ApprovalsModule(hooks, _time, _dispatcher);
         _ciModule = new CiModule(ci, shell, _time, _dispatcher);
 
@@ -204,7 +233,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
 
         // Order = switcher order; the clock goes first as the fallback.
         _state = new IslandStateManager(
-            [_clockModule, _mediaModule, _claudeModule, _approvalsModule, _privacyModule, _timerModule, _ciModule, _downloadsModule, _clipboardModule, _shelfModule, _controlsModule],
+            [_clockModule, _mediaModule, _claudeModule, _approvalsModule, _calendarModule, _privacyModule, _timerModule, _ciModule, _downloadsModule, _clipboardModule, _shelfModule, _controlsModule],
             _time,
             _dispatcher);
         _interaction = new InteractionController(_time, _dispatcher, _settings.ToInteractionOptions());
@@ -306,6 +335,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _downloadsModule.Dispose();
         _approvalsModule.Dispose();
         _ciModule.Dispose();
+        _calendarModule.Dispose();
         _connectivity.Dispose();
         _spotify?.Dispose();
         _settingsWindow?.Close();
@@ -600,6 +630,18 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         }
     }
 
+    /// <summary>Calendar feed links, kept with DPAPI (they grant read access to the calendar).</summary>
+    private static IReadOnlyList<string> CalendarFeeds() =>
+        (SecretStore.Read("calendars") ?? string.Empty).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>Network sources re-fetch now (settings changed).</summary>
+    private void RefreshOnline()
+    {
+        _github?.Refresh();
+        _weather?.Refresh();
+        _calendar?.Refresh();
+    }
+
     /// <summary>A token saved in settings (DPAPI), else GITHUB_TOKEN / GH_TOKEN; public repos work without one.</summary>
     private static string? GitHubToken() =>
         SecretStore.Read("github") ??
@@ -712,7 +754,8 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         UpdatePointerWatcher();
         Reevaluate();
         _settingsViewModel?.Refresh();
-        _github?.Refresh();
+        RefreshOnline();
+        _clockModule.RefreshWeather();
         _ = SaveSettingsAsync(_settings);
     }
 
@@ -737,7 +780,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
     {
         if (_settingsWindow is null)
         {
-            _settingsViewModel = new SettingsViewModel(() => _settings, UpdateSettings, _state.Modules, _spotify, () => _github?.Refresh());
+            _settingsViewModel = new SettingsViewModel(() => _settings, UpdateSettings, _state.Modules, _spotify, RefreshOnline);
             _settingsWindow = new SettingsWindow(_settingsViewModel);
             _settingsWindow.Closed += (_, _) =>
             {

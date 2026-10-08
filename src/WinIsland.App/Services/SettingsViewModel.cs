@@ -17,23 +17,25 @@ public sealed class SettingsViewModel : ObservableObject
     private readonly Func<IslandSettings> _get;
     private readonly Action<Func<IslandSettings, IslandSettings>> _update;
     private readonly SpotifyLibrary? _spotify;
-    private readonly Action _refreshGitHub;
+    private readonly Action _refreshOnline;
     private string _spotifyStatus = string.Empty;
     private string _claudeStatus = string.Empty;
     private string _gitHubToken = string.Empty;
+    private string _calendarFeeds = string.Empty;
 
     internal SettingsViewModel(
         Func<IslandSettings> get,
         Action<Func<IslandSettings, IslandSettings>> update,
         IEnumerable<IslandModule> modules,
         SpotifyLibrary? spotify,
-        Action refreshGitHub)
+        Action refreshOnline)
     {
         _get = get;
         _update = update;
         _spotify = spotify;
-        _refreshGitHub = refreshGitHub;
+        _refreshOnline = refreshOnline;
         _gitHubToken = SecretStore.Read("github") ?? string.Empty;
+        _calendarFeeds = SecretStore.Read("calendars") ?? string.Empty;
         ConnectClaudeCommand = new RelayCommand(() => SetClaudeHooks(install: true));
         DisconnectClaudeCommand = new RelayCommand(() => SetClaudeHooks(install: false));
         RefreshClaude();
@@ -143,6 +145,43 @@ public sealed class SettingsViewModel : ObservableObject
 
     public RelayCommand DisconnectClaudeCommand { get; }
 
+    // ---- Weather ----
+
+    public bool ShowWeather
+    {
+        get => S.ShowWeather;
+        set => Update(s => s with { ShowWeather = value });
+    }
+
+    public string WeatherLocation
+    {
+        get => S.WeatherLocation;
+        set => Update(s => s with { WeatherLocation = value?.Trim() ?? string.Empty });
+    }
+
+    public bool WeatherFahrenheit
+    {
+        get => S.WeatherFahrenheit;
+        set => Update(s => s with { WeatherFahrenheit = value });
+    }
+
+    // ---- Calendar ----
+
+    /// <summary>ICS links, one per line; kept with DPAPI.</summary>
+    public string CalendarFeeds
+    {
+        get => _calendarFeeds;
+        set
+        {
+            string normalized = string.Join('\n', (value ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            if (SetProperty(ref _calendarFeeds, normalized))
+            {
+                SecretStore.Write("calendars", normalized);
+                _refreshOnline();
+            }
+        }
+    }
+
     // ---- GitHub ----
 
     /// <summary>Kept with DPAPI, never in settings.json.</summary>
@@ -154,7 +193,7 @@ public sealed class SettingsViewModel : ObservableObject
             if (SetProperty(ref _gitHubToken, value?.Trim() ?? string.Empty))
             {
                 SecretStore.Write("github", _gitHubToken);
-                _refreshGitHub();
+                _refreshOnline();
             }
         }
     }

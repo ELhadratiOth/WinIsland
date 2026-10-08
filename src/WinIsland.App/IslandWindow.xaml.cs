@@ -214,6 +214,11 @@ public sealed partial class IslandWindow : Window
     {
         AddModuleView(new Views.LyricsView(ViewModel.Media, AccentBrush), MediaModule.ModuleId, IslandSize.Large);
 
+        if (ViewModel.Module<CalendarModule>() is { } calendar)
+        {
+            AddModuleView(new Views.CalendarView(calendar), CalendarModule.ModuleId, IslandSize.Expanded);
+        }
+
         if (ViewModel.Module<ApprovalsModule>() is { } approvals)
         {
             AddModuleView(new Views.ApprovalView(approvals), ApprovalsModule.ModuleId, IslandSize.Expanded);

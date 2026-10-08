@@ -34,6 +34,11 @@ internal static class Converters
     /// <summary>The same colour at 15% opacity (status badges).</summary>
     public static SolidColorBrush ToSoftBrush(uint argb) => new(ToColor((argb & 0x00FFFFFF) | 0x26000000));
 
+    private static readonly SolidColorBrush AgendaNext = new(Color.FromArgb(0xFF, 0xFF, 0x45, 0x3A));
+    private static readonly SolidColorBrush AgendaOther = new(Color.FromArgb(0xFF, 0x3A, 0x3A, 0x3C));
+
+    public static SolidColorBrush AgendaBar(bool isNext) => isNext ? AgendaNext : AgendaOther;
+
     public static string Upper(string? text) => (text ?? string.Empty).ToUpperInvariant();
 
     public static Visibility VisibleWhen(bool value) => value ? Visibility.Visible : Visibility.Collapsed;

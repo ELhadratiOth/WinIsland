@@ -15,7 +15,8 @@ namespace WinIsland.App.Services.Preview;
 /// 20 volume keys (OSD) · 22.5 Teams starts using the microphone · 26.5 interactive (privacy) ·
 /// 29 controls · 31 Pomodoro timer · 34 back to compact (timer) · 36 a download finishes ·
 /// 39 clipboard history · 41.5 file shelf · 44 back to compact · 45 Claude asks for approval ·
-/// 47.5 interactive (approve) · 51 a build starts · 53.5 it passes · 58 end.
+/// 47.5 interactive (approve) · 51 a build starts · 53.5 it passes · 58 a meeting in 5 minutes ·
+/// 61 compact (meeting countdown) · 64 end. Weather shows next to the clock throughout.
 /// </summary>
 internal sealed class PreviewScenario
 {
@@ -46,6 +47,10 @@ internal sealed class PreviewScenario
     public PreviewHookServer Hooks { get; } = new();
 
     public PreviewCi Ci { get; } = new();
+
+    public PreviewWeather Weather { get; } = new();
+
+    public PreviewCalendar Calendar { get; } = new();
 
     public string ClaudeProjectsDirectory { get; }
 
@@ -101,6 +106,8 @@ internal sealed class PreviewScenario
         });
         At(queue, 51.0, () => Ci.Set(Runs(Core.GitHub.RunState.Running)));
         At(queue, 53.5, () => Ci.Set(Runs(Core.GitHub.RunState.Succeeded)));
+        At(queue, 58.0, Calendar.MeetingSoon);
+        At(queue, 61.0, target.PreviewDismiss);
     }
 
     private void At(DispatcherQueue queue, double seconds, Action action)
@@ -141,7 +148,7 @@ internal sealed class PreviewScenario
             "Midnight City", "M83", "Spotify.exe", IsPlaying: true, CanGoNext: true, CanGoPrevious: true,
             Position: TimeSpan.FromSeconds(83), Duration: TimeSpan.FromSeconds(243), PositionSampledAt: DateTimeOffset.UtcNow,
             Artwork: artwork, Album: "Hurry Up, We're Dreaming",
-            CanShuffle: true, IsShuffleActive: true, CanRepeat: true, RepeatMode: MediaRepeatMode.None);
+            CanShuffle: true, IsShuffleActive: true, CanRepeat: true, RepeatMode: MediaRepeatMode.None, CanSeek: true);
     }
 
     private static Core.GitHub.WorkflowRun[] Runs(Core.GitHub.RunState latest)
