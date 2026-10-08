@@ -19,7 +19,8 @@ public sealed record MediaSnapshot(
     bool CanShuffle = false,
     bool IsShuffleActive = false,
     bool CanRepeat = false,
-    MediaRepeatMode RepeatMode = MediaRepeatMode.None)
+    MediaRepeatMode RepeatMode = MediaRepeatMode.None,
+    bool CanSeek = false)
 {
     public TimeSpan PositionAt(DateTimeOffset now)
     {

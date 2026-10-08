@@ -65,6 +65,30 @@ internal sealed class FakeMediaSource : IMediaSource
         RepeatRequests.Add(mode);
         return Task.CompletedTask;
     }
+
+    public List<TimeSpan> SeekRequests { get; } = [];
+
+    public List<string?> SelectedSessions { get; } = [];
+
+    public IReadOnlyList<MediaSessionInfo> Sessions { get; set; } = [];
+
+    public void SetSessions(params MediaSessionInfo[] sessions)
+    {
+        Sessions = sessions;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    public Task SeekAsync(TimeSpan position)
+    {
+        SeekRequests.Add(position);
+        return Task.CompletedTask;
+    }
+
+    public Task SelectSessionAsync(string? sessionId)
+    {
+        SelectedSessions.Add(sessionId);
+        return Task.CompletedTask;
+    }
 }
 
 internal static class Eventually

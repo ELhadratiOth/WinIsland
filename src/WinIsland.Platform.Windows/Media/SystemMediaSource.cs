@@ -19,6 +19,8 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
     private MediaSnapshot? _current;
     private int _version;
     private string? _artworkKey;
+    private string? _pinnedId;
+    private IReadOnlyList<MediaSessionInfo> _sessions = [];
     private MediaArtwork? _artwork;
 
     private readonly Func<bool> _onlineLookupEnabled;
@@ -38,6 +40,8 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
 
     public MediaSnapshot? Current => Volatile.Read(ref _current);
 
+    public IReadOnlyList<MediaSessionInfo> Sessions => Volatile.Read(ref _sessions);
+
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         GlobalSystemMediaTransportControlsSessionManager manager =
@@ -47,9 +51,10 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
         {
             _manager = manager;
             manager.CurrentSessionChanged += OnCurrentSessionChanged;
+            manager.SessionsChanged += OnSessionsChanged;
         }
 
-        Attach(manager.GetCurrentSession());
+        Attach(ResolveSession(manager));
     }
 
     public Task StopAsync()
@@ -59,6 +64,7 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
             if (_manager is not null)
             {
                 _manager.CurrentSessionChanged -= OnCurrentSessionChanged;
+                _manager.SessionsChanged -= OnSessionsChanged;
                 _manager = null;
             }
 
@@ -87,6 +93,95 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
         _ => MediaPlaybackAutoRepeatMode.None,
     }).AsTask());
 
+    public Task SeekAsync(TimeSpan position) => Invoke(s => s.TryChangePlaybackPositionAsync(position.Ticks).AsTask());
+
+    public Task SelectSessionAsync(string? sessionId)
+    {
+        GlobalSystemMediaTransportControlsSessionManager? manager;
+        lock (_gate)
+        {
+            _pinnedId = string.IsNullOrEmpty(sessionId) ? null : sessionId;
+            manager = _manager;
+        }
+
+        if (manager is not null)
+        {
+            Attach(ResolveSession(manager));
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>The pinned app while it's still around, else whatever Windows considers current.</summary>
+    private GlobalSystemMediaTransportControlsSession? ResolveSession(GlobalSystemMediaTransportControlsSessionManager manager)
+    {
+        string? pinned;
+        lock (_gate)
+        {
+            pinned = _pinnedId;
+        }
+
+        if (pinned is not null)
+        {
+            foreach (GlobalSystemMediaTransportControlsSession candidate in manager.GetSessions())
+            {
+                if (candidate.SourceAppUserModelId == pinned)
+                {
+                    return candidate;
+                }
+            }
+
+            lock (_gate)
+            {
+                _pinnedId = null;
+            }
+        }
+
+        return manager.GetCurrentSession();
+    }
+
+    private void OnSessionsChanged(GlobalSystemMediaTransportControlsSessionManager sender, SessionsChangedEventArgs args)
+    {
+        // A pinned app may have closed; also refresh the picker list.
+        Attach(ResolveSession(sender));
+    }
+
+    private void UpdateSessionList()
+    {
+        GlobalSystemMediaTransportControlsSessionManager? manager;
+        GlobalSystemMediaTransportControlsSession? selected;
+        lock (_gate)
+        {
+            manager = _manager;
+            selected = _session;
+        }
+
+        if (manager is null)
+        {
+            Volatile.Write(ref _sessions, []);
+            return;
+        }
+
+        var list = new List<MediaSessionInfo>();
+        foreach (GlobalSystemMediaTransportControlsSession session in manager.GetSessions())
+        {
+            string id = session.SourceAppUserModelId ?? string.Empty;
+            bool playing;
+            try
+            {
+                playing = session.GetPlaybackInfo().PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+            }
+            catch (Exception)
+            {
+                playing = false;
+            }
+
+            list.Add(new MediaSessionInfo(id, MediaSourceNames.Friendly(id), playing, id == selected?.SourceAppUserModelId));
+        }
+
+        Volatile.Write(ref _sessions, list);
+    }
+
     private Task Invoke(Func<GlobalSystemMediaTransportControlsSession, Task<bool>> action)
     {
         GlobalSystemMediaTransportControlsSession? session;
@@ -99,7 +194,7 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
     }
 
     private void OnCurrentSessionChanged(GlobalSystemMediaTransportControlsSessionManager sender, CurrentSessionChangedEventArgs args) =>
-        Attach(sender.GetCurrentSession());
+        Attach(ResolveSession(sender));
 
     private void Attach(GlobalSystemMediaTransportControlsSession? session)
     {
@@ -151,6 +246,7 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
 
         if (session is null)
         {
+            UpdateSessionList();
             Publish(null);
             return;
         }
@@ -202,7 +298,8 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
                     MediaPlaybackAutoRepeatMode.Track => MediaRepeatMode.Track,
                     MediaPlaybackAutoRepeatMode.List => MediaRepeatMode.List,
                     _ => MediaRepeatMode.None,
-                });
+                },
+                playback.Controls.IsPlaybackPositionEnabled);
 
             lock (_gate)
             {
@@ -213,6 +310,7 @@ public sealed class SystemMediaSource : IMediaSource, IIntegration
                 }
             }
 
+            UpdateSessionList();
             Publish(snapshot);
         }
         catch (Exception ex)

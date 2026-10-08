@@ -48,4 +48,28 @@ internal sealed class PreviewMediaSource : IMediaSource
 
         return Task.CompletedTask;
     }
+
+    public IReadOnlyList<MediaSessionInfo> Sessions { get; private set; } = [];
+
+    public void SetSessions(params MediaSessionInfo[] sessions)
+    {
+        Sessions = sessions;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    public Task SeekAsync(TimeSpan position)
+    {
+        if (Current is { } c)
+        {
+            Set(c with { Position = position, PositionSampledAt = DateTimeOffset.UtcNow });
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task SelectSessionAsync(string? sessionId)
+    {
+        SetSessions([.. Sessions.Select(s => s with { IsSelected = s.Id == sessionId })]);
+        return Task.CompletedTask;
+    }
 }

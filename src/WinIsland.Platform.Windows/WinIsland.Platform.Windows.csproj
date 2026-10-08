@@ -14,6 +14,8 @@
   <ItemGroup>
     <!-- WMI: built-in display brightness (no WinRT API exists for unpackaged apps). -->
     <PackageReference Include="System.Management" />
+    <!-- DPAPI: keeps sign-in tokens (Spotify, GitHub) encrypted for the current Windows user. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\WinIsland.Core\WinIsland.Core.csproj" />

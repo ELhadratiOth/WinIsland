@@ -117,8 +117,11 @@ public sealed class IntegrationHost : IAsyncDisposable
                 TimeSpan delay = RetryDelay(entry.Failures);
                 AppLog.Warn(nameof(IntegrationHost), $"{entry.Integration.Name} failed to start; retrying in {delay}", ex);
                 await SafeStopAsync(entry).ConfigureAwait(false);
-                SetStatus(entry, IntegrationStatus.Faulted, ex.Message);
+
+                // Schedule the retry before announcing the fault, so anyone reacting to the
+                // status (tests advancing a fake clock) always finds the retry in place.
                 entry.RetryTimer = _time.CreateTimer(_ => _ = Task.Run(() => StartEntryAsync(entry)), null, delay, Timeout.InfiniteTimeSpan);
+                SetStatus(entry, IntegrationStatus.Faulted, ex.Message);
             }
         }
         catch (OperationCanceledException) when (_shutdown.IsCancellationRequested)

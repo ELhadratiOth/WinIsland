@@ -18,4 +18,15 @@ public interface IMediaSource
     Task SetShuffleAsync(bool active);
 
     Task SetRepeatModeAsync(MediaRepeatMode mode);
+
+    Task SeekAsync(TimeSpan position);
+
+    /// <summary>Every app currently exposing media controls (Spotify, a browser tab…).</summary>
+    IReadOnlyList<MediaSessionInfo> Sessions { get; }
+
+    /// <summary>
+    /// Follow a specific app instead of the one Windows considers current; null returns to
+    /// automatic. A pinned app that closes falls back to automatic.
+    /// </summary>
+    Task SelectSessionAsync(string? sessionId);
 }
