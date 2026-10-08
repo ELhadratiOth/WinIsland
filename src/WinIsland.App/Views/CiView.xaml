@@ -26,7 +26,7 @@
             FontFamily="Segoe UI Variable Display"
             FontSize="17"
             FontWeight="SemiBold"
-            Foreground="{x:Bind local:Converters.ToBrush(Module.AccentArgb), Mode=OneWay}"
+            Foreground="{x:Bind local:Converters.ToBrush(Module.HeadlineArgb), Mode=OneWay}"
             Text="{x:Bind Module.Headline, Mode=OneWay}"
             Visibility="{x:Bind Module.HasHeadline, Mode=OneWay}" />
         <ListView

@@ -42,6 +42,9 @@ public sealed class CiModule : IslandModule
 
     public bool HasHeadline => Headline.Length > 0;
 
+    /// <summary>Green or red for the last finished build's headline.</summary>
+    public uint HeadlineArgb { get; private set; } = Palette.Green;
+
     public override DipSize GetSize(IslandSize size) => size switch
     {
         IslandSize.Compact => IslandMetrics.CompactWide,
@@ -113,7 +116,7 @@ public sealed class CiModule : IslandModule
         WorkflowRun? first = runs.FirstOrDefault(r => r.IsActive);
         CompactText = active > 0 ? $"Building {RepoName(first!.Repo)}" : string.Empty;
         CompactDetail = active > 1 ? $"{active}" : string.Empty;
-        AccentArgb = Palette.Yellow;
+        AccentArgb = active > 0 ? Palette.Yellow : HeadlineArgb;
 
         if (finished is not null)
         {
@@ -122,7 +125,9 @@ public sealed class CiModule : IslandModule
             Headline = $"{(failed ? "Build failed" : finished.State == RunState.Succeeded ? "Build passed" : "Build finished")} · {RepoName(finished.Repo)}";
             OnPropertyChanged(nameof(Headline));
             OnPropertyChanged(nameof(HasHeadline));
-            AccentArgb = failed ? Palette.Red : Palette.Green;
+            HeadlineArgb = failed ? Palette.Red : Palette.Green;
+            OnPropertyChanged(nameof(HeadlineArgb));
+            AccentArgb = HeadlineArgb;
             RequestAttention(TimeSpan.FromSeconds(failed ? 8 : 5), failed ? AttentionPriority.Important : AttentionPriority.Normal);
         }
 

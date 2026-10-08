@@ -115,7 +115,7 @@ public class PersonalModuleTests
 
         Assert.Equal("18°", clock.WeatherTemperature);
         Assert.Equal("Partly cloudy · H 22° L 14°", clock.WeatherSummary);
-        Assert.Equal(440, clock.GetSize(IslandSize.Expanded).Width);
+        Assert.Equal(520, clock.GetSize(IslandSize.Expanded).Width);
 
         fahrenheit = true;
         clock.RefreshWeather();

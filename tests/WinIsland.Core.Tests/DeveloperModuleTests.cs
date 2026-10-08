@@ -193,6 +193,11 @@ public class DeveloperModuleTests
         Assert.Equal(Palette.Red, module.AccentArgb);
         Assert.Equal(AttentionPriority.Important, Assert.Single(attention).Priority);
         Assert.Single(module.Runs);
+
+        // Opening the panel later keeps the red headline.
+        module.IsViewActive = true;
+        Assert.Equal(Palette.Red, module.HeadlineArgb);
+        Assert.Equal("Build failed · island", module.Headline);
     }
 
     [Fact]

@@ -57,7 +57,7 @@ public sealed class ClockModule : IslandModule
 
     public override Geometry.DipSize GetSize(Layout.IslandSize size) => size switch
     {
-        Layout.IslandSize.Expanded => new Geometry.DipSize(HasWeather ? 440 : 340, 96),
+        Layout.IslandSize.Expanded => new Geometry.DipSize(HasWeather ? 520 : 340, 96),
         Layout.IslandSize.Compact when HasWeather => new Geometry.DipSize(216, 36),
         _ => base.GetSize(size),
     };
