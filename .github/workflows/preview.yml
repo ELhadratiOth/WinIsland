@@ -1,0 +1,71 @@
+name: Preview recording
+
+# Records the --preview tour (every island state, sample data) on a Windows runner with
+# animations enabled, as a PNG frame sequence for turning into a video/GIF.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish
+        run: dotnet publish src/WinIsland.App -c Release -p:Platform=x64 -r win-x64 --self-contained true -o publish
+
+      - name: Record
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          Add-Type @"
+          using System;
+          using System.Runtime.InteropServices;
+          public static class Spi {
+            [DllImport("user32.dll", SetLastError = true)]
+            public static extern bool SystemParametersInfo(uint action, uint param, IntPtr vparam, uint winIni);
+          }
+          "@
+          # Windows Server runners ship with "Animation effects" off; the island honours that
+          # setting, so turn it on (SPI_SETCLIENTAREAANIMATION) to record the real motion.
+          [Spi]::SystemParametersInfo(0x1043, 0, [IntPtr]1, 3) | Out-Null
+
+          # Clean backdrop: hide the runner's console windows.
+          (New-Object -ComObject Shell.Application).MinimizeAll()
+          Start-Sleep -Seconds 2
+
+          New-Item -ItemType Directory -Force frames | Out-Null
+          $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $w = 640; $h = 400; $x = [int](($screen.Width - $w) / 2)
+          $bitmap = New-Object System.Drawing.Bitmap $w, $h
+          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+
+          $process = Start-Process (Resolve-Path 'publish/WinIsland.exe') -ArgumentList '--preview' -PassThru
+          $clock = [System.Diagnostics.Stopwatch]::StartNew()
+          $index = 0
+          $timestamps = New-Object System.Collections.Generic.List[string]
+          while ($clock.Elapsed.TotalSeconds -lt 22) {
+            $graphics.CopyFromScreen($x, 0, 0, 0, $bitmap.Size)
+            $bitmap.Save(("frames/f{0:D4}.png" -f $index), [System.Drawing.Imaging.ImageFormat]::Png)
+            $timestamps.Add(("{0:D4} {1}" -f $index, [int]$clock.Elapsed.TotalMilliseconds))
+            $index++
+            $sleep = 50 - ($clock.ElapsedMilliseconds % 50)
+            Start-Sleep -Milliseconds $sleep
+          }
+          $timestamps | Set-Content frames/timestamps.txt
+          Get-Process WinIsland -ErrorAction SilentlyContinue | Stop-Process -Force
+          Write-Host "Captured $index frames"
+          $log = Join-Path $env:LOCALAPPDATA 'WinIsland\winisland.log'
+          if (Test-Path $log) { Copy-Item $log frames/winisland.log; Get-Content $log }
+
+      - name: Upload frames
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-frames
+          path: frames/
