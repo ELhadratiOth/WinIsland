@@ -15,9 +15,12 @@ internal static class TrayMenu
     private const int HiddenId = 302;
     private const int OnlineArtworkId = 303;
     private const int FocusId = 304;
+    private const int SettingsId = 305;
 
     public static IReadOnlyList<TrayMenuItem> Build(IslandSettings settings, bool startsWithWindows, bool userHidden) =>
     [
+        new TrayMenuItem(SettingsId, "Settings…"),
+        TrayMenuItem.Separator,
         new TrayMenuItem(0, "Visibility")
         {
             Children =
@@ -53,6 +56,7 @@ internal static class TrayMenu
         HiddenId => new Command.ToggleHidden(),
         OnlineArtworkId => new Command.ToggleOnlineArtwork(),
         FocusId => new Command.ToggleFocus(),
+        SettingsId => new Command.OpenSettings(),
         _ => null,
     };
 
@@ -74,5 +78,7 @@ internal static class TrayMenu
         public sealed record ToggleOnlineArtwork : Command;
 
         public sealed record ToggleFocus : Command;
+
+        public sealed record OpenSettings : Command;
     }
 }

@@ -27,6 +27,12 @@ public sealed record IslandSettings
     /// </summary>
     public bool OnlineArtworkLookup { get; init; } = true;
 
+    /// <summary>Time-synced lyrics from lrclib.net (sends only artist, title, album and duration).</summary>
+    public bool OnlineLyrics { get; init; } = true;
+
+    /// <summary>Client ID of the user's own Spotify developer app (for "Liked Songs"). Empty: off.</summary>
+    public string SpotifyClientId { get; init; } = string.Empty;
+
     /// <summary>Focus mode: only the clock, timers, recording indicators and approvals may show.</summary>
     public bool FocusMode { get; init; }
 

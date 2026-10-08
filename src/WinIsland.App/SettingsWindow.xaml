@@ -1,0 +1,188 @@
+<Window
+    x:Class="WinIsland.App.SettingsWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:services="using:WinIsland.App.Services"
+    Title="WinIsland settings">
+
+    <Grid x:Name="SettingsRoot">
+        <Grid.Resources>
+            <Style x:Key="SectionHeaderStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}">
+                <Setter Property="Margin" Value="4,20,0,6" />
+            </Style>
+            <Style x:Key="CardStyle" TargetType="Border">
+                <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="Padding" Value="16,4" />
+            </Style>
+            <Style x:Key="RowStyle" TargetType="Grid">
+                <Setter Property="MinHeight" Value="56" />
+                <Setter Property="ColumnSpacing" Value="16" />
+            </Style>
+            <Style x:Key="RowDescriptionStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+        </Grid.Resources>
+
+        <ScrollViewer>
+            <StackPanel MaxWidth="760" Padding="32,24,32,40">
+                <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Settings" />
+                <TextBlock
+                    Margin="0,4,0,0"
+                    Style="{StaticResource RowDescriptionStyle}"
+                    Text="Changes apply immediately." />
+
+                <!-- ===== General ===== -->
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="General" />
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <Grid Style="{StaticResource RowStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="When to hide the island" />
+                                <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="Games and fullscreen video stay uncovered." />
+                            </StackPanel>
+                            <ComboBox
+                                Grid.Column="1"
+                                MinWidth="260"
+                                VerticalAlignment="Center"
+                                SelectedIndex="{x:Bind ViewModel.VisibilityIndex, Mode=TwoWay}">
+                                <x:String>Always show (including games)</x:String>
+                                <x:String>Hide in games</x:String>
+                                <x:String>Hide in fullscreen apps</x:String>
+                                <x:String>Hide when an app is maximized</x:String>
+                            </ComboBox>
+                        </Grid>
+                        <Grid Style="{StaticResource RowStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock VerticalAlignment="Center" Text="Display" />
+                            <ComboBox
+                                Grid.Column="1"
+                                MinWidth="260"
+                                VerticalAlignment="Center"
+                                SelectedIndex="{x:Bind ViewModel.DisplayIndex, Mode=TwoWay}">
+                                <x:String>Primary display</x:String>
+                                <x:String>Follow the active window</x:String>
+                            </ComboBox>
+                        </Grid>
+                        <Grid Style="{StaticResource RowStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Expand on hover" />
+                                <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="Rest the pointer on the island to use it. Win+Alt+I always works." />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ViewModel.HoverToInteract, Mode=TwoWay}" />
+                        </Grid>
+                        <Grid Style="{StaticResource RowStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Focus mode" />
+                                <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="Only the clock, timers, microphone/camera and Claude approvals appear." />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ViewModel.FocusMode, Mode=TwoWay}" />
+                        </Grid>
+                        <Grid Style="{StaticResource RowStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock VerticalAlignment="Center" Text="Start with Windows" />
+                            <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ViewModel.StartWithWindows, Mode=TwoWay}" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- ===== Modules ===== -->
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Island modules" />
+                <Border Style="{StaticResource CardStyle}">
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.Modules}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="services:ModuleToggle">
+                                <Grid MinHeight="48" ColumnSpacing="14">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <FontIcon VerticalAlignment="Center" FontSize="16" Glyph="{x:Bind Glyph}" />
+                                    <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{x:Bind Name}" />
+                                    <ToggleSwitch Grid.Column="2" IsOn="{x:Bind IsEnabled, Mode=TwoWay}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+
+                <!-- ===== Music ===== -->
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Music" />
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <Grid Style="{StaticResource RowStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Find missing cover art online" />
+                                <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="Asks Apple's iTunes Search with the artist and title only." />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ViewModel.OnlineArtwork, Mode=TwoWay}" />
+                        </Grid>
+                        <Grid Style="{StaticResource RowStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Lyrics" />
+                                <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="Time-synced lyrics from lrclib.net (sends artist, title, album and length)." />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ViewModel.OnlineLyrics, Mode=TwoWay}" />
+                        </Grid>
+                        <StackPanel Padding="0,12,0,14" Spacing="8">
+                            <TextBlock Text="Spotify Liked Songs" />
+                            <TextBlock Style="{StaticResource RowDescriptionStyle}">
+                                <Run Text="Create a free app at developer.spotify.com/dashboard, add the redirect URI " /><Run FontWeight="SemiBold" Text="http://127.0.0.1:43821/callback" /><Run Text=", tick Web API, then paste its Client ID here and connect. WinIsland talks to Spotify directly; no secret is needed." />
+                            </TextBlock>
+                            <HyperlinkButton Padding="0" Content="Open the Spotify developer dashboard" NavigateUri="https://developer.spotify.com/dashboard" />
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox PlaceholderText="Client ID" Text="{x:Bind ViewModel.SpotifyClientId, Mode=TwoWay}" />
+                                <Button
+                                    Grid.Column="1"
+                                    Command="{x:Bind ViewModel.ConnectSpotifyCommand}"
+                                    Content="Connect"
+                                    Style="{StaticResource AccentButtonStyle}"
+                                    Visibility="{x:Bind ViewModel.IsSpotifyDisconnected, Mode=OneWay}" />
+                                <Button
+                                    Grid.Column="1"
+                                    Command="{x:Bind ViewModel.DisconnectSpotifyCommand}"
+                                    Content="Disconnect"
+                                    Visibility="{x:Bind ViewModel.IsSpotifyConnected, Mode=OneWay}" />
+                            </Grid>
+                            <TextBlock Style="{StaticResource RowDescriptionStyle}" Text="{x:Bind ViewModel.SpotifyStatus, Mode=OneWay}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

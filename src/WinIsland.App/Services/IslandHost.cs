@@ -3,6 +3,7 @@ using WinIsland.Core.Claude;
 using WinIsland.Core.Devices;
 using WinIsland.Core.Diagnostics;
 using WinIsland.Core.Display;
+using WinIsland.Core.Helpers;
 using WinIsland.Core.Geometry;
 using WinIsland.Core.Integrations;
 using WinIsland.Core.Interaction;
@@ -18,6 +19,7 @@ using WinIsland.Platform.Windows.Audio;
 using WinIsland.Platform.Windows.Devices;
 using WinIsland.Platform.Windows.Display;
 using WinIsland.Platform.Windows.Foreground;
+using WinIsland.Platform.Windows.Helpers;
 using WinIsland.Platform.Windows.Input;
 using WinIsland.Platform.Windows.Media;
 using WinIsland.Platform.Windows.Networking;
@@ -66,6 +68,14 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
     private readonly ControlsModule _controlsModule;
     private readonly TimerModule _timerModule;
     private readonly PrivacyModule _privacyModule;
+    private readonly SpotifyLibrary? _spotify;
+    private readonly ClipboardModule _clipboardModule;
+    private readonly ShelfModule _shelfModule;
+    private readonly DownloadsModule _downloadsModule;
+    private readonly MessageWindow? _helperWindow;
+    private readonly ClipboardMonitor? _clipboardMonitor;
+    private SettingsWindow? _settingsWindow;
+    private SettingsViewModel? _settingsViewModel;
     private readonly IslandStateManager _state;
     private readonly InteractionController _interaction;
     private readonly IslandViewModel _viewModel;
@@ -111,7 +121,9 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
 
         // The clock goes first: it is the fallback module when nothing else has content.
         _clockModule = new ClockModule(_time, _dispatcher);
-        _mediaModule = new MediaModule(_media, _time, _dispatcher);
+        _spotify = preview ? null : new SpotifyLibrary(() => _settings.SpotifyClientId);
+        ILyricsProvider lyrics = preview ? new Preview.PreviewLyrics() : new LrcLibClient(() => _settings.OnlineLyrics);
+        _mediaModule = new MediaModule(_media, _time, _dispatcher, lyrics, _spotify);
         _claudeModule = new ClaudeModule(_claudeSessions, new ClaudeCliMessenger(), _dispatcher, _time);
 
         // System devices: Core Audio, WMI brightness, battery, microphone/camera use.
@@ -141,9 +153,30 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _timerModule.Finished += (_, _) => Sounds.Notify();
         _controlsModule.FocusModeToggleRequested += (_, _) => UpdateSettings(s => s with { FocusMode = !s.FocusMode });
 
+        // Helpers: clipboard history, file shelf, downloads.
+        IClipboardService clipboard;
+        IDownloadSource downloads;
+        IShellLauncher shell;
+        if (_preview is not null)
+        {
+            (clipboard, downloads, shell) = (_preview.Clipboard, _preview.Downloads, new Preview.PreviewShell());
+        }
+        else
+        {
+            _helperWindow = new MessageWindow("WinIsland.Helpers");
+            _clipboardMonitor = new ClipboardMonitor(_helperWindow, () => IsModuleEnabled(ClipboardModule.ModuleId), _time);
+            var downloadsWatcher = new DownloadsWatcher(_time);
+            integrations.Add(downloadsWatcher);
+            (clipboard, downloads, shell) = (_clipboardMonitor, downloadsWatcher, new ShellLauncher());
+        }
+
+        _clipboardModule = new ClipboardModule(clipboard, _time);
+        _shelfModule = new ShelfModule(shell);
+        _downloadsModule = new DownloadsModule(downloads, shell, _dispatcher);
+
         // Order = switcher order; the clock goes first as the fallback.
         _state = new IslandStateManager(
-            [_clockModule, _mediaModule, _claudeModule, _privacyModule, _timerModule, _controlsModule],
+            [_clockModule, _mediaModule, _claudeModule, _privacyModule, _timerModule, _downloadsModule, _clipboardModule, _shelfModule, _controlsModule],
             _time,
             _dispatcher);
         _interaction = new InteractionController(_time, _dispatcher, _settings.ToInteractionOptions());
@@ -189,6 +222,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         Reevaluate();
 
         RegisterHotkey();
+        _clipboardMonitor?.Start();
         AppLog.Info(nameof(IslandHost), $"Monitors: {string.Join("; ", _monitors.GetMonitors().Select(m => $"{m.Id} {m.Bounds} work {m.WorkArea} x{m.Scale}{(m.IsPrimary ? " primary" : string.Empty)}"))}");
         _connectivity.Start();
         _integrations.Start();
@@ -200,6 +234,10 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
     void Preview.IPreviewTarget.PreviewSelect(string moduleId) => _state.SelectModule(moduleId);
 
     void Preview.IPreviewTarget.PreviewDismiss() => _interaction.Dismiss();
+
+    void Preview.IPreviewTarget.PreviewShowLyrics(bool show) => _mediaModule.ShowLyrics = show;
+
+    void Preview.IPreviewTarget.PreviewShelf(params string[] paths) => _shelfModule.Add(paths);
 
     void Preview.IPreviewTarget.PreviewStartTimer()
     {
@@ -233,7 +271,14 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _controlsModule.Dispose();
         _timerModule.Dispose();
         _privacyModule.Dispose();
+        _clipboardMonitor?.Dispose();
+        _helperWindow?.Dispose();
+        _clipboardModule.Dispose();
+        _shelfModule.Dispose();
+        _downloadsModule.Dispose();
         _connectivity.Dispose();
+        _spotify?.Dispose();
+        _settingsWindow?.Close();
         _messages.Dispose();
         _settingsStore.Dispose();
         _window.CloseForExit();
@@ -255,6 +300,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _window.EscapePressed += OnEscapePressed;
         _window.TextInputFocusChanged += OnTextInputFocusChanged;
         _window.Deactivated += OnWindowDeactivated;
+        _window.FileDragChanged += OnFileDragChanged;
         _integrations.StatusChanged += OnIntegrationStatusChanged;
     }
 
@@ -274,6 +320,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _window.EscapePressed -= OnEscapePressed;
         _window.TextInputFocusChanged -= OnTextInputFocusChanged;
         _window.Deactivated -= OnWindowDeactivated;
+        _window.FileDragChanged -= OnFileDragChanged;
         _integrations.StatusChanged -= OnIntegrationStatusChanged;
     }
 
@@ -514,6 +561,17 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
 
     private void OnEscapePressed(object? sender, EventArgs e) => _interaction.Dismiss();
 
+    private void OnFileDragChanged(object? sender, bool dragging)
+    {
+        _shelfModule.IsDropTarget = dragging;
+        if (dragging)
+        {
+            _state.SelectModule(ShelfModule.ModuleId);
+        }
+    }
+
+    private bool IsModuleEnabled(string id) => !_settings.DisabledModules.Contains(id, StringComparer.OrdinalIgnoreCase);
+
     private void OnHotkeyPressed(object? sender, int id)
     {
         if (id != HotkeyId || !_state.State.IsVisible)
@@ -617,6 +675,7 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         ApplyModuleFilter();
         UpdatePointerWatcher();
         Reevaluate();
+        _settingsViewModel?.Refresh();
         _ = SaveSettingsAsync(_settings);
     }
 
@@ -636,10 +695,30 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
     public IReadOnlyList<TrayMenuItem> GetTrayMenuItems() =>
         TrayMenu.Build(_settings, StartupRegistration.IsEnabled(), _userHidden);
 
+    /// <summary>Opens (or brings back) the settings window.</summary>
+    public void OpenSettings()
+    {
+        if (_settingsWindow is null)
+        {
+            _settingsViewModel = new SettingsViewModel(() => _settings, UpdateSettings, _state.Modules, _spotify);
+            _settingsWindow = new SettingsWindow(_settingsViewModel);
+            _settingsWindow.Closed += (_, _) =>
+            {
+                _settingsWindow = null;
+                _settingsViewModel = null;
+            };
+        }
+
+        _settingsWindow.Activate();
+    }
+
     public void HandleTrayCommand(int id)
     {
         switch (TrayMenu.Parse(id))
         {
+            case TrayMenu.Command.OpenSettings:
+                OpenSettings();
+                break;
             case TrayMenu.Command.SetVisibility(VisibilityMode mode):
                 UpdateSettings(s => s with { VisibilityMode = mode });
                 break;

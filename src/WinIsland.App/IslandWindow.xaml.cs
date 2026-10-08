@@ -91,6 +91,11 @@ public sealed partial class IslandWindow : Window
         // Clicking the text box of a not-yet-focused island: TextBox marks pointer presses as
         // handled, so listen for handled events too.
         MessageInput.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnTextInputPointerPressed), handledEventsToo: true);
+
+        // The slider marks pointer events handled; listen anyway to know when a drag starts/ends.
+        SeekSlider.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) => ViewModel.Media.BeginScrub()), handledEventsToo: true);
+        SeekSlider.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, _) => ViewModel.Media.EndScrub(SeekSlider.Value)), handledEventsToo: true);
+        SeekSlider.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler((_, _) => ViewModel.Media.EndScrub(SeekSlider.Value)), handledEventsToo: true);
         Activated += OnActivated;
 
         // Diagnostic: confirms XAML content actually loaded and rendered.
@@ -105,6 +110,9 @@ public sealed partial class IslandWindow : Window
     public nint Handle { get; }
 
     public event EventHandler? EscapePressed;
+
+    /// <summary>Files are being dragged over the island (true) or left/dropped (false).</summary>
+    public event EventHandler<bool>? FileDragChanged;
 
     /// <summary>A text field gained (true) or lost (false) focus.</summary>
     public event EventHandler<bool>? TextInputFocusChanged;
@@ -204,6 +212,24 @@ public sealed partial class IslandWindow : Window
     /// </summary>
     private void RegisterModuleViews()
     {
+        AddModuleView(new Views.LyricsView(ViewModel.Media, AccentBrush), MediaModule.ModuleId, IslandSize.Large);
+
+        if (ViewModel.Module<ClipboardModule>() is { } clipboard)
+        {
+            AddModuleView(new Views.ClipboardView(clipboard), ClipboardModule.ModuleId, IslandSize.Expanded);
+        }
+
+        if (ViewModel.Module<ShelfModule>() is { } shelf)
+        {
+            AddModuleView(new Views.ShelfView(shelf), ShelfModule.ModuleId, IslandSize.Expanded);
+            ConfigureFileDrop(shelf);
+        }
+
+        if (ViewModel.Module<DownloadsModule>() is { } downloads)
+        {
+            AddModuleView(new Views.DownloadsView(downloads), DownloadsModule.ModuleId, IslandSize.Expanded);
+        }
+
         if (ViewModel.Module<ControlsModule>() is { } controls)
         {
             AddModuleView(new Views.OsdView(controls), ControlsModule.ModuleId, IslandSize.Compact);
@@ -226,6 +252,53 @@ public sealed partial class IslandWindow : Window
             vm => vm.State.IsVisible && vm.State.Size == IslandSize.Compact && !bespokeCompact.Contains(vm.State.ModuleId));
 
         UpdateModuleViews();
+    }
+
+    /// <summary>
+    /// Files dragged onto the (interactive) island open the shelf and are parked there. Only
+    /// their paths are kept; the source files are left alone.
+    /// </summary>
+    private void ConfigureFileDrop(ShelfModule shelf)
+    {
+        RootGrid.AllowDrop = true;
+        RootGrid.DragEnter += (_, e) =>
+        {
+            if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
+            {
+                FileDragChanged?.Invoke(this, true);
+            }
+        };
+        RootGrid.DragOver += (_, e) =>
+        {
+            if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
+            {
+                e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Link;
+                e.DragUIOverride.Caption = "Add to shelf";
+                e.DragUIOverride.IsGlyphVisible = false;
+            }
+        };
+        RootGrid.DragLeave += (_, _) => FileDragChanged?.Invoke(this, false);
+        RootGrid.Drop += async (_, e) =>
+        {
+            DragOperationDeferral deferral = e.GetDeferral();
+            try
+            {
+                if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
+                {
+                    IReadOnlyList<Windows.Storage.IStorageItem> items = await e.DataView.GetStorageItemsAsync();
+                    shelf.Add(items.Select(i => i.Path).Where(p => !string.IsNullOrEmpty(p)));
+                }
+            }
+            catch (Exception ex)
+            {
+                Core.Diagnostics.AppLog.Warn(nameof(IslandWindow), "Drop failed", ex);
+            }
+            finally
+            {
+                deferral.Complete();
+                FileDragChanged?.Invoke(this, false);
+            }
+        };
     }
 
     private void AddModuleView(UIElement view, string moduleId, IslandSize size) =>
@@ -310,6 +383,32 @@ public sealed partial class IslandWindow : Window
 
     private void OnSessionSelectionChanged(object sender, SelectionChangedEventArgs e) =>
         ViewModel.Claude.SelectedSession = SessionList.SelectedItem as ClaudeSessionItem;
+
+    private void OnSeekValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e) =>
+        ViewModel.Media.Scrub(e.NewValue);
+
+    /// <summary>"Playing on …" lists every app with media controls; picking one pins it.</summary>
+    private void OnSourceButtonClick(object sender, RoutedEventArgs e)
+    {
+        var menu = new MenuFlyout();
+        var automatic = new ToggleMenuFlyoutItem { Text = "Automatic", IsChecked = false };
+        automatic.Click += (_, _) => ViewModel.Media.SelectSessionCommand.Execute(string.Empty);
+        menu.Items.Add(automatic);
+        menu.Items.Add(new MenuFlyoutSeparator());
+        foreach (Core.Media.MediaSessionInfo session in ViewModel.Media.Sessions)
+        {
+            var item = new ToggleMenuFlyoutItem
+            {
+                Text = session.IsPlaying ? $"{session.Name}  ·  playing" : session.Name,
+                IsChecked = session.IsSelected,
+            };
+            string id = session.Id;
+            item.Click += (_, _) => ViewModel.Media.SelectSessionCommand.Execute(id);
+            menu.Items.Add(item);
+        }
+
+        menu.ShowAt(SourceButton);
+    }
 
     private void OnModuleButtonClick(object sender, RoutedEventArgs e)
     {

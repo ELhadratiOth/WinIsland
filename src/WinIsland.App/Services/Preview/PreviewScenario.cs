@@ -11,9 +11,10 @@ namespace WinIsland.App.Services.Preview;
 /// <c>WinIsland.exe --preview</c>: a scripted tour through every island state with sample data,
 /// so the design can be reviewed (and photographed in CI) without real media or sessions.
 /// Timeline (seconds): 0 Claude working (compact) · 4 a track starts (expanded notice) ·
-/// 7.5 compact media · 9.5 interactive media · 12 Claude panel · 15 expanded clock · 18 back to compact ·
-/// 20 volume keys (OSD) · 22.5 Teams starts using the microphone · 26 interactive (privacy) ·
-/// 28.5 controls · 31 Pomodoro timer · 34 back to compact (timer) · 38 end.
+/// 7.5 compact media · 9.5 interactive media · 10.6 lyrics · 12 Claude panel · 15 expanded clock · 18 back to compact ·
+/// 20 volume keys (OSD) · 22.5 Teams starts using the microphone · 26.5 interactive (privacy) ·
+/// 29 controls · 31 Pomodoro timer · 34 back to compact (timer) · 36 a download finishes ·
+/// 39 clipboard history · 41.5 file shelf · 44 back to compact · 46 end.
 /// </summary>
 internal sealed class PreviewScenario
 {
@@ -37,25 +38,54 @@ internal sealed class PreviewScenario
 
     public PreviewPrivacy Privacy { get; } = new();
 
+    public PreviewClipboard Clipboard { get; } = new();
+
+    public PreviewDownloads Downloads { get; } = new();
+
     public string ClaudeProjectsDirectory { get; }
 
     public void Run(DispatcherQueue queue, IPreviewTarget target)
     {
-        At(queue, 4.0, async () => Media.Set(await SongAsync()));
+        At(queue, 4.0, async () =>
+        {
+            Media.SetSessions(new MediaSessionInfo("Spotify.exe", "Spotify", true, true), new MediaSessionInfo("MSEdge", "Microsoft Edge", false, false));
+            Media.Set(await SongAsync());
+        });
         At(queue, 9.5, target.PreviewActivate);
-        At(queue, 12.0, () => target.PreviewSelect("claude"));
+        At(queue, 10.6, () => target.PreviewShowLyrics(true));
+        At(queue, 12.0, () =>
+        {
+            target.PreviewShowLyrics(false);
+            target.PreviewSelect("claude");
+        });
         At(queue, 15.0, () => target.PreviewSelect("clock"));
         At(queue, 18.0, target.PreviewDismiss);
         At(queue, 20.0, () => Speakers.PressKeys(0.64));
         At(queue, 22.5, () => Privacy.Set(new SensorUse(SensorKind.Microphone, "Teams")));
-        At(queue, 26.0, target.PreviewActivate);
-        At(queue, 28.5, () => target.PreviewSelect("controls"));
+        At(queue, 26.5, target.PreviewActivate);
+        At(queue, 29.0, () => target.PreviewSelect("controls"));
         At(queue, 31.0, target.PreviewStartTimer);
         At(queue, 34.0, () =>
         {
             Privacy.Set();
             target.PreviewDismiss();
         });
+        At(queue, 35.0, () =>
+        {
+            Clipboard.Emit("git push -u origin feature/island", TimeSpan.FromMinutes(42));
+            Clipboard.Emit("Meeting notes:\n- ship v0.2\n- record the demo", TimeSpan.FromMinutes(18));
+            Clipboard.Emit("https://github.com/ELhadratiOth/WinIsland/releases", TimeSpan.FromMinutes(6));
+            Clipboard.Emit("The island now shows lyrics, timers and your downloads.", TimeSpan.FromSeconds(20));
+            target.PreviewShelf(@"C:\Users\you\Desktop\Design review.pdf", @"C:\Users\you\Pictures\island-hero.png", @"C:\Users\you\Downloads\WinIsland-0.2.0-win-x64.zip");
+        });
+        At(queue, 36.0, () => Downloads.Complete("WinIsland-0.2.0-win-x64.zip", 106_000_000));
+        At(queue, 39.0, () =>
+        {
+            target.PreviewActivate();
+            target.PreviewSelect("clipboard");
+        });
+        At(queue, 41.5, () => target.PreviewSelect("shelf"));
+        At(queue, 44.0, target.PreviewDismiss);
     }
 
     private void At(DispatcherQueue queue, double seconds, Action action)
@@ -131,4 +161,8 @@ internal interface IPreviewTarget
     void PreviewDismiss();
 
     void PreviewStartTimer();
+
+    void PreviewShowLyrics(bool show);
+
+    void PreviewShelf(params string[] paths);
 }

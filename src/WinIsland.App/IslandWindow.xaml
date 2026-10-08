@@ -202,16 +202,31 @@
                             Grid.Column="1"
                             VerticalAlignment="Center"
                             Spacing="1">
-                            <TextBlock
+                            <!-- "Playing on Spotify ▾": picks another player when several are open. -->
+                            <Button
+                                x:Name="SourceButton"
                                 Margin="0,0,0,3"
-                                FontFamily="Segoe UI Variable Text"
-                                FontSize="10"
-                                FontWeight="SemiBold"
-                                CharacterSpacing="80"
-                                Foreground="{x:Bind AccentBrush}"
-                                MaxLines="1"
-                                Text="{x:Bind ViewModel.Media.SourceCaption, Mode=OneWay}"
-                                TextTrimming="CharacterEllipsis" />
+                                AutomationProperties.Name="Choose player"
+                                Click="OnSourceButtonClick"
+                                IsHitTestVisible="{x:Bind ViewModel.Media.HasMultipleSessions, Mode=OneWay}"
+                                Style="{StaticResource IslandBareButton}">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock
+                                        FontFamily="Segoe UI Variable Text"
+                                        FontSize="10"
+                                        FontWeight="SemiBold"
+                                        CharacterSpacing="80"
+                                        Foreground="{x:Bind AccentBrush}"
+                                        MaxLines="1"
+                                        Text="{x:Bind ViewModel.Media.SourceCaption, Mode=OneWay}"
+                                        TextTrimming="CharacterEllipsis" />
+                                    <FontIcon
+                                        FontSize="8"
+                                        Foreground="{x:Bind AccentBrush}"
+                                        Glyph="&#xE70D;"
+                                        Visibility="{x:Bind ViewModel.Media.HasMultipleSessions, Mode=OneWay}" />
+                                </StackPanel>
+                            </Button>
                             <TextBlock
                                 FontFamily="Segoe UI Variable Display"
                                 FontSize="18"
@@ -236,10 +251,33 @@
                                 TextTrimming="CharacterEllipsis"
                                 Visibility="{x:Bind ViewModel.Media.HasAlbum, Mode=OneWay}" />
                         </StackPanel>
+                        <!-- Lyrics and like (Spotify) under the waveform. -->
+                        <StackPanel
+                            Grid.Column="2"
+                            VerticalAlignment="Bottom"
+                            Orientation="Horizontal"
+                            Spacing="4">
+                            <Button
+                                AutomationProperties.Name="Lyrics"
+                                Command="{x:Bind ViewModel.Media.ToggleLyricsCommand}"
+                                Style="{StaticResource IslandModeButton}"
+                                ToolTipService.ToolTip="Lyrics">
+                                <FontIcon FontSize="14" Foreground="{StaticResource IslandSecondaryBrush}" Glyph="&#xE8D2;" />
+                            </Button>
+                            <Button
+                                AutomationProperties.Name="Like"
+                                Command="{x:Bind ViewModel.Media.ToggleLikeCommand}"
+                                Style="{StaticResource IslandModeButton}"
+                                ToolTipService.ToolTip="Add to Liked Songs"
+                                Visibility="{x:Bind ViewModel.Media.CanLike, Mode=OneWay}">
+                                <FontIcon FontSize="14" Foreground="{x:Bind AccentBrush}" Glyph="{x:Bind ViewModel.Media.LikeGlyph, Mode=OneWay}" />
+                            </Button>
+                        </StackPanel>
                         <StackPanel
                             x:Name="ExpandedBars"
                             Grid.Column="2"
                             Margin="0,6,2,0"
+                            HorizontalAlignment="Right"
                             VerticalAlignment="Top"
                             Orientation="Horizontal"
                             Spacing="3">
@@ -262,14 +300,16 @@
                             HorizontalAlignment="Left"
                             Style="{StaticResource IslandTimeStyle}"
                             Text="{x:Bind ViewModel.Media.PositionText, Mode=OneWay}" />
-                        <ProgressBar
+                        <!-- Drag to seek: the bar stops following the song while held. -->
+                        <Slider
+                            x:Name="SeekSlider"
                             Grid.Column="1"
-                            MinHeight="5"
-                            VerticalAlignment="Center"
-                            Background="{StaticResource IslandTrackBrush}"
-                            CornerRadius="2.5"
+                            Height="24"
+                            AutomationProperties.Name="Position"
                             Foreground="{x:Bind AccentBrush}"
-                            Maximum="100"
+                            IsEnabled="{x:Bind ViewModel.Media.CanSeek, Mode=OneWay}"
+                            Style="{StaticResource IslandSliderStyle}"
+                            ValueChanged="OnSeekValueChanged"
                             Value="{x:Bind ViewModel.Media.Progress, Mode=OneWay}" />
                         <TextBlock
                             Grid.Column="2"

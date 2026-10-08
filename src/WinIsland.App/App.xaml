@@ -73,6 +73,14 @@
                 <Setter Property="Height" Value="38" />
                 <Setter Property="CornerRadius" Value="19" />
             </Style>
+            <!-- Text-only button (no chrome), e.g. the "Playing on …" source picker. -->
+            <Style x:Key="IslandBareButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="MinHeight" Value="0" />
+                <Setter Property="CornerRadius" Value="4" />
+            </Style>
             <!-- Rounded tile, like a Control Center toggle. -->
             <Style x:Key="IslandTileButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
                 <Setter Property="Background" Value="{StaticResource IslandRaisedBrush}" />

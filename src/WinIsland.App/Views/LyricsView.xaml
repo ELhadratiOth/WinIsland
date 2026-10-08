@@ -1,0 +1,152 @@
+<UserControl
+    x:Class="WinIsland.App.Views.LyricsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:WinIsland.App">
+
+    <!-- Time-synced lyrics: the sung line is large and bright, the next ones fade out below. -->
+    <Grid Padding="18,16,18,12" RowSpacing="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border
+                Width="40"
+                Height="40"
+                Background="{StaticResource IslandArtPlaceholderBrush}"
+                CornerRadius="10">
+                <Border CornerRadius="10" Visibility="{x:Bind Module.HasArtwork, Mode=OneWay}">
+                    <Border.Background>
+                        <ImageBrush ImageSource="{x:Bind local:Converters.ToImage(Module.Artwork), Mode=OneWay}" Stretch="UniformToFill" />
+                    </Border.Background>
+                </Border>
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock
+                    FontFamily="Segoe UI Variable Display"
+                    FontSize="14"
+                    FontWeight="SemiBold"
+                    Foreground="{StaticResource IslandForegroundBrush}"
+                    MaxLines="1"
+                    Text="{x:Bind Module.Title, Mode=OneWay}"
+                    TextTrimming="CharacterEllipsis" />
+                <TextBlock
+                    FontSize="12"
+                    Foreground="{StaticResource IslandSecondaryBrush}"
+                    MaxLines="1"
+                    Text="{x:Bind Module.Artist, Mode=OneWay}"
+                    TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <Button
+                Grid.Column="2"
+                AutomationProperties.Name="Back to the player"
+                Command="{x:Bind Module.ToggleLyricsCommand}"
+                Style="{StaticResource IslandRoundButton}">
+                <FontIcon FontSize="12" Glyph="&#xE8BB;" />
+            </Button>
+        </Grid>
+
+        <!-- Synced -->
+        <StackPanel
+            Grid.Row="1"
+            VerticalAlignment="Center"
+            Spacing="8"
+            Visibility="{x:Bind Module.HasSyncedLyrics, Mode=OneWay}">
+            <TextBlock
+                FontSize="13"
+                Foreground="{StaticResource IslandTertiaryBrush}"
+                MaxLines="1"
+                Text="{x:Bind Module.LyricPrevious, Mode=OneWay}"
+                TextTrimming="CharacterEllipsis" />
+            <TextBlock
+                FontFamily="Segoe UI Variable Display"
+                FontSize="21"
+                FontWeight="SemiBold"
+                Foreground="{x:Bind Accent}"
+                MaxLines="2"
+                Text="{x:Bind Module.LyricCurrent, Mode=OneWay}"
+                TextTrimming="CharacterEllipsis"
+                TextWrapping="Wrap" />
+            <TextBlock
+                FontSize="15"
+                FontWeight="SemiBold"
+                Foreground="{StaticResource IslandSecondaryBrush}"
+                MaxLines="1"
+                Text="{x:Bind Module.LyricNext, Mode=OneWay}"
+                TextTrimming="CharacterEllipsis" />
+            <TextBlock
+                FontSize="13"
+                Foreground="{StaticResource IslandTertiaryBrush}"
+                MaxLines="1"
+                Text="{x:Bind Module.LyricNext2, Mode=OneWay}"
+                TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+
+        <!-- Plain (no timestamps) -->
+        <ScrollViewer
+            Grid.Row="1"
+            HorizontalScrollMode="Disabled"
+            VerticalScrollBarVisibility="Hidden"
+            Visibility="{x:Bind Module.HasPlainLyrics, Mode=OneWay}">
+            <TextBlock
+                FontSize="14"
+                Foreground="{StaticResource IslandForegroundBrush}"
+                LineHeight="22"
+                Text="{x:Bind Module.LyricsPlainText, Mode=OneWay}"
+                TextWrapping="Wrap" />
+        </ScrollViewer>
+
+        <TextBlock
+            Grid.Row="1"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Style="{StaticResource IslandBodyStyle}"
+            Text="{x:Bind Module.LyricsStatus, Mode=OneWay}"
+            Visibility="{x:Bind Module.ShowLyricsStatus, Mode=OneWay}" />
+
+        <Grid Grid.Row="2" ColumnSpacing="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Style="{StaticResource IslandTimeStyle}" Text="{x:Bind Module.PositionText, Mode=OneWay}" />
+            <StackPanel
+                Grid.Column="1"
+                HorizontalAlignment="Center"
+                Orientation="Horizontal"
+                Spacing="16">
+                <Button
+                    AutomationProperties.Name="Previous"
+                    Command="{x:Bind Module.PreviousCommand}"
+                    Style="{StaticResource IslandTransportButton}">
+                    <FontIcon FontSize="16" Glyph="&#xE892;" />
+                </Button>
+                <Button
+                    AutomationProperties.Name="Play or pause"
+                    Command="{x:Bind Module.TogglePlayPauseCommand}"
+                    Style="{StaticResource IslandTransportButton}">
+                    <FontIcon FontSize="20" Glyph="{x:Bind Module.PlayPauseGlyph, Mode=OneWay}" />
+                </Button>
+                <Button
+                    AutomationProperties.Name="Next"
+                    Command="{x:Bind Module.NextCommand}"
+                    Style="{StaticResource IslandTransportButton}">
+                    <FontIcon FontSize="16" Glyph="&#xE893;" />
+                </Button>
+            </StackPanel>
+            <TextBlock
+                Grid.Column="2"
+                Style="{StaticResource IslandTimeStyle}"
+                Text="{x:Bind Module.DurationText, Mode=OneWay}" />
+        </Grid>
+    </Grid>
+</UserControl>
