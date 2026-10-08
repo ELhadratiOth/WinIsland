@@ -82,12 +82,16 @@ jobs:
         shell: pwsh
         run: |
           Get-Process WinIsland -ErrorAction SilentlyContinue | Stop-Process -Force
-          $json = '{"session_id":"s","cwd":"C:\\work\\demo","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"echo hi"}}'
+          # WinIsland.exe is a windowed app; PowerShell's & operator doesn't wait for those, so
+          # start it explicitly with redirected stdin/stdout (like Claude Code does) and wait.
+          New-Item -ItemType Directory -Force hook | Out-Null
+          Set-Content hook/in.json '{"session_id":"s","cwd":"C:\\work\\demo","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"echo hi"}}' -NoNewline
           $watch = [System.Diagnostics.Stopwatch]::StartNew()
-          $out = $json | & (Resolve-Path 'publish/release/WinIsland.exe') --claude-hook permission
-          $code = $LASTEXITCODE
-          Write-Host "exit=$code output='$out' took=$($watch.ElapsedMilliseconds)ms"
-          if ($code -ne 0 -or -not [string]::IsNullOrEmpty("$out") -or $watch.ElapsedMilliseconds -gt 8000) { throw 'Hook mode misbehaved' }
+          $p = Start-Process (Resolve-Path 'publish/release/WinIsland.exe').Path -ArgumentList '--claude-hook', 'permission' `
+                 -RedirectStandardInput hook/in.json -RedirectStandardOutput hook/out.txt -RedirectStandardError hook/err.txt -PassThru -Wait
+          $out = Get-Content hook/out.txt -Raw
+          Write-Host "exit=$($p.ExitCode) output='$out' took=$($watch.ElapsedMilliseconds)ms"
+          if ($p.ExitCode -ne 0 -or -not [string]::IsNullOrEmpty($out) -or $watch.ElapsedMilliseconds -gt 8000) { throw 'Hook mode misbehaved' }
           if (Get-Process WinIsland -ErrorAction SilentlyContinue) { throw 'Hook mode started the island' }
 
       - name: Visual capture (window configurations)
