@@ -24,6 +24,8 @@ internal static class Converters
 
     public static string Text(int value) => value.ToString(System.Globalization.CultureInfo.CurrentCulture);
 
+    public static string Number(double value) => Math.Round(value).ToString(System.Globalization.CultureInfo.CurrentCulture);
+
     public static Color ToColor(uint argb) =>
         Color.FromArgb((byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb);
 
@@ -35,6 +37,16 @@ internal static class Converters
 
     /// <summary>Dims a control the current player doesn't support instead of hiding it.</summary>
     public static double EnabledOpacity(bool enabled) => enabled ? 1.0 : 0.3;
+
+    private static readonly SolidColorBrush SelectedChip = new(Color.FromArgb(0xFF, 0xF5, 0xF5, 0xF7));
+    private static readonly SolidColorBrush NormalChip = new(Color.FromArgb(0xFF, 0x1C, 0x1C, 0x1E));
+    private static readonly SolidColorBrush SelectedChipText = new(Color.FromArgb(0xFF, 0x0B, 0x0B, 0x0C));
+    private static readonly SolidColorBrush NormalChipText = new(Color.FromArgb(0xFF, 0xF5, 0xF5, 0xF7));
+
+    /// <summary>Background of a chip/tile that reads as "on" (light) or "off" (raised dark).</summary>
+    public static SolidColorBrush ChipBackground(bool selected) => selected ? SelectedChip : NormalChip;
+
+    public static SolidColorBrush ChipForeground(bool selected) => selected ? SelectedChipText : NormalChipText;
 
     public static Color Transparent => Colors.Transparent;
 }

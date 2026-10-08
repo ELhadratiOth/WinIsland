@@ -12,6 +12,10 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <!-- WMI: built-in display brightness (no WinRT API exists for unpackaged apps). -->
+    <PackageReference Include="System.Management" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\WinIsland.Core\WinIsland.Core.csproj" />
   </ItemGroup>
 </Project>

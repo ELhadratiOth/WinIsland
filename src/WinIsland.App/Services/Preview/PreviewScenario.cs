@@ -1,5 +1,6 @@
 using Microsoft.UI.Dispatching;
 using Windows.Storage.Streams;
+using WinIsland.Core.Devices;
 using WinIsland.Core.Diagnostics;
 using WinIsland.Core.Media;
 using WinIsland.Platform.Windows.Media;
@@ -10,7 +11,9 @@ namespace WinIsland.App.Services.Preview;
 /// <c>WinIsland.exe --preview</c>: a scripted tour through every island state with sample data,
 /// so the design can be reviewed (and photographed in CI) without real media or sessions.
 /// Timeline (seconds): 0 Claude working (compact) · 4 a track starts (expanded notice) ·
-/// 7.5 compact media · 9.5 interactive media · 12 Claude panel · 15 expanded clock · 18 back to compact.
+/// 7.5 compact media · 9.5 interactive media · 12 Claude panel · 15 expanded clock · 18 back to compact ·
+/// 20 volume keys (OSD) · 22.5 Teams starts using the microphone · 26 interactive (privacy) ·
+/// 28.5 controls · 31 Pomodoro timer · 34 back to compact (timer) · 38 end.
 /// </summary>
 internal sealed class PreviewScenario
 {
@@ -24,6 +27,16 @@ internal sealed class PreviewScenario
 
     public PreviewMediaSource Media { get; } = new();
 
+    public PreviewAudio Speakers { get; } = new(0.42);
+
+    public PreviewAudio Microphone { get; } = new(0.8);
+
+    public PreviewBrightness Brightness { get; } = new();
+
+    public PreviewPower Power { get; } = new();
+
+    public PreviewPrivacy Privacy { get; } = new();
+
     public string ClaudeProjectsDirectory { get; }
 
     public void Run(DispatcherQueue queue, IPreviewTarget target)
@@ -33,6 +46,16 @@ internal sealed class PreviewScenario
         At(queue, 12.0, () => target.PreviewSelect("claude"));
         At(queue, 15.0, () => target.PreviewSelect("clock"));
         At(queue, 18.0, target.PreviewDismiss);
+        At(queue, 20.0, () => Speakers.PressKeys(0.64));
+        At(queue, 22.5, () => Privacy.Set(new SensorUse(SensorKind.Microphone, "Teams")));
+        At(queue, 26.0, target.PreviewActivate);
+        At(queue, 28.5, () => target.PreviewSelect("controls"));
+        At(queue, 31.0, target.PreviewStartTimer);
+        At(queue, 34.0, () =>
+        {
+            Privacy.Set();
+            target.PreviewDismiss();
+        });
     }
 
     private void At(DispatcherQueue queue, double seconds, Action action)
@@ -106,4 +129,6 @@ internal interface IPreviewTarget
     void PreviewSelect(string moduleId);
 
     void PreviewDismiss();
+
+    void PreviewStartTimer();
 }

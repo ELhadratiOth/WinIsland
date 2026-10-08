@@ -120,7 +120,11 @@ jobs:
           Remove-Item $log -ErrorAction SilentlyContinue
           $start = Get-Date
           $process = Start-Process $exe -ArgumentList '--preview' -PassThru
-          $shots = [ordered]@{ '1-claude-compact' = 3.0; '2-track-notice' = 5.5; '3-media-compact' = 8.5; '4-media-expanded' = 11.0; '5-claude-panel' = 14.0; '6-clock-expanded' = 16.5; '7-back-compact' = 20.0 }
+          $shots = [ordered]@{
+            '01-claude-compact' = 3.0; '02-track-notice' = 5.5; '03-media-compact' = 8.5; '04-media-expanded' = 11.0
+            '05-claude-panel' = 14.0; '06-clock-expanded' = 16.5; '07-volume-osd' = 20.6; '08-mic-notice' = 23.5
+            '09-mic-compact' = 25.0; '10-privacy-expanded' = 27.5; '11-controls' = 30.0; '12-timer' = 33.0; '13-timer-compact' = 36.5
+          }
           foreach ($name in $shots.Keys) {
             $wait = $shots[$name] - ((Get-Date) - $start).TotalSeconds
             if ($wait -gt 0) { Start-Sleep -Milliseconds ([int]($wait * 1000)) }

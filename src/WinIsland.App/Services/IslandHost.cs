@@ -1,5 +1,6 @@
 using Microsoft.UI.Dispatching;
 using WinIsland.Core.Claude;
+using WinIsland.Core.Devices;
 using WinIsland.Core.Diagnostics;
 using WinIsland.Core.Display;
 using WinIsland.Core.Geometry;
@@ -13,6 +14,8 @@ using WinIsland.Core.State;
 using WinIsland.Core.Threading;
 using WinIsland.Core.ViewModels;
 using WinIsland.Core.Visibility;
+using WinIsland.Platform.Windows.Audio;
+using WinIsland.Platform.Windows.Devices;
 using WinIsland.Platform.Windows.Display;
 using WinIsland.Platform.Windows.Foreground;
 using WinIsland.Platform.Windows.Input;
@@ -60,6 +63,9 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
     private readonly ClockModule _clockModule;
     private readonly MediaModule _mediaModule;
     private readonly ClaudeModule _claudeModule;
+    private readonly ControlsModule _controlsModule;
+    private readonly TimerModule _timerModule;
+    private readonly PrivacyModule _privacyModule;
     private readonly IslandStateManager _state;
     private readonly InteractionController _interaction;
     private readonly IslandViewModel _viewModel;
@@ -107,16 +113,52 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _clockModule = new ClockModule(_time, _dispatcher);
         _mediaModule = new MediaModule(_media, _time, _dispatcher);
         _claudeModule = new ClaudeModule(_claudeSessions, new ClaudeCliMessenger(), _dispatcher, _time);
-        _state = new IslandStateManager([_clockModule, _mediaModule, _claudeModule], _time, _dispatcher);
+
+        // System devices: Core Audio, WMI brightness, battery, microphone/camera use.
+        var integrations = new List<IIntegration>();
+        IAudioEndpoint speakers, microphone;
+        IBrightnessControl brightness;
+        IPowerSource power;
+        IPrivacySource privacy;
+        if (_preview is not null)
+        {
+            (speakers, microphone, brightness, power, privacy) = (_preview.Speakers, _preview.Microphone, _preview.Brightness, _preview.Power, _preview.Privacy);
+        }
+        else
+        {
+            var speakerEndpoint = CoreAudioEndpoint.Speakers();
+            var micEndpoint = CoreAudioEndpoint.Microphone();
+            var wmiBrightness = new WmiBrightness();
+            var powerSource = new PowerSource();
+            var sensors = new SensorUsageMonitor();
+            integrations.AddRange([speakerEndpoint, micEndpoint, wmiBrightness, powerSource, sensors]);
+            (speakers, microphone, brightness, power, privacy) = (speakerEndpoint, micEndpoint, wmiBrightness, powerSource, sensors);
+        }
+
+        _controlsModule = new ControlsModule(speakers, microphone, brightness, power, _dispatcher);
+        _timerModule = new TimerModule(_time, _dispatcher);
+        _privacyModule = new PrivacyModule(privacy, microphone, _dispatcher);
+        _timerModule.Finished += (_, _) => Sounds.Notify();
+        _controlsModule.FocusModeToggleRequested += (_, _) => UpdateSettings(s => s with { FocusMode = !s.FocusMode });
+
+        // Order = switcher order; the clock goes first as the fallback.
+        _state = new IslandStateManager(
+            [_clockModule, _mediaModule, _claudeModule, _privacyModule, _timerModule, _controlsModule],
+            _time,
+            _dispatcher);
         _interaction = new InteractionController(_time, _dispatcher, _settings.ToInteractionOptions());
         _viewModel = new IslandViewModel(_state, _clockModule, _mediaModule, _claudeModule);
 
         // Offline-capable sources first; network-bound ones (calendar, usage…) slot in here and
         // are paused automatically while offline.
-        _integrations = new IntegrationHost(
-            systemMedia is null ? [_claudeSessions] : [systemMedia, _claudeSessions],
-            _connectivity,
-            _time);
+        if (systemMedia is not null)
+        {
+            integrations.Insert(0, systemMedia);
+        }
+
+        integrations.Add(_claudeSessions);
+        _integrations = new IntegrationHost(integrations, _connectivity, _time);
+        ApplyModuleFilter();
 
         _window = new IslandWindow(_viewModel);
         _controller = new IslandWindowController(_window.Handle);
@@ -159,6 +201,13 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
 
     void Preview.IPreviewTarget.PreviewDismiss() => _interaction.Dismiss();
 
+    void Preview.IPreviewTarget.PreviewStartTimer()
+    {
+        _timerModule.Mode = TimerMode.Pomodoro;
+        _timerModule.StartPauseCommand.Execute(null);
+        _state.SelectModule(TimerModule.ModuleId);
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
@@ -181,6 +230,9 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _clockModule.Dispose();
         _mediaModule.Dispose();
         _claudeModule.Dispose();
+        _controlsModule.Dispose();
+        _timerModule.Dispose();
+        _privacyModule.Dispose();
         _connectivity.Dispose();
         _messages.Dispose();
         _settingsStore.Dispose();
@@ -545,12 +597,24 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
         _inspector.GamePathFragments = _settings.GamePathFragments.ToArray();
     }
 
+    /// <summary>Focus mode and modules switched off in settings.</summary>
+    private void ApplyModuleFilter()
+    {
+        IslandSettings settings = _settings;
+        _controlsModule.IsFocusMode = settings.FocusMode;
+        _state.SetFilter(m =>
+            !settings.DisabledModules.Contains(m.Id, StringComparer.OrdinalIgnoreCase) &&
+            (!settings.FocusMode || m.AllowedInFocus));
+        _viewModel.RefreshSwitcher();
+    }
+
     private void UpdateSettings(Func<IslandSettings, IslandSettings> change)
     {
         _settings = change(_settings);
         _placementOptions = _placementOptions with { TopMarginDip = _settings.TopMarginDip };
         _interaction.Options = _settings.ToInteractionOptions();
         ApplyGameSettings();
+        ApplyModuleFilter();
         UpdatePointerWatcher();
         Reevaluate();
         _ = SaveSettingsAsync(_settings);
@@ -584,6 +648,9 @@ internal sealed class IslandHost : IAsyncDisposable, Preview.IPreviewTarget
                 break;
             case TrayMenu.Command.ToggleHover:
                 UpdateSettings(s => s with { HoverToInteract = !s.HoverToInteract });
+                break;
+            case TrayMenu.Command.ToggleFocus:
+                UpdateSettings(s => s with { FocusMode = !s.FocusMode });
                 break;
             case TrayMenu.Command.ToggleOnlineArtwork:
                 UpdateSettings(s => s with { OnlineArtworkLookup = !s.OnlineArtworkLookup });

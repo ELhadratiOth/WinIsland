@@ -127,6 +127,53 @@ public class IslandStateManagerTests
         Assert.False(_manager.State.IsVisible);
     }
 
+    [Fact]
+    public void A_lower_priority_notice_never_cuts_a_more_important_one_short()
+    {
+        _media.Set(available: true, compact: ModulePriority.Background, interactive: ModulePriority.Media);
+        _panel.Set(available: true, compact: ModulePriority.Unavailable, interactive: ModulePriority.Background);
+
+        _panel.Attention(TimeSpan.FromSeconds(30), AttentionPriority.Blocking);
+        _media.Attention(TimeSpan.FromSeconds(3), AttentionPriority.Feedback);
+        Assert.Equal("panel", _manager.State.ModuleId);
+
+        _panel.End();
+        Assert.False(_manager.State.IsAttention);
+        _media.Attention(TimeSpan.FromSeconds(3), AttentionPriority.Feedback, IslandSize.Compact);
+        Assert.Equal("media", _manager.State.ModuleId);
+        Assert.Equal(IslandSize.Compact, _manager.State.Size);
+        Assert.True(_manager.State.IsAttention);
+    }
+
+    [Fact]
+    public void Hovering_a_notice_opens_that_module()
+    {
+        _media.Set(available: true, compact: ModulePriority.Media, interactive: ModulePriority.Media);
+        _panel.Set(available: true, compact: ModulePriority.Unavailable, interactive: ModulePriority.Background);
+
+        _panel.Attention(TimeSpan.FromSeconds(5));
+        _manager.SetMode(InteractionMode.Interactive);
+
+        Assert.Equal("panel", _manager.State.ModuleId);
+        Assert.Equal(IslandSize.Large, _manager.State.Size);
+        Assert.False(_manager.State.IsAttention);
+    }
+
+    [Fact]
+    public void Filtered_modules_never_show_but_the_clock_always_can()
+    {
+        _media.Set(available: true, compact: ModulePriority.Media, interactive: ModulePriority.Media);
+        _manager.SetFilter(m => m.Id != "media");
+
+        Assert.Equal(ClockModule.ModuleId, _manager.State.ModuleId);
+        _media.Attention(TimeSpan.FromSeconds(3));
+        Assert.False(_manager.State.IsAttention);
+        Assert.DoesNotContain(_media, _manager.SwitcherModules());
+
+        _manager.SetFilter(_ => false);
+        Assert.Contains(_clock, _manager.SwitcherModules());
+    }
+
     private sealed class TestModule(string id, IslandSize interactiveSize) : IslandModule(id, id, "x")
     {
         public override IslandSize InteractiveSize => interactiveSize;
@@ -138,6 +185,9 @@ public class IslandStateManagerTests
             InteractivePriority = interactive;
         }
 
-        public void Attention(TimeSpan duration) => RequestAttention(duration);
+        public void Attention(TimeSpan duration, int priority = AttentionPriority.Normal, IslandSize size = IslandSize.Expanded) =>
+            RequestAttention(duration, priority, size);
+
+        public void End() => EndAttention();
     }
 }

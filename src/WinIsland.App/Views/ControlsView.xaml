@@ -1,0 +1,141 @@
+<UserControl
+    x:Class="WinIsland.App.Views.ControlsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:WinIsland.App">
+
+    <!-- Quick controls: volume, brightness, microphone, focus mode, battery. -->
+    <Grid Padding="18,14,18,12" RowSpacing="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Volume -->
+        <Grid ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="30" />
+            </Grid.ColumnDefinitions>
+            <Button
+                AutomationProperties.Name="Mute"
+                Command="{x:Bind Module.ToggleMuteCommand}"
+                Style="{StaticResource IslandRoundButton}">
+                <FontIcon FontSize="15" Glyph="{x:Bind Module.VolumeGlyph, Mode=OneWay}" />
+            </Button>
+            <Slider
+                Grid.Column="1"
+                AutomationProperties.Name="Volume"
+                IsEnabled="{x:Bind Module.HasSpeakers, Mode=OneWay}"
+                Style="{StaticResource IslandSliderStyle}"
+                Value="{x:Bind Module.Volume, Mode=TwoWay}" />
+            <TextBlock
+                Grid.Column="2"
+                HorizontalAlignment="Right"
+                Style="{StaticResource IslandTimeStyle}"
+                Text="{x:Bind local:Converters.Number(Module.Volume), Mode=OneWay}"
+                Typography.NumeralAlignment="Tabular" />
+        </Grid>
+
+        <!-- Brightness (built-in displays only) -->
+        <Grid
+            Grid.Row="1"
+            ColumnSpacing="12"
+            Visibility="{x:Bind Module.HasBrightness, Mode=OneWay}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="34" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="30" />
+            </Grid.ColumnDefinitions>
+            <FontIcon
+                HorizontalAlignment="Center"
+                FontSize="15"
+                Foreground="{StaticResource IslandForegroundBrush}"
+                Glyph="&#xE706;" />
+            <Slider
+                Grid.Column="1"
+                AutomationProperties.Name="Brightness"
+                Style="{StaticResource IslandSliderStyle}"
+                Value="{x:Bind Module.Brightness, Mode=TwoWay}" />
+            <TextBlock
+                Grid.Column="2"
+                HorizontalAlignment="Right"
+                Style="{StaticResource IslandTimeStyle}"
+                Text="{x:Bind local:Converters.Number(Module.Brightness), Mode=OneWay}"
+                Typography.NumeralAlignment="Tabular" />
+        </Grid>
+
+        <!-- Toggles + battery -->
+        <Grid Grid.Row="2" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Button
+                AutomationProperties.Name="Microphone"
+                Background="{x:Bind local:Converters.ChipBackground(Module.IsMicMuted), Mode=OneWay}"
+                Command="{x:Bind Module.ToggleMicCommand}"
+                Foreground="{x:Bind local:Converters.ChipForeground(Module.IsMicMuted), Mode=OneWay}"
+                Style="{StaticResource IslandTileButton}">
+                <StackPanel Orientation="Horizontal" Spacing="7">
+                    <FontIcon FontSize="13" Glyph="{x:Bind Module.MicGlyph, Mode=OneWay}" />
+                    <TextBlock Text="{x:Bind Module.MicLabel, Mode=OneWay}" />
+                </StackPanel>
+            </Button>
+            <Button
+                Grid.Column="1"
+                AutomationProperties.Name="Focus mode"
+                Background="{x:Bind local:Converters.ChipBackground(Module.IsFocusMode), Mode=OneWay}"
+                Command="{x:Bind Module.ToggleFocusCommand}"
+                Foreground="{x:Bind local:Converters.ChipForeground(Module.IsFocusMode), Mode=OneWay}"
+                Style="{StaticResource IslandTileButton}">
+                <StackPanel Orientation="Horizontal" Spacing="7">
+                    <FontIcon FontSize="13" Glyph="&#xE708;" />
+                    <TextBlock Text="{x:Bind Module.FocusLabel, Mode=OneWay}" />
+                </StackPanel>
+            </Button>
+            <StackPanel
+                Grid.Column="3"
+                VerticalAlignment="Center"
+                Orientation="Horizontal"
+                Spacing="8"
+                Visibility="{x:Bind Module.HasBattery, Mode=OneWay}">
+                <TextBlock
+                    VerticalAlignment="Center"
+                    Style="{StaticResource IslandTimeStyle}"
+                    Text="{x:Bind Module.BatteryText, Mode=OneWay}" />
+                <!-- Drawn battery: outline + fill scaled to the charge + terminal nub. -->
+                <StackPanel VerticalAlignment="Center" Orientation="Horizontal" Spacing="1">
+                    <Grid
+                        Width="25"
+                        Height="12"
+                        Padding="2"
+                        BorderBrush="{StaticResource IslandSecondaryBrush}"
+                        BorderThickness="1"
+                        CornerRadius="3.5">
+                        <Rectangle
+                            HorizontalAlignment="Stretch"
+                            Fill="{x:Bind local:Converters.ToBrush(Module.BatteryAccent), Mode=OneWay}"
+                            RadiusX="1.5"
+                            RadiusY="1.5">
+                            <Rectangle.RenderTransform>
+                                <ScaleTransform ScaleX="{x:Bind Module.BatteryFraction, Mode=OneWay}" />
+                            </Rectangle.RenderTransform>
+                        </Rectangle>
+                    </Grid>
+                    <Rectangle
+                        Width="1.5"
+                        Height="4"
+                        VerticalAlignment="Center"
+                        Fill="{StaticResource IslandSecondaryBrush}"
+                        RadiusX="0.75"
+                        RadiusY="0.75" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

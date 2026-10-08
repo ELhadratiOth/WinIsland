@@ -23,7 +23,9 @@ public sealed class IslandStateManager : IDisposable
     private HiddenReason _hiddenReason = HiddenReason.None;
     private string? _selectedModuleId;
     private IslandModule? _attentionModule;
+    private AttentionRequest? _attention;
     private DateTimeOffset _attentionUntil;
+    private Func<IslandModule, bool> _filter = static _ => true;
 
     public IslandStateManager(IReadOnlyList<IslandModule> modules, TimeProvider time, IUiDispatcher dispatcher)
     {
@@ -42,6 +44,7 @@ public sealed class IslandStateManager : IDisposable
         {
             module.PresentationChanged += OnModulePresentationChanged;
             module.AttentionRequested += OnModuleAttentionRequested;
+            module.AttentionEnded += OnModuleAttentionEnded;
         }
 
         State = Compute();
@@ -67,7 +70,12 @@ public sealed class IslandStateManager : IDisposable
         }
         else
         {
-            // The user is interacting now; a pending transient expansion is superseded.
+            // Pointing at a notice opens that module; the transient expansion itself is over.
+            if (CurrentAttention() is { } attention)
+            {
+                _selectedModuleId = attention.Id;
+            }
+
             ClearAttention();
         }
 
@@ -90,6 +98,23 @@ public sealed class IslandStateManager : IDisposable
 
         Recompute();
     }
+
+    /// <summary>
+    /// Restricts which modules may show at all (focus mode, modules switched off in settings).
+    /// The clock (first module) is always allowed as the fallback.
+    /// </summary>
+    public void SetFilter(Func<IslandModule, bool> filter)
+    {
+        _filter = filter ?? throw new ArgumentNullException(nameof(filter));
+        if (_attentionModule is { } module && !Allowed(module))
+        {
+            ClearAttention();
+        }
+
+        Recompute();
+    }
+
+    public bool Allowed(IslandModule module) => module == _fallback || _filter(module);
 
     /// <summary>Lets the user pick a module from the switcher while interacting.</summary>
     public void SelectModule(string? moduleId)
@@ -121,6 +146,7 @@ public sealed class IslandStateManager : IDisposable
         {
             module.PresentationChanged -= OnModulePresentationChanged;
             module.AttentionRequested -= OnModuleAttentionRequested;
+            module.AttentionEnded -= OnModuleAttentionEnded;
         }
 
         _attentionTimer.Dispose();
@@ -128,7 +154,7 @@ public sealed class IslandStateManager : IDisposable
 
     private IslandState Compute()
     {
-        IslandModule? attention = _attentionModule is { IsAvailable: true } a && _time.GetUtcNow() < _attentionUntil ? a : null;
+        IslandModule? attention = CurrentAttention();
 
         IslandModule module;
         IslandSize size;
@@ -144,7 +170,7 @@ public sealed class IslandStateManager : IDisposable
         else if (attention is not null)
         {
             module = attention;
-            size = IslandSize.Expanded;
+            size = _attention!.Size;
         }
         else
         {
@@ -153,7 +179,7 @@ public sealed class IslandStateManager : IDisposable
         }
 
         DipSize sizeDip = module.GetSize(size);
-        bool hasSwitcher = _mode == InteractionMode.Interactive && _modules.Count(m => m.IsAvailable) > 1;
+        bool hasSwitcher = _mode == InteractionMode.Interactive && SwitcherModules().Count() > 1;
         if (hasSwitcher)
         {
             sizeDip = sizeDip with { Height = sizeDip.Height + IslandMetrics.SwitcherHeight };
@@ -162,15 +188,22 @@ public sealed class IslandStateManager : IDisposable
         return new IslandState(_hiddenReason, module.Id, size, sizeDip, _mode, attention is not null, hasSwitcher);
     }
 
+    /// <summary>Modules offered in the switcher strip while interacting.</summary>
+    public IEnumerable<IslandModule> SwitcherModules() =>
+        _modules.Where(m => m.IsAvailable && m.ShowInSwitcher && Allowed(m));
+
+    private IslandModule? CurrentAttention() =>
+        _attentionModule is { IsAvailable: true } a && Allowed(a) && _time.GetUtcNow() < _attentionUntil ? a : null;
+
     private IslandModule? FindAvailable(string? id) =>
-        id is null ? null : _modules.FirstOrDefault(m => m.IsAvailable && m.Id == id);
+        id is null ? null : _modules.FirstOrDefault(m => m.IsAvailable && Allowed(m) && m.Id == id);
 
     private IslandModule? Best(Func<IslandModule, int> priority)
     {
         IslandModule? best = null;
         foreach (IslandModule module in _modules)
         {
-            if (module.IsAvailable && priority(module) != ModulePriority.Unavailable &&
+            if (module.IsAvailable && Allowed(module) && priority(module) != ModulePriority.Unavailable &&
                 (best is null || priority(module) > priority(best)))
             {
                 best = module;
@@ -182,23 +215,37 @@ public sealed class IslandStateManager : IDisposable
 
     private void OnModulePresentationChanged(object? sender, EventArgs e) => Recompute();
 
-    private void OnModuleAttentionRequested(object? sender, TimeSpan duration)
+    private void OnModuleAttentionRequested(object? sender, AttentionRequest request)
     {
-        // Never pop up over a game/fullscreen app, and never interrupt the user mid-interaction.
-        if (sender is not IslandModule module || _hiddenReason != HiddenReason.None || _mode == InteractionMode.Interactive)
+        // Never pop up over a game/fullscreen app, never interrupt the user mid-interaction,
+        // and never cut a more important notice short.
+        if (sender is not IslandModule module || !Allowed(module) ||
+            _hiddenReason != HiddenReason.None || _mode == InteractionMode.Interactive ||
+            (CurrentAttention() is { } current && current != module && _attention!.Priority > request.Priority))
         {
             return;
         }
 
         _attentionModule = module;
-        _attentionUntil = _time.GetUtcNow() + duration;
-        _attentionTimer.Start(duration);
+        _attention = request;
+        _attentionUntil = _time.GetUtcNow() + request.Duration;
+        _attentionTimer.Start(request.Duration);
         Recompute();
+    }
+
+    private void OnModuleAttentionEnded(object? sender, EventArgs e)
+    {
+        if (sender is IslandModule module && module == _attentionModule)
+        {
+            ClearAttention();
+            Recompute();
+        }
     }
 
     private void ClearAttention()
     {
         _attentionModule = null;
+        _attention = null;
         _attentionTimer.Cancel();
     }
 }

@@ -46,6 +46,15 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
 
     public IslandState State => _state;
 
+    public IReadOnlyList<IslandModule> Modules => _stateManager.Modules;
+
+    /// <summary>The module of type <typeparamref name="T"/>, if the host registered one.</summary>
+    public T? Module<T>()
+        where T : IslandModule => _stateManager.Modules.OfType<T>().FirstOrDefault();
+
+    /// <summary>True when <paramref name="moduleId"/> is on screen at <paramref name="size"/>.</summary>
+    public bool Shows(string moduleId, IslandSize size) => Is(moduleId, size);
+
     public bool IsCompact => _state.Size == IslandSize.Compact;
 
     public bool IsInteractive => _state.Mode == InteractionMode.Interactive;
@@ -88,6 +97,12 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>The module currently on screen.</summary>
+    public IslandModule ActiveModule => _activeModule;
+
+    /// <summary>Re-reads the switcher after the module filter (focus mode, settings) changed.</summary>
+    public void RefreshSwitcher() => UpdateSwitcher();
+
     /// <summary>Called by the host after the state manager publishes a new state.</summary>
     public void Apply(IslandState state)
     {
@@ -106,6 +121,7 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
             _activeModule.PropertyChanged -= OnActiveModulePropertyChanged;
             _activeModule = module;
             _activeModule.PropertyChanged += OnActiveModulePropertyChanged;
+            OnPropertyChanged(nameof(ActiveModule));
             OnPropertyChanged(nameof(CompactGlyph));
             OnPropertyChanged(nameof(CompactText));
         }
@@ -145,7 +161,7 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
 
     private void UpdateSwitcher()
     {
-        List<IslandModule> available = _stateManager.Modules.Where(m => m.IsAvailable).ToList();
+        List<IslandModule> available = _stateManager.SwitcherModules().ToList();
         if (!available.SequenceEqual(SwitcherModules))
         {
             SwitcherModules = available;

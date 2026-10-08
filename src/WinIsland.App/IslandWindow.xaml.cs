@@ -26,6 +26,7 @@ public sealed partial class IslandWindow : Window
     private readonly PillAnimator _pill;
     private readonly ActivityAnimations _activity;
     private readonly UISettings _uiSettings = new();
+    private readonly List<(UIElement View, Func<IslandViewModel, bool> IsShown)> _moduleViews = [];
     private DipSize _pillSize;
     private double _previousArea;
     private bool _allowClose;
@@ -72,9 +73,18 @@ public sealed partial class IslandWindow : Window
         _activity.AddSpinner(CompactClaudeGlyph);
         _activity.AddSpinner(PanelClaudeGlyph);
         ConfigureContentTransitions();
+        RegisterModuleViews();
 
         AccentBrush.Color = Converters.ToColor(ViewModel.Media.AccentColor);
-        ViewModel.PropertyChanged += (_, _) => UpdateActivity();
+        ViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(IslandViewModel.State))
+            {
+                UpdateModuleViews();
+            }
+
+            UpdateActivity();
+        };
         ViewModel.Media.PropertyChanged += OnMediaPropertyChanged;
         ViewModel.Claude.PropertyChanged += (_, _) => UpdateActivity();
 
@@ -185,6 +195,66 @@ public sealed partial class IslandWindow : Window
             ElementCompositionPreview.SetIsTranslationEnabled(layer, true);
             ElementCompositionPreview.SetImplicitShowAnimation(layer, _pill.CreateEnter(TimeSpan.FromMilliseconds(70)));
             ElementCompositionPreview.SetImplicitHideAnimation(layer, _pill.CreateExit());
+        }
+    }
+
+    /// <summary>
+    /// Modules beyond the original three bring their own views (UserControls in Views/). Each is
+    /// shown for one module at one size; any other compact module gets the generic pill.
+    /// </summary>
+    private void RegisterModuleViews()
+    {
+        if (ViewModel.Module<ControlsModule>() is { } controls)
+        {
+            AddModuleView(new Views.OsdView(controls), ControlsModule.ModuleId, IslandSize.Compact);
+            AddModuleView(new Views.ControlsView(controls), ControlsModule.ModuleId, IslandSize.Expanded);
+        }
+
+        if (ViewModel.Module<TimerModule>() is { } timer)
+        {
+            AddModuleView(new Views.TimerView(timer), TimerModule.ModuleId, IslandSize.Expanded);
+        }
+
+        if (ViewModel.Module<PrivacyModule>() is { } privacy)
+        {
+            AddModuleView(new Views.PrivacyView(privacy), PrivacyModule.ModuleId, IslandSize.Expanded);
+        }
+
+        string[] bespokeCompact = [ClockModule.ModuleId, MediaModule.ModuleId, ClaudeModule.ModuleId, ControlsModule.ModuleId];
+        AddModuleView(
+            new Views.GenericCompactView(ViewModel),
+            vm => vm.State.IsVisible && vm.State.Size == IslandSize.Compact && !bespokeCompact.Contains(vm.State.ModuleId));
+
+        UpdateModuleViews();
+    }
+
+    private void AddModuleView(UIElement view, string moduleId, IslandSize size) =>
+        AddModuleView(view, vm => vm.Shows(moduleId, size));
+
+    private void AddModuleView(UIElement view, Func<IslandViewModel, bool> isShown)
+    {
+        view.Visibility = Visibility.Collapsed;
+        Grid.SetRow((FrameworkElement)view, 0);
+        ContentHost.Children.Add(view);
+        if (AnimationsEnabled)
+        {
+            ElementCompositionPreview.SetIsTranslationEnabled(view, true);
+            ElementCompositionPreview.SetImplicitShowAnimation(view, _pill.CreateEnter(TimeSpan.FromMilliseconds(70)));
+            ElementCompositionPreview.SetImplicitHideAnimation(view, _pill.CreateExit());
+        }
+
+        _moduleViews.Add((view, isShown));
+    }
+
+    private void UpdateModuleViews()
+    {
+        foreach ((UIElement view, Func<IslandViewModel, bool> isShown) in _moduleViews)
+        {
+            Visibility visibility = isShown(ViewModel) ? Visibility.Visible : Visibility.Collapsed;
+            if (view.Visibility != visibility)
+            {
+                view.Visibility = visibility;
+            }
         }
     }
 

@@ -73,6 +73,48 @@
                 <Setter Property="Height" Value="38" />
                 <Setter Property="CornerRadius" Value="19" />
             </Style>
+            <!-- Rounded tile, like a Control Center toggle. -->
+            <Style x:Key="IslandTileButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+                <Setter Property="Background" Value="{StaticResource IslandRaisedBrush}" />
+                <Setter Property="Foreground" Value="{StaticResource IslandForegroundBrush}" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Padding" Value="12,0" />
+                <Setter Property="Height" Value="34" />
+                <Setter Property="CornerRadius" Value="17" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+            </Style>
+            <!-- Small text chip (presets, modes). -->
+            <Style x:Key="IslandTextChipButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+                <Setter Property="Background" Value="{StaticResource IslandRaisedBrush}" />
+                <Setter Property="Foreground" Value="{StaticResource IslandForegroundBrush}" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Padding" Value="10,0" />
+                <Setter Property="Height" Value="26" />
+                <Setter Property="MinWidth" Value="34" />
+                <Setter Property="CornerRadius" Value="13" />
+                <Setter Property="FontSize" Value="11.5" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+            </Style>
+            <!-- Round icon button on the raised surface. -->
+            <Style x:Key="IslandRoundButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+                <Setter Property="Background" Value="{StaticResource IslandRaisedBrush}" />
+                <Setter Property="Foreground" Value="{StaticResource IslandForegroundBrush}" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Width" Value="34" />
+                <Setter Property="Height" Value="34" />
+                <Setter Property="CornerRadius" Value="17" />
+            </Style>
+            <Style x:Key="IslandSliderStyle" TargetType="Slider" BasedOn="{StaticResource DefaultSliderStyle}">
+                <Setter Property="Foreground" Value="{StaticResource IslandForegroundBrush}" />
+                <Setter Property="Background" Value="{StaticResource IslandTrackBrush}" />
+                <Setter Property="IsThumbToolTipEnabled" Value="False" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Minimum" Value="0" />
+                <Setter Property="Maximum" Value="100" />
+            </Style>
             <Style x:Key="IslandSendButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
                 <Setter Property="Background" Value="{StaticResource IslandClaudeBrush}" />
                 <Setter Property="Foreground" Value="#FF1A0F0B" />
@@ -87,7 +129,7 @@
                 <Setter Property="Foreground" Value="{StaticResource IslandSecondaryBrush}" />
                 <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="Padding" Value="0" />
-                <Setter Property="Width" Value="34" />
+                <Setter Property="Width" Value="30" />
                 <Setter Property="Height" Value="22" />
                 <Setter Property="CornerRadius" Value="11" />
             </Style>
@@ -117,6 +159,16 @@
             <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="#FF2C2C2E" />
             <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#FF2C2C2E" />
             <SolidColorBrush x:Key="ListViewItemSelectionIndicatorBrush" Color="#FFE08A6A" />
+            <SolidColorBrush x:Key="SliderTrackFill" Color="#33FFFFFF" />
+            <SolidColorBrush x:Key="SliderTrackFillPointerOver" Color="#44FFFFFF" />
+            <SolidColorBrush x:Key="SliderTrackFillPressed" Color="#44FFFFFF" />
+            <SolidColorBrush x:Key="SliderTrackValueFill" Color="#FFF5F5F7" />
+            <SolidColorBrush x:Key="SliderTrackValueFillPointerOver" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="SliderTrackValueFillPressed" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="SliderThumbBackground" Color="#FFF5F5F7" />
+            <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="#FFE5E5EA" />
+            <SolidColorBrush x:Key="SliderOuterThumbBackground" Color="#FF3A3A3C" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

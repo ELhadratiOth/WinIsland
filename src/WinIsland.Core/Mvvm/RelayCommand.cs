@@ -72,3 +72,27 @@ public sealed class AsyncRelayCommand : ICommand
 
     public void NotifyCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 }
+
+/// <summary>Command with a typed parameter (e.g. a CommandParameter string from XAML).</summary>
+public sealed class RelayCommandOf<T> : ICommand
+{
+    private readonly Action<T> _execute;
+
+    public RelayCommandOf(Action<T> execute) => _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+
+    public event EventHandler? CanExecuteChanged
+    {
+        add { }
+        remove { }
+    }
+
+    public bool CanExecute(object? parameter) => true;
+
+    public void Execute(object? parameter)
+    {
+        if (parameter is T value)
+        {
+            _execute(value);
+        }
+    }
+}

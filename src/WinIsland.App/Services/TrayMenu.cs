@@ -14,6 +14,7 @@ internal static class TrayMenu
     private const int StartupId = 301;
     private const int HiddenId = 302;
     private const int OnlineArtworkId = 303;
+    private const int FocusId = 304;
 
     public static IReadOnlyList<TrayMenuItem> Build(IslandSettings settings, bool startsWithWindows, bool userHidden) =>
     [
@@ -35,6 +36,7 @@ internal static class TrayMenu
                 new TrayMenuItem(MonitorBase + (int)MonitorPreference.FollowActiveWindow, "Follow the active window", settings.MonitorPreference == MonitorPreference.FollowActiveWindow),
             ],
         },
+        new TrayMenuItem(FocusId, "Focus mode", settings.FocusMode),
         new TrayMenuItem(HoverId, "Expand on hover", settings.HoverToInteract),
         new TrayMenuItem(OnlineArtworkId, "Find missing cover art online", settings.OnlineArtworkLookup),
         new TrayMenuItem(StartupId, "Start with Windows", startsWithWindows),
@@ -50,6 +52,7 @@ internal static class TrayMenu
         StartupId => new Command.ToggleStartup(),
         HiddenId => new Command.ToggleHidden(),
         OnlineArtworkId => new Command.ToggleOnlineArtwork(),
+        FocusId => new Command.ToggleFocus(),
         _ => null,
     };
 
@@ -69,5 +72,7 @@ internal static class TrayMenu
         public sealed record ToggleHidden : Command;
 
         public sealed record ToggleOnlineArtwork : Command;
+
+        public sealed record ToggleFocus : Command;
     }
 }

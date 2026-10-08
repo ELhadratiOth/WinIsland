@@ -27,6 +27,12 @@ public sealed record IslandSettings
     /// </summary>
     public bool OnlineArtworkLookup { get; init; } = true;
 
+    /// <summary>Focus mode: only the clock, timers, recording indicators and approvals may show.</summary>
+    public bool FocusMode { get; init; }
+
+    /// <summary>Module ids switched off by the user (e.g. "media", "timer").</summary>
+    public IReadOnlyList<string> DisabledModules { get; init; } = [];
+
     /// <summary>Executable names (e.g. "eldenring.exe") always treated as games.</summary>
     public IReadOnlyList<string> GameProcesses { get; init; } = [];
 

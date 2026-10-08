@@ -1,6 +1,7 @@
 namespace WinIsland.Core.Media;
 
-/// <summary>Turns a media session's app id ("Spotify.exe", "SpotifyAB.SpotifyMusic_…!Spotify", "MSEdge"…) into a display name.</summary>
+/// <summary>Turns an app id (media session, executable path or package name) into a display name.
+/// For example: a media session's app id ("Spotify.exe", "SpotifyAB.SpotifyMusic_…!Spotify", "MSEdge"…) into a display name.</summary>
 public static class MediaSourceNames
 {
     private static readonly (string Fragment, string Name)[] Known =
@@ -20,6 +21,19 @@ public static class MediaSourceNames
         ("tidal", "TIDAL"),
         ("amazonmusic", "Amazon Music"),
         ("youtube", "YouTube Music"),
+
+        // Apps that typically use the microphone or camera (privacy indicator).
+        ("teams", "Teams"),
+        ("zoom", "Zoom"),
+        ("discord", "Discord"),
+        ("slack", "Slack"),
+        ("skype", "Skype"),
+        ("whatsapp", "WhatsApp"),
+        ("webex", "Webex"),
+        ("obs64", "OBS Studio"),
+        ("windowscamera", "Camera"),
+        ("soundrecorder", "Sound Recorder"),
+        ("windowsterminal", "Terminal"),
     ];
 
     public static string Friendly(string? appId)

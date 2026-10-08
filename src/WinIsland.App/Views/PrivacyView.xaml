@@ -1,0 +1,62 @@
+<UserControl
+    x:Class="WinIsland.App.Views.PrivacyView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:WinIsland.App">
+
+    <!-- Who is recording: green for the camera, orange for the microphone, plus a quick mute. -->
+    <Grid Padding="20,0,18,0" ColumnSpacing="14">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <StackPanel VerticalAlignment="Center" Spacing="10">
+            <Grid ColumnSpacing="12" Visibility="{x:Bind Module.UsesCamera, Mode=OneWay}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Width="34" Height="34" Background="#2630D158" CornerRadius="17">
+                    <FontIcon FontSize="15" Foreground="#FF30D158" Glyph="&#xE714;" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource IslandCaptionStyle}" Text="CAMERA IN USE" />
+                    <TextBlock
+                        Style="{StaticResource IslandCompactTextStyle}"
+                        Text="{x:Bind Module.CameraApps, Mode=OneWay}"
+                        TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </Grid>
+            <Grid ColumnSpacing="12" Visibility="{x:Bind Module.UsesMicrophone, Mode=OneWay}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Width="34" Height="34" Background="#26FF9F0A" CornerRadius="17">
+                    <FontIcon FontSize="15" Foreground="#FFFF9F0A" Glyph="&#xE720;" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource IslandCaptionStyle}" Text="MICROPHONE IN USE" />
+                    <TextBlock
+                        Style="{StaticResource IslandCompactTextStyle}"
+                        Text="{x:Bind Module.MicrophoneApps, Mode=OneWay}"
+                        TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </Grid>
+        </StackPanel>
+        <Button
+            Grid.Column="1"
+            VerticalAlignment="Center"
+            AutomationProperties.Name="{x:Bind Module.MicButtonLabel, Mode=OneWay}"
+            Background="{x:Bind local:Converters.ChipBackground(Module.IsMicMuted), Mode=OneWay}"
+            Command="{x:Bind Module.ToggleMicCommand}"
+            Foreground="{x:Bind local:Converters.ChipForeground(Module.IsMicMuted), Mode=OneWay}"
+            Style="{StaticResource IslandTileButton}"
+            Visibility="{x:Bind Module.UsesMicrophone, Mode=OneWay}">
+            <StackPanel Orientation="Horizontal" Spacing="7">
+                <FontIcon FontSize="13" Glyph="{x:Bind Module.MicButtonGlyph, Mode=OneWay}" />
+                <TextBlock Text="{x:Bind Module.MicButtonLabel, Mode=OneWay}" />
+            </StackPanel>
+        </Button>
+    </Grid>
+</UserControl>
