@@ -11,7 +11,7 @@ on:
         type: boolean
         default: false
       cleanup:
-        description: Only delete the ci-shots branch
+        description: Only delete the ci-shots and ci-tests branches
         type: boolean
         default: false
 
@@ -54,7 +54,10 @@ jobs:
     if: ${{ inputs.cleanup }}
     runs-on: ubuntu-latest
     steps:
-      - name: Delete ci-shots
+      - name: Delete ci-shots and ci-tests
         env:
           TOKEN: ${{ github.token }}
-        run: git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" --delete ci-shots || true
+        run: |
+          for b in ci-shots ci-tests; do
+            git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" --delete "$b" || true
+          done

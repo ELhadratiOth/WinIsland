@@ -28,6 +28,8 @@ jobs:
     name: Tests
     runs-on: windows-latest
     timeout-minutes: 120
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -52,3 +54,15 @@ jobs:
             }
             exit $code
           }
+      - name: Push the test output to ci-tests
+        if: ${{ failure() }}
+        shell: bash
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          mkdir out && cp test-output.txt out/ && cd out
+          git init -q
+          git checkout -q -b ci-tests
+          git add .
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -qm "Test output"
+          git push -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ci-tests
