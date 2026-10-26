@@ -19,9 +19,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Newest first; the first completed run of each workflow stays.
+          # Newest first; the first completed run of each workflow stays. This workflow's own earlier
+          # runs all go (the one running now is the newest).
           gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
             --jq '.workflow_runs[] | select(.status == "completed") | "\(.workflow_id) \(.id)"' > runs.txt
-          awk 'seen[$1]++ { print $2 }' runs.txt | while read -r id; do
+          own="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .workflow_id)"
+          awk -v own="$own" '$1 == own || seen[$1]++ { print $2 }' runs.txt | while read -r id; do
             gh api -X DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/${id}" > /dev/null && echo "deleted run ${id}"
           done
