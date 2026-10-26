@@ -56,8 +56,8 @@ jobs:
     steps:
       - name: Delete ci-shots and ci-tests
         env:
-          TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           for b in ci-shots ci-tests; do
-            git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" --delete "$b" || true
+            gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/$b" && echo "deleted $b" || echo "no $b"
           done
