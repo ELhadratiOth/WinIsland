@@ -121,10 +121,10 @@ $events = 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure',
 Say "claude: $((& claude --version) 2>&1)"
 Say "screen $($screen.Width)x$($screen.Height), scale $scale"
 
-# No location prompt over the desktop; long enough for the card's answer to be clicked.
+# No location prompt or morning brief over the desktop; long enough for the card's answer to be clicked.
 $settingsDir = Join-Path $env:APPDATA 'WinIsland'
 New-Item -ItemType Directory -Force $settingsDir, $claudeDir | Out-Null
-Set-Content -Path (Join-Path $settingsDir 'settings.json') -Value '{"weather_locate": false, "claude_ask_wait_s": 120}' -Encoding ascii
+Set-Content -Path (Join-Path $settingsDir 'settings.json') -Value '{"weather_locate": false, "brief_morning": false, "claude_ask_wait_s": 120}' -Encoding ascii
 # A setting of the user's own, which the install must keep.
 Set-Content -Path $claudeSettings -Value '{"theme": "dark"}' -Encoding ascii
 
@@ -170,7 +170,8 @@ $claude = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', "claude -p `"mak
 Say "claude started (pid $($claude.Id))"
 
 # 4. The ask: the hook's waiting window, the card with "Allow", the click.
-if (Until 90 { [Check]::FindWindow('WinIslandAsk', $null) -ne [IntPtr]::Zero }) {
+# [NullString]: a $null passed to a string parameter arrives as "" (a window with no title).
+if (Until 90 { [Check]::FindWindow('WinIslandAsk', [NullString]::Value) -ne [IntPtr]::Zero }) {
     Say 'the PermissionRequest hook waits for the card'
     Start-Sleep -Seconds 2
     Shot '02-asking'
@@ -233,9 +234,12 @@ Start-Sleep -Seconds 3
 Step 'app log' {
     Copy-Item $appLog (Join-Path $Out 'winisland-log.txt')
     $log = Get-Content $appLog -Raw
-    foreach ($want in 'claude: Run', 'claude: Wait', 'claude: allow .*, delivered true', 'claude: Done', 'claude: Clear') {
+    foreach ($want in 'claude: Run', 'claude: Wait', 'claude: allow .*, delivered true', 'claude: Done') {
         if ($log -match $want) { Say "log has '$want'" } else { Fail "the log has no '$want'" }
     }
+    # A `claude -p` that exits may end its SessionEnd hook before it is sent: only said (Done
+    # leaves the pill by itself).
+    Say "log has 'claude: Clear': $($log -match 'claude: Clear')"
 }
 
 $alive = -not $app.HasExited
