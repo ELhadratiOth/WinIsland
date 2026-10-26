@@ -253,6 +253,10 @@ builds a second full copy of the dependencies under `debug\` (tens of GB).
   takes a screenshot of each page with the real renderer, and closes without saving the settings.
 - `tools\smoke.ps1`: starts the app with a demo timer, clicks the pill and takes screenshots (the
   **Smoke test** workflow runs it on a Windows runner).
+- `tools\claude-check.ps1`: runs the real Claude Code CLI against the app (against a stand-in API,
+  `tools\fake-anthropic.js`, so no key is needed): installs the hooks, gives Claude's permission from
+  the card's **Allow** button, checks the result and removes the hooks again (the **Claude Code check**
+  workflow runs it on a Windows runner when the Claude Code side changes).
 - `winisland.exe --demo`: starts with a one-minute sample timer; `--match-replay <folder>` replays a match
   from recorded score tables.
 - `assets\make_icon.py`: redraws the icon (the white pill in the tray).

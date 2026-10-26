@@ -2677,7 +2677,13 @@ impl App {
         for c in crate::platform::ipc::take() {
             match c {
                 // The API's ids are the apps' own.
-                crate::platform::ipc::Command::Live(m) if settings::current().live_enabled && push_id_ok(&m.id) => self.live.apply(*m, now),
+                crate::platform::ipc::Command::Live(m) if settings::current().live_enabled && push_id_ok(&m.id) => {
+                    // Claude Code's turns in the log (a prompt, an ask, the end), not each step.
+                    if m.id.starts_with("claude:") && (m.state != LiveState::Run || m.claude.as_ref().is_some_and(|c| c.new_prompt)) {
+                        log(&format!("claude: {:?}", m.state));
+                    }
+                    self.live.apply(*m, now)
+                }
                 crate::platform::ipc::Command::Live(_) => {}
                 crate::platform::ipc::Command::Update => self.updater.apply(),
                 crate::platform::ipc::Command::AskGone { id } => self.live.drop_ask(&id),
