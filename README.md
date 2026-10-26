@@ -1,0 +1,282 @@
+<div align="center">
+
+<img src="assets/readme/hero.png" width="880" alt="The pill showing the playing song, with a music card opened from it; beside it Claude Code, a match, a timer, Galaxy Buds, weather and battery pills">
+
+# WinIsland
+
+**A Dynamic Island for Windows 11 and 10, at the top centre of your screen.**
+
+A small pill sits at the top centre of the screen and shows what is going on right now: the playing song, a timer, a match<br>
+score, what Claude Code is doing. Click the pill and a card opens below it.
+
+**[Download](https://github.com/ELhadratiOth/WinIsland/releases/latest)** &nbsp;·&nbsp;
+[What it shows](#what-it-shows) &nbsp;·&nbsp;
+[Installation](#installation) &nbsp;·&nbsp;
+[Building](#building)
+
+<sub>Inspired by One UI's Now Bar and Apple's Dynamic Island.</sub>
+
+</div>
+
+<br>
+
+## What it shows
+
+<img src="assets/readme/pills.png" width="880" alt="Examples of pills: music, a Claude Code permission request, a match, a timer, weather, a rain warning, charging, Galaxy Buds, camera and microphone, a Steam download, the shelf, a screen-time limit, the clock and volume">
+
+- **Music:** any app that opens a Windows media session (Spotify, YouTube Music, browsers).
+  The pill takes the colour of the album cover; the card has the cover, a wavy progress bar, lyrics
+  and the choice of audio output.
+- **Timer and stopwatch:** started from the picker (Win+Alt+N) or the tray menu; when the time is up
+  an alarm sounds and the card opens.
+- **Live match:** the score, minute and goal moments of the football and basketball teams you follow.
+- **Weather:** the clock and weather when idle; warnings for rain, snow, storms, strong wind, extreme
+  heat, frost and poor air quality. If no city is chosen, the location comes from Windows.
+- **Galaxy Buds:** the charge of both earbuds and the case, and noise control. If more than one Buds
+  is paired, the one shown is chosen in the settings.
+- **Claude Code:** what Claude is doing at the moment and its task list. When it asks for permission,
+  the card shows **Allow / Deny** buttons ([see below](#live-activities)).
+- **Games:** Steam and Epic Games downloads, updates, pauses and play time.
+- **Digital Wellbeing:** the day's screen time, each app's share, and the limits you set.
+- **Shelf:** files you drop on the pill wait there until you drag them where you need them; new
+  screenshots are added to the shelf automatically.
+- **System:** volume, charging and low-battery warnings, the app using the microphone or camera, and
+  the charge of Bluetooth headphones.
+- When several activities are active, thin strips show beside the front one; scroll the mouse wheel
+  over the pill to switch between them. When a game, video or presentation is full screen, the pill
+  is hidden; things that can't wait (Claude's permission request, a weather warning) appear as a small
+  island at the top of the screen.
+
+## Cards
+
+<img src="assets/readme/music.png" width="880" alt="Music card: cover, progress bar and buttons; beside it the lyrics of the same song; below it the music pill">
+
+The card grows out of the pill when it opens and shrinks back into it when the mouse leaves. On the
+music card, **Lyrics** in the corner of the cover opens the song's lyrics; they come from `lrclib.net`
+and scroll along with the song.
+
+<img src="assets/readme/day.png" width="880" alt="Day summary card, timer card, hourly weather card and Digital Wellbeing card">
+
+When idle, click the clock to open the day's summary: weather, matches, the last song played and screen
+time.
+
+<img src="assets/readme/live.png" width="880" alt="Live match card, Claude Code permission card, Galaxy Buds card and shelf card">
+
+## Settings
+
+<img src="assets/readme/settings.png" width="880" alt="Settings window: pages on the left, previews of the pill and card sizes in the middle, appearance options on the right">
+
+The settings window opens from **Settings…** in the tray menu; every change applies to the pill
+immediately. The search box at the top finds settings; on the Live match page it searches for teams,
+and on the Full screen page it adds exceptions. Ctrl+F goes to search, Ctrl+K opens the actions menu.
+
+## Installation
+
+<img src="assets/readme/setup.png" width="480" align="right" alt="Setup window">
+
+Download `winisland-setup.exe` from the [latest release](https://github.com/ELhadratiOth/WinIsland/releases/latest)
+and run it. It needs no administrator rights and installs to `%LOCALAPPDATA%\Programs\WinIsland` (use
+"Change" to pick another folder). Options on the setup screen:
+
+- **Start with Windows**
+- **Connect to Claude Code** (shown when Claude Code is on the PC)
+- **Turn on app notifications** (off by default): lets other apps show notifications on the pill
+  ([see below](#live-activities)). The apps you allow, and what they show, are your responsibility.
+- **Desktop shortcut**
+- **Open settings when done**
+
+A Start menu shortcut is always added. WinIsland appears in Windows' "Settings → Apps" list and can be
+removed from there. Removing it also deletes the shortcuts, the start-with-Windows entry and the Claude
+Code hooks; deleting the settings is optional.
+
+If WinIsland is already installed and you run the setup again, WinIsland is updated or repaired: the
+running WinIsland is closed, its files are replaced and it starts again.
+
+For a silent install, use `winisland-setup.exe --quiet` (it doesn't change the app notifications
+setting); for a silent uninstall, use `"%LOCALAPPDATA%\Programs\WinIsland\winisland-setup.exe" --uninstall --quiet`.
+
+<br clear="right">
+
+## Usage
+
+| What | How |
+|---|---|
+| Open / close the card | Click the pill; the card closes by itself when the mouse leaves |
+| Play / pause | Middle-click the pill |
+| Switch between activities | Mouse wheel over the pill or the card |
+| Timer picker | Win+Alt+N (can be changed in Settings → General) |
+| Tray menu | Start timer, Start stopwatch, Start with Windows, Settings…, Quit |
+
+## Live activities
+
+Another program or script can show an activity on the pill. If WinIsland isn't running, the command
+exits without doing anything (the exit code is always 0 and it prints nothing):
+
+```
+winisland.exe push --id backup --title "Backup" --text "Documents" --progress 40
+winisland.exe push --id backup --title "Backup" --state done
+```
+
+`--state`: `run` (default), `wait` (waiting for the user; it comes to the front briefly), `done`
+(shows "Done" for 5 seconds), `clear` (removes it at once). An activity that isn't updated for an hour
+goes away by itself. This can be turned off in Settings → System → Live activities.
+
+**API for apps:** other apps can show a notification or a live activity on the pill with a single HTTP
+request; they can use their own icons, colours and up to two buttons. The API is reachable only from
+this PC (`127.0.0.1:20034`) and stays off until you turn it on (during setup, **Turn on app
+notifications**, or Settings → System → App notifications). The first time an app sends a request, the
+pill asks "Wants to show a notification"; your answer is remembered and can be changed in the settings.
+The apps you allow, and what they show, are your responsibility; WinIsland only displays them. For
+developers: [DOCS.md](DOCS.md).
+
+```
+curl -H "Content-Type: application/json" -d "{\"app\":\"Backup tool\",\"title\":\"Backup finished\"}" http://127.0.0.1:20034/v1/notify
+```
+
+**Claude Code:** the **Connect to Claude Code** option in setup installs the hooks. To install or remove
+them by hand, use the commands below. The command writes the path of the exe itself. The first time, it
+saves a backup as `settings.json.before-winisland`; after that, every write saves `settings.json.winisland-last`.
+It doesn't touch other hooks:
+
+```
+winisland.exe claude-hooks install
+winisland.exe claude-hooks remove
+```
+
+The pill shows what Claude is doing and how long it has been running ("winisland · Editing:
+app.rs"). The card shows the progress of the task list, the latest steps, and, when the work is done,
+the first line of the answer ("Done · 12 min · 9 files"). When Claude asks for permission, the card
+shows **Allow / Deny** buttons. This only applies to single-line commands, files, addresses and
+searches that fit entirely on the card. For file permissions, the card shows the file's full path; the
+change itself stays in Claude's window. Multi-line commands, questions and plan approvals are also
+answered there. Claude's own window stays open at the same time, and whichever answer comes first
+counts. The card waits 60 seconds for an answer (Settings → System → Live activities). If WinIsland is
+moved to another folder, the hooks are updated to the new path the next time it starts. It works in the
+Code tab of the desktop app, in the CLI and in VS Code.
+
+## Building
+
+You need Rust (with the MSVC toolchain) and the Windows SDK (`rc.exe`), which embeds the icon in the exes.
+It still builds without the SDK, but the exes keep Windows' default icon.
+
+```
+cargo b
+```
+
+`cargo b` is an alias defined in `.cargo\config.toml`: `cargo build --profile quick --bin
+winisland --bin winisland-settings`. It produces an exe that runs about as fast as a release build but
+doesn't optimise the whole program together (no LTO), so with a warm cache a build takes a few seconds.
+The settings window's interface (`ui\`, Slint) is built without optimisation in this profile: a `.slint`
+change compiles in 40 seconds instead of 4–5 minutes.
+
+The output goes to `target\quick\`; clone the project to a short path (the MSVC path limit is 260
+characters). The two exes (`winisland.exe` and `winisland-settings.exe`) must be in **the same folder**:
+the app looks for the settings window next to itself. Copy both into a `bin\` folder and run them from
+there. If "Start with Windows" is on, the startup entry is updated automatically to the most recently run copy.
+
+**Release files:** `tools\make-setup.ps1` produces the files that go on a GitHub release in `dist\`:
+`winisland-setup.exe` (with both exes inside), `winisland.exe`, `winisland-settings.exe` (what the
+updater downloads) and `SHA256SUMS.txt`. The C runtime is linked statically, so the exes open on
+Windows machines without the Visual C++ Redistributable. The release build (`target\dist\`, several GB)
+is kept: the first build takes 13–14 minutes, and later ones rebuild only what changed (about 5 minutes
+after a code change). `-Clean` deletes that build at the end; `-Jobs` sets how many build jobs run at once.
+
+```
+powershell -ExecutionPolicy Bypass -File tools\make-setup.ps1 -Jobs 6
+```
+
+### Fonts
+
+The pill and card look for a `fonts\` folder next to the exe: if it has `OneUISans*.ttf`, they use One UI
+Sans (you can take it from your phone); otherwise `Inter*.ttf`; otherwise Windows' Segoe UI Variable.
+The settings window includes Inter itself (`ui\fonts`, SIL Open Font License).
+
+## Files
+
+- Settings: `%APPDATA%\WinIsland\settings.json`
+- Log: `%LOCALAPPDATA%\WinIsland\log.txt`. It also records when and why the pill is hidden
+  (for example `pill: hidden (nothing active)` or `media: Brave left (paused 10 min)`).
+- Team crests: `%LOCALAPPDATA%\WinIsland\crests\`
+
+## Updates
+
+A minute after WinIsland starts, and then once a day, it checks GitHub for the latest release
+(`api.github.com`; nothing is sent besides the request itself). If a new version exists, **Update: x.y.z**
+appears in the tray menu and on a line in Settings → About. Clicking it downloads both exes, verifies
+them against `SHA256SUMS.txt`, replaces the old exes and restarts WinIsland; your settings and the
+start-with-Windows setting stay as they are. If any step fails, the old exes stay in place. If WinIsland
+was installed to a folder it can't write to (such as Program Files), the release page opens instead.
+Update checks can be turned off in Settings → About → Check for updates.
+
+## Privacy and network
+
+Where WinIsland connects (none of these need an API key):
+
+- **Lyrics:** the playing song's artist, title and length are sent to `lrclib.net` (can be turned off
+  in Settings → Media → Lyrics).
+- **Weather:** the coordinates of the chosen city are sent to Open-Meteo (`api.open-meteo.com`,
+  `geocoding-api.open-meteo.com`). If **Use my location** is selected, the location comes from
+  Windows' location service (Windows asks for permission); to find the place's name, coordinates
+  rounded to about 1 km are sent to OpenStreetMap (`nominatim.openstreetmap.org`).
+- **Matches:** for the teams you follow, ESPN (`site.api.espn.com`) and EuroLeague/EuroCup
+  (`feeds.incrowdsports.com`, `live.euroleague.net`); crests are also downloaded from these sources'
+  image addresses.
+- **Updates:** GitHub (`api.github.com`), as described above.
+
+When **App notifications** is on, WinIsland listens only on `127.0.0.1:20034` and `[::1]`, which are
+reachable only from this PC. If the port is taken, it uses another port Windows gives it and writes that
+to `%LOCALAPPDATA%\WinIsland\api.json`. When it's off, no port is opened at all. Requests from web
+pages, from the network and from other Windows users on this PC are rejected; details are in [DOCS.md](DOCS.md).
+
+Watched folders: ShareX's screenshot folder and Windows' `Pictures\Screenshots` folder (a new image
+shows on the pill for a short time and is added to the shelf; Settings → System → Screenshots).
+Claude Code's steps and permission requests show at the top of the screen; be mindful of this when you share your
+screen.
+
+## Known limits
+
+- **Windows 11 or Windows 10 (1809 and later).** On Windows 10 the card's background isn't blurred
+  (a flat background is used) and the icons come from Segoe MDL2 Assets. Windows 10 support arrived in
+  0.2.1.
+- **Galaxy Buds:** tested with Buds2. Buds2 Pro, Buds FE, Buds Core, Buds3, Buds3 FE and Buds4 use the same
+  protocol, and Buds Pro is recognised too. The first Galaxy Buds, Buds+ and Buds Live are not supported.
+  While GalaxyBudsClient or Samsung's Galaxy Buds app is using the connection, WinIsland can't read the earbuds.
+- **Paused media leaves the pill after 10 minutes** (Settings → Media → Keep when paused). If there is no
+  other activity, the pill is hidden at that point; it comes back when the music plays again.
+- The settings window doesn't show live data: instead of the match's current score, the Buds' current
+  charge or a running timer, it shows a sample view of that activity's pill.
+- It shows on the main display only (the one with the taskbar).
+- Resource use when idle (media paused, measured 2026-10-21): 5–10 ms of CPU time over 10 seconds,
+  39–66 MB working set (25 MB private memory). The target was 5 ms and 50 MB per 10 seconds.
+- If Explorer restarts, the pill comes back by itself; an open card is closed.
+
+## Development
+
+```
+cargo t
+cargo lint
+```
+
+Tests and clippy (the aliases in `.cargo\config.toml`) run in the quick profile; a plain `cargo test`
+builds a second full copy of the dependencies under `debug\` (tens of GB).
+
+- What speeds up building: Rust's own linker (`rust-lld`), debug information turned off for dependencies,
+  and the settings window's Slint interface in its own crate (`ui\`), so it's rebuilt only when a `.slint`
+  file changes.
+- `WINISLAND_SETTINGS_SHOTS=<folder> winisland-settings.exe`: opens the settings window off-screen,
+  takes a screenshot of each page with the real renderer, and closes without saving the settings.
+- `tools\smoke.ps1`: starts the app with a demo timer, clicks the pill and takes screenshots (the
+  **Smoke test** workflow runs it on a Windows runner).
+- `winisland.exe --demo`: starts with a one-minute sample timer; `--match-replay <folder>` replays a match
+  from recorded score tables.
+- `assets\make_icon.py`: redraws the icon (the white pill in the tray).
+- **Publishing a release:** increase `version` in `Cargo.toml`, commit, then push a matching tag
+  (`git tag vX.Y.Z && git push origin vX.Y.Z`) or run the **Release** workflow by hand. It builds the EXEs
+  on Windows and publishes `winisland-setup.exe`, `winisland.exe`, `winisland-settings.exe` and
+  `SHA256SUMS.txt` as a GitHub release.
+  `winisland.exe --update-from <folder>` tests the update without GitHub, using the exes in a folder.
+
+---
+
+<sub>Not affiliated with Samsung; it's an independent project inspired by One UI. The Galaxy Buds
+noise-control icons belong to Samsung.</sub>

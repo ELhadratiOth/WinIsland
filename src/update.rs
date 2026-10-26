@@ -1,0 +1,198 @@
+//! Updates from GitHub Releases: whether the latest release is newer, its files and their
+//! checksums, and the renames that swap the exes. The pure part; platform/updater.rs asks
+//! GitHub, downloads and swaps.
+
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+/// "owner/name" of the repository whose releases are the updates (asked without a token: it
+/// answers once the repository is public); empty: none asked.
+pub const REPO: &str = "ELhadratiOth/WinIsland";
+
+/// The files a release must carry: the two exes and their checksums.
+pub const ASSETS: [&str; 3] = ["winisland.exe", "winisland-settings.exe", "SHA256SUMS.txt"];
+
+pub type Version = (u32, u32, u32);
+
+pub fn latest_url(repo: &str) -> String {
+    format!("https://api.github.com/repos/{repo}/releases/latest")
+}
+
+/// "v0.3.0" or "0.3.0"; `None` for anything else, a pre-release suffix included.
+pub fn parse_version(tag: &str) -> Option<Version> {
+    let mut parts = tag.strip_prefix('v').unwrap_or(tag).split('.').map(|p| p.parse::<u32>().ok());
+    let version = (parts.next()??, parts.next()??, parts.next()??);
+    parts.next().is_none().then_some(version)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Release {
+    pub version: Version,
+    pub tag: String,
+    /// The release's page (opened when the exes can't be swapped).
+    pub page: String,
+    /// (file name, download URL).
+    pub assets: Vec<(String, String)>,
+}
+
+impl Release {
+    pub fn asset(&self, name: &str) -> Option<&str> {
+        self.assets.iter().find(|(n, _)| n == name).map(|(_, url)| url.as_str())
+    }
+}
+
+/// GitHub's latest-release answer; `None` for a draft, a pre-release or an error answer.
+pub fn parse_release(v: &Value) -> Option<Release> {
+    if v["draft"].as_bool() != Some(false) || v["prerelease"].as_bool() != Some(false) {
+        return None;
+    }
+    let tag = v["tag_name"].as_str()?;
+    let assets = v["assets"]
+        .as_array()?
+        .iter()
+        .filter_map(|a| Some((a["name"].as_str()?.to_string(), a["browser_download_url"].as_str()?.to_string())))
+        .collect();
+    Some(Release { version: parse_version(tag)?, tag: tag.to_string(), page: v["html_url"].as_str()?.to_string(), assets })
+}
+
+/// Whether `r` is newer than the running `current` ("0.2.0").
+pub fn is_newer(r: &Release, current: &str) -> bool {
+    parse_version(current).is_some_and(|now| r.version > now)
+}
+
+/// Whether the version `latest` ("0.3.0", as update.json keeps it) is newer than `current`.
+pub fn newer(latest: &str, current: &str) -> bool {
+    matches!((parse_version(latest), parse_version(current)), (Some(l), Some(c)) if l > c)
+}
+
+/// The Hakkında page's update line, and whether its row installs.
+pub fn update_line(state: Option<&UpdateState>, current: &str) -> (String, bool) {
+    match state {
+        None => (crate::i18n::trf("{} · denetlenmedi", &[&current]), false),
+        Some(s) if newer(&s.latest, current) => (crate::i18n::trf("{} hazır · şimdiki {}", &[&s.latest, &current]), true),
+        Some(_) => (crate::i18n::trf("{} · güncel", &[&current]), false),
+    }
+}
+
+/// `sha256sum`'s lines ("<hex>  <name>" or "<hex> *<name>"): (name, lowercase hex).
+pub fn parse_sums(text: &str) -> Vec<(String, String)> {
+    text.lines()
+        .filter_map(|line| {
+            let (hex, name) = line.trim().split_once(char::is_whitespace)?;
+            let name = name.trim_start().trim_start_matches('*');
+            (hex.chars().all(|c| c.is_ascii_hexdigit()) && !name.is_empty()).then(|| (name.to_string(), hex.to_ascii_lowercase()))
+        })
+        .collect()
+}
+
+/// The renames, in order, that put the exes staged in `staged` in place of the ones in `dir`:
+/// the running ones step aside first (a running exe can be renamed, not overwritten).
+pub fn swap_plan(dir: &Path, staged: &Path) -> Vec<(PathBuf, PathBuf)> {
+    let exes = ["winisland", "winisland-settings"];
+    let aside = exes.iter().map(|e| (dir.join(format!("{e}.exe")), dir.join(format!("{e}.old.exe"))));
+    let new_in = exes.iter().map(|e| (staged.join(format!("{e}.exe")), dir.join(format!("{e}.exe"))));
+    aside.chain(new_in).collect()
+}
+
+/// What undoes the renames `done` (the start of a `swap_plan`), in order.
+pub fn rollback(done: &[(PathBuf, PathBuf)]) -> Vec<(PathBuf, PathBuf)> {
+    done.iter().rev().map(|(from, to)| (to.clone(), from.clone())).collect()
+}
+
+/// `%LOCALAPPDATA%\WinIsland\update.json`: what the last check found, for the settings window.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateState {
+    /// The latest release's version ("0.3.0").
+    pub latest: String,
+    pub page: String,
+    /// When it was asked (unix seconds).
+    pub checked: i64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn versions_compare_as_numbers() {
+        assert_eq!(parse_version("v0.10.0"), Some((0, 10, 0)));
+        assert_eq!(parse_version("0.2.0"), Some((0, 2, 0)));
+        assert_eq!(parse_version("v0.3.0-beta"), None);
+        assert_eq!(parse_version("latest"), None);
+        assert_eq!(parse_version("v1.2"), None);
+        let r = Release { version: (0, 10, 0), tag: "v0.10.0".into(), page: String::new(), assets: Vec::new() };
+        assert!(is_newer(&r, "0.9.3"));
+        assert!(!is_newer(&r, "0.10.0"));
+        assert!(!is_newer(&r, "1.0.0"));
+        assert!(!is_newer(&r, "garbage"), "an unreadable current version never updates");
+        assert!(newer("0.3.0", "0.2.0"));
+        assert!(!newer("0.2.0", "0.2.0"));
+        assert!(!newer("", "0.2.0"), "nothing found yet");
+    }
+
+    fn answer() -> Value {
+        serde_json::json!({
+            "tag_name": "v0.3.0", "html_url": "https://github.com/k/winisland/releases/tag/v0.3.0",
+            "draft": false, "prerelease": false,
+            "assets": [
+                {"name": "winisland.exe", "browser_download_url": "https://github.com/k/winisland/releases/download/v0.3.0/winisland.exe", "size": 9000000},
+                {"name": "SHA256SUMS.txt", "browser_download_url": "https://github.com/k/winisland/releases/download/v0.3.0/SHA256SUMS.txt"}
+            ]
+        })
+    }
+
+    #[test]
+    fn release_reads_tag_page_and_assets() {
+        let r = parse_release(&answer()).unwrap();
+        assert_eq!((r.version, r.tag.as_str()), ((0, 3, 0), "v0.3.0"));
+        assert_eq!(r.page, "https://github.com/k/winisland/releases/tag/v0.3.0");
+        assert_eq!(r.asset("winisland.exe"), Some("https://github.com/k/winisland/releases/download/v0.3.0/winisland.exe"));
+        assert_eq!(r.asset("winisland-settings.exe"), None);
+        let mut draft = answer();
+        draft["draft"] = true.into();
+        assert_eq!(parse_release(&draft), None);
+        let mut pre = answer();
+        pre["prerelease"] = true.into();
+        assert_eq!(parse_release(&pre), None);
+        assert_eq!(parse_release(&serde_json::json!({"message": "Not Found", "status": "404"})), None);
+        assert_eq!(latest_url("k/winisland"), "https://api.github.com/repos/k/winisland/releases/latest");
+    }
+
+    #[test]
+    fn the_about_line_says_where_it_stands() {
+        let state = |latest: &str| UpdateState { latest: latest.into(), page: String::new(), checked: 1 };
+        assert_eq!(update_line(None, "0.2.0"), ("0.2.0 · denetlenmedi".to_string(), false));
+        assert_eq!(update_line(Some(&state("0.2.0")), "0.2.0"), ("0.2.0 · güncel".to_string(), false));
+        assert_eq!(update_line(Some(&state("0.3.0")), "0.2.0"), ("0.3.0 hazır · şimdiki 0.2.0".to_string(), true));
+    }
+
+    #[test]
+    fn sums_read_both_formats() {
+        let text = "AB12cd  winisland.exe\r\nef34 *winisland-settings.exe\n\nnot a line\n";
+        assert_eq!(parse_sums(text), vec![("winisland.exe".into(), "ab12cd".into()), ("winisland-settings.exe".into(), "ef34".into())]);
+    }
+
+    #[test]
+    fn swap_moves_old_aside_then_new_in() {
+        let (dir, staged) = (Path::new("C:/app"), Path::new("C:/stage"));
+        assert_eq!(
+            swap_plan(dir, staged),
+            vec![
+                (dir.join("winisland.exe"), dir.join("winisland.old.exe")),
+                (dir.join("winisland-settings.exe"), dir.join("winisland-settings.old.exe")),
+                (staged.join("winisland.exe"), dir.join("winisland.exe")),
+                (staged.join("winisland-settings.exe"), dir.join("winisland-settings.exe")),
+            ]
+        );
+    }
+
+    #[test]
+    fn rollback_undoes_in_reverse() {
+        let plan = swap_plan(Path::new("C:/app"), Path::new("C:/stage"));
+        let undo = rollback(&plan[..3]);
+        assert_eq!(undo, vec![(plan[2].1.clone(), plan[2].0.clone()), (plan[1].1.clone(), plan[1].0.clone()), (plan[0].1.clone(), plan[0].0.clone())]);
+        assert!(rollback(&[]).is_empty());
+    }
+}

@@ -1,0 +1,449 @@
+// The WinIsland's pills drawn at 1:1 for the preview pane (src/render/pill.rs geometry), with the
+// window's settings applied: size, opacity, slivers, accent, cover colour, media buttons, artist.
+// Content is a fixed sample (the settings window doesn't see the live activities).
+
+import { Store } from "store.slint";
+import { Theme } from "theme.slint";
+
+export global Pills {
+    /// Pill scale for the size setting (176/300 × 28/32/36).
+    out property <float> k: Store.pill-size == 0 ? 0.875 : Store.pill-size == 2 ? 1.125 : 1;
+    public pure function base-w(kind: int) -> length {
+        return kind == 0 ? 300px : kind == 1 || kind == 2 || kind == 4 ? 176px : kind == 9 ? 220px : kind >= 10 ? 260px : 200px;
+    }
+    /// The circle's colour (and the body's left glow) of every pill but media's.
+    public pure function tint(kind: int) -> color {
+        return kind == 3 ? #3579FF : kind == 4 ? #1450D1 : kind == 6 ? #34C759 : kind == 7 ? #FF9F0A : kind == 8 ? #3E91FF : kind == 9 ? #8A8A8A
+            : kind == 10 ? #2A9FEB : kind == 11 ? #9C9CA4 : Store.accent-color;
+    }
+    /// The sample cover's colour, or the app's when "Kapak rengini kullan" is off.
+    out property <color> media-accent: Store.cover-color ? #E23E48 : #1DB954;
+    public pure function scale(c: color, f: float) -> color {
+        return rgb(Math.round(c.red * f), Math.round(c.green * f), Math.round(c.blue * f));
+    }
+    /// A sliver's colour (pill.rs `sliver`).
+    public pure function sliver-color(kind: int) -> color {
+        if (kind == 0) {
+            let top = scale(media-accent, 0.32);
+            return rgba(min(255, top.red + 18), min(255, top.green + 18), min(255, top.blue + 18), 0.92);
+        }
+        let c = tint(kind);
+        return rgba(Math.floor((c.red * 3 + 90) / 8), Math.floor((c.green * 3 + 90) / 8), Math.floor((c.blue * 3 + 90) / 8), 0.92);
+    }
+}
+
+component PGlyph inherits Text {
+    font-family: Theme.icons;
+    horizontal-alignment: center;
+    vertical-alignment: center;
+    color: white;
+}
+
+component PLabel inherits Text {
+    font-family: Theme.text-face;
+    vertical-alignment: center;
+    color: white;
+    wrap: no-wrap;
+}
+
+/// A sample album cover (gradients standing in for the art).
+export component Art inherits Rectangle {
+    property <float> w: self.width / 1px;
+    property <float> h: self.height / 1px;
+    property <length> r0: Math.sqrt(0.68 * w * 0.68 * w + 0.7 * h * 0.7 * h) * 1px;
+    property <length> cx0: self.width * 0.32;
+    property <length> cy0: self.height * 0.3;
+    background: @radial-gradient(circle r0 at cx0 cy0, #FFB7AA 0%, #FFB7AA 5%, #E8434F 24%, #8C1222 50%, #2A0408 82%);
+}
+
+/// A crest: the cached image, or initials on the club colour.
+component Crest inherits Rectangle {
+    in property <image> image;
+    in property <bool> has-image;
+    in property <string> code;
+    in property <color> tint;
+    in property <color> ink;
+    in property <float> k: 1;
+    width: 24px * k;
+    height: 24px * k;
+    border-radius: self.width / 2;
+    background: has-image ? #FFFFFF1A : tint;
+    if root.has-image: Image {
+        width: parent.width;
+        height: parent.height;
+        source: root.image;
+        image-fit: contain;
+    }
+    if !root.has-image: PLabel {
+        width: parent.width;
+        height: parent.height;
+        horizontal-alignment: center;
+        text: root.code;
+        font-size: 9.5px * root.k;
+        font-weight: 800;
+        color: root.ink;
+    }
+}
+
+/// One pill at 1:1, with up to two slivers of what waits behind it.
+/// kind: 0 media, 1 timer, 2 stopwatch, 3 Buds, 4 match, 5 volume, 6 power, 7 microphone /
+/// camera, 8 another headset, 9 the idle clock and weather, 10 a Steam download, 11 an Epic game
+/// played.
+export component Pill inherits Rectangle {
+    in property <int> kind;
+    /// Activities behind (their kinds), drawn as slivers when the setting is on; -1 for none.
+    in property <int> behind1: -1;
+    in property <int> behind2: -1;
+    /// The clock: a city is picked, so the weather shows on the right.
+    in property <bool> weather: true;
+    // Match crests.
+    in property <image> home-crest;
+    in property <bool> home-has;
+    in property <string> home-code: "FB";
+    in property <color> home-tint: #0B2A6F;
+    in property <color> home-ink: #FFE500;
+    in property <image> away-crest;
+    in property <bool> away-has;
+    in property <string> away-code: "GS";
+    in property <color> away-tint: #A90432;
+    in property <color> away-ink: #FDB912;
+
+    property <float> k: Pills.k;
+    property <length> u: 1px * k;
+    property <length> pw: Pills.base-w(kind) * k;
+    property <length> ph: 32px * k;
+    property <bool> s1: Store.pill-slivers && behind1 >= 0;
+    property <bool> s2: Store.pill-slivers && behind2 >= 0;
+    width: pw + (s2 ? 12 * u : s1 ? 6 * u : 0px);
+    height: ph;
+
+    if root.s2: Rectangle {
+        x: 12 * root.u;
+        y: 2 * root.u;
+        width: root.pw;
+        height: root.ph - 4 * root.u;
+        border-radius: self.height / 2;
+        background: Pills.sliver-color(root.behind2);
+    }
+    if root.s1: Rectangle {
+        x: 6 * root.u;
+        y: 1 * root.u;
+        width: root.pw;
+        height: root.ph - 2 * root.u;
+        border-radius: self.height / 2;
+        background: Pills.sliver-color(root.behind1);
+    }
+    body := Rectangle {
+        x: 0px;
+        width: root.pw;
+        height: root.ph;
+        border-radius: root.ph / 2;
+        property <color> base: rgba(18, 18, 18, Store.pill-opacity / 100);
+        property <color> acc: root.kind == 0 ? Pills.media-accent : Pills.tint(root.kind);
+        /// The pills with a circle on the left: timer, stopwatch, Buds and the system ones (not
+        /// the clock: a plain body or the sky's, no glow).
+        property <bool> dot: root.kind != 0 && root.kind != 4 && root.kind != 9;
+        background: root.kind == 0
+            ? @linear-gradient(180deg, Pills.scale(self.acc, 0.32).with-alpha(0.96) 0%, Pills.scale(self.acc, 0.13).with-alpha(0.98) 100%)
+            // A sunny sky (weather.rs palette).
+            : root.kind == 9 && root.weather ? @linear-gradient(180deg, #1B4A80F5 0%, #102C52FA 100%)
+            : self.base;
+        if body.dot: Rectangle {
+            border-radius: parent.border-radius;
+            background: @linear-gradient(90deg, body.acc.with-alpha(0.38) 0%, body.acc.with-alpha(0) 50%);
+        }
+        if root.kind == 4: Rectangle {
+            border-radius: parent.border-radius;
+            background: @linear-gradient(90deg, root.home-tint.with-alpha(0.38) 0%, root.home-tint.with-alpha(0) 50%, root.away-tint.with-alpha(0) 50%, root.away-tint.with-alpha(0.38) 100%);
+        }
+
+        // ------------------------------------------------ media
+        if root.kind == 0: Art {
+            x: 4 * root.u;
+            y: 4 * root.u;
+            width: 24 * root.u;
+            height: 24 * root.u;
+            border-radius: 12 * root.u;
+        }
+        // The waveform: three bars from x 36, 2.5 wide, 2 apart, 3 to 14 tall (pill.rs WAVE_*).
+        if root.kind == 0 && Store.media-waveform: Rectangle {
+            for b[i] in [8, 13, 6]: Rectangle {
+                x: (36 + i * 4.5) * root.u;
+                y: (root.ph - b * root.u) / 2;
+                width: 2.5 * root.u;
+                height: b * root.u;
+                border-radius: self.width / 2;
+                background: white;
+            }
+        }
+        if root.kind == 0: Rectangle {
+            x: (Store.media-waveform ? 52 : 36) * root.u;
+            width: max(1px, parent.width - self.x - (Store.pill-buttons == 2 ? 14 : Store.pill-buttons == 1 ? 44 : 100) * root.u);
+            height: root.ph;
+            clip: true;
+            HorizontalLayout {
+                alignment: start;
+                PLabel {
+                    text: "GEM DELÍRIO (Slowed)";
+                    font-size: 12.5 * root.u;
+                    font-weight: 600;
+                }
+                if Store.pill-artist: PLabel {
+                    text: " · ZXVRF";
+                    font-size: 12.5 * root.u;
+                    color: #FFFFFFB3;
+                }
+            }
+        }
+        if root.kind == 0 && Store.pill-buttons == 0: PGlyph {
+            x: parent.width - 95 * root.u;
+            width: 30 * root.u;
+            height: root.ph;
+            text: "\u{F8AC}";
+            font-size: 16 * root.u;
+        }
+        if root.kind == 0 && Store.pill-buttons != 2: PGlyph {
+            x: parent.width - (Store.pill-buttons == 0 ? 65 : 37) * root.u;
+            width: 30 * root.u;
+            height: root.ph;
+            text: "\u{F8AE}";
+            font-size: 16 * root.u;
+        }
+        if root.kind == 0 && Store.pill-buttons == 0: PGlyph {
+            x: parent.width - 35 * root.u;
+            width: 30 * root.u;
+            height: root.ph;
+            text: "\u{F8AD}";
+            font-size: 16 * root.u;
+        }
+
+        // ------------------------------------------------ timer, stopwatch, Buds, system
+        if body.dot && root.kind < 10: Rectangle {
+            x: 4 * root.u;
+            y: 4 * root.u;
+            width: 24 * root.u;
+            height: 24 * root.u;
+            border-radius: 12 * root.u;
+            background: body.acc;
+            PGlyph {
+                text: root.kind == 1 ? "\u{E823}" : root.kind == 2 ? "\u{E916}" : root.kind == 5 ? "\u{E767}" : root.kind == 6 ? "\u{EBB3}" : root.kind == 7 ? "\u{E720}" : "\u{E7F6}";
+                font-size: (root.kind == 5 ? 13 : root.kind == 6 ? 14 * Theme.battery-scale : 14) * root.u;
+            }
+        }
+        if root.kind == 1 || root.kind == 2 || root.kind == 3 || root.kind == 6 || root.kind == 7: HorizontalLayout {
+            x: 36 * root.u;
+            width: parent.width - (root.kind == 1 || root.kind == 2 ? 70 : 48) * root.u;
+            height: root.ph;
+            // The Buds and charging pills use the media pill's pair: "%80 · Şarj oluyor".
+            spacing: (root.kind == 3 || root.kind == 6 ? 0 : 7) * root.u;
+            alignment: start;
+            PLabel {
+                text: root.kind == 1 ? "04:32" : root.kind == 2 ? (Store.tenths ? "00:12,4" : "00:12") : root.kind == 6 ? @tr("%{}", 80) : root.kind == 7 ? "Discord" : @tr("%{}", 85) + " · " + @tr("%{}", 80);
+                font-family: root.kind == 3 || root.kind == 6 ? Theme.text-face : Theme.display-face;
+                font-size: (root.kind == 3 || root.kind == 6 ? 12.5 : 14) * root.u;
+                font-weight: root.kind == 3 || root.kind == 6 ? 600 : 700;
+            }
+            if root.kind != 3 || Store.buds-case: PLabel {
+                text: root.kind == 1 ? @tr("Zamanlayıcı") : root.kind == 2 ? @tr("Kronometre") : root.kind == 6 ? @tr(" · Şarj oluyor") : root.kind == 7 ? @tr("Mikrofon") : @tr(" · Kutu %60");
+                font-size: (root.kind == 3 || root.kind == 6 ? 12.5 : 12) * root.u;
+                color: root.kind == 3 || root.kind == 6 ? #FFFFFFB3 : #FFFFFFCC;
+                overflow: elide;
+            }
+        }
+        if root.kind == 1 || root.kind == 2: PGlyph {
+            x: parent.width - 32 * root.u;
+            width: 24 * root.u;
+            height: root.ph;
+            text: "\u{F8AE}";
+            font-size: 16 * root.u;
+        }
+
+        // ------------------------------------------------ volume: speaker · level bar · %45 (pill.rs paint_volume)
+        if root.kind == 5: Rectangle {
+            x: 38 * root.u;
+            y: (root.ph - self.height) / 2;
+            width: parent.width - self.x - (16 + 46) * root.u;
+            height: 4 * root.u;
+            border-radius: self.height / 2;
+            background: #FFFFFF38;
+            Rectangle {
+                x: 0px;
+                width: parent.width * 0.45;
+                border-radius: parent.border-radius;
+                background: white;
+            }
+        }
+        // ------------------------------------------------ the number on the right: volume, headset
+        if root.kind == 5 || root.kind == 8: PLabel {
+            x: parent.width - (12 + 46) * root.u;
+            width: 46 * root.u;
+            height: root.ph;
+            horizontal-alignment: right;
+            text: root.kind == 5 ? @tr("%{}", 45) : @tr("%{}", 70);
+            font-family: root.kind == 5 ? Theme.display-face : Theme.text-face;
+            font-size: (root.kind == 5 ? 13 : 12.5) * root.u;
+            font-weight: root.kind == 5 ? 700 : 600;
+        }
+        // ------------------------------------------------ headset: headphones · name · %70
+        if root.kind == 8: PLabel {
+            x: 36 * root.u;
+            width: parent.width - self.x - (12 + 46 + 6) * root.u;
+            height: root.ph;
+            text: "WH-1000XM4";
+            font-family: Theme.text-face;
+            font-size: 12.5 * root.u;
+            font-weight: 600;
+            overflow: elide;
+        }
+
+        // ------------------------------------------------ clock: (sun) 20:42 · Çar 21 Eki · 18° (pill.rs paint_clock)
+        // The weather's emoji on its colour (#FFB43C at 28 %), or a clock on grey without a city.
+        if root.kind == 9: Rectangle {
+            x: 4 * root.u;
+            y: 4 * root.u;
+            width: 24 * root.u;
+            height: 24 * root.u;
+            border-radius: 12 * root.u;
+            background: root.weather ? #FFB43C47 : #FFFFFF29;
+            if root.weather: Text {
+                text: "☀\u{FE0F}";
+                font-family: "Segoe UI Emoji";
+                font-size: 14 * root.u;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            if !root.weather: PGlyph {
+                text: "\u{E823}";
+                font-size: 13 * root.u;
+            }
+        }
+        if root.kind == 9: HorizontalLayout {
+            x: 36 * root.u;
+            width: parent.width - self.x - 14 * root.u;
+            height: root.ph;
+            alignment: start;
+            PLabel {
+                text: "20:42";
+                font-size: 12.5 * root.u;
+                font-weight: 600;
+            }
+            PLabel {
+                text: root.weather ? @tr(" · Çar 21 Eki · 18°") : @tr(" · Çar 21 Eki");
+                font-size: 12.5 * root.u;
+                color: #FFFFFFB3;
+                overflow: elide;
+            }
+        }
+
+        // ------------------------------------------------ games: art · title · %48 · 18 MB/sn (pill.rs paint_game)
+        // A download's art shrinks into a ring that fills (48 %: the arc's end at 172.8°).
+        if root.kind >= 10: Art {
+            property <float> side: root.kind == 10 ? 19 : 24;
+            x: (16 - self.side / 2) * root.u;
+            y: (16 - self.side / 2) * root.u;
+            width: self.side * root.u;
+            height: self.side * root.u;
+            border-radius: self.width / 2;
+        }
+        if root.kind == 10: Rectangle {
+            x: 4 * root.u;
+            y: 4 * root.u;
+            width: 24 * root.u;
+            height: 24 * root.u;
+            border-radius: self.width / 2;
+            border-width: 2 * root.u;
+            border-color: #FFFFFF33;
+        }
+        if root.kind == 10: Path {
+            x: 4 * root.u;
+            y: 4 * root.u;
+            width: 24 * root.u;
+            height: 24 * root.u;
+            viewbox-width: 24;
+            viewbox-height: 24;
+            stroke: #5FB7F0;
+            stroke-width: 2 * root.u;
+            commands: "M 12 1 A 11 11 0 0 1 13.38 22.91";
+        }
+        if root.kind >= 10: HorizontalLayout {
+            x: 36 * root.u;
+            width: parent.width - self.x - 14 * root.u;
+            height: root.ph;
+            alignment: start;
+            PLabel {
+                text: root.kind == 10 ? "THE FINALS" : "Fortnite";
+                font-size: 12.5 * root.u;
+                font-weight: 600;
+            }
+            PLabel {
+                text: root.kind == 10 ? @tr(" · %48 · 18 MB/sn") : @tr(" · 2 sa 14 dk oynadın");
+                font-size: 12.5 * root.u;
+                color: #FFFFFFB3;
+                overflow: elide;
+            }
+        }
+
+        // ------------------------------------------------ match: crest · score · ● minute · score · crest
+        if root.kind == 4: Crest {
+            x: 4 * root.u;
+            y: 4 * root.u;
+            k: root.k;
+            image: root.home-crest;
+            has-image: root.home-has;
+            code: root.home-code;
+            tint: root.home-tint;
+            ink: root.home-ink;
+        }
+        if root.kind == 4: PLabel {
+            x: 34 * root.u;
+            width: 20 * root.u;
+            height: root.ph;
+            horizontal-alignment: center;
+            text: "2";
+            font-family: Theme.display-face;
+            font-size: 16 * root.u;
+            font-weight: 700;
+        }
+        if root.kind == 4: HorizontalLayout {
+            x: 60 * root.u;
+            width: 56 * root.u;
+            height: root.ph;
+            spacing: 5 * root.u;
+            alignment: center;
+            VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 6 * root.u;
+                    height: 6 * root.u;
+                    border-radius: 3 * root.u;
+                    background: #FF4B4B;
+                }
+            }
+            PLabel {
+                text: "67′";
+                font-size: 12.5 * root.u;
+                font-weight: 600;
+            }
+        }
+        if root.kind == 4: PLabel {
+            x: 122 * root.u;
+            width: 20 * root.u;
+            height: root.ph;
+            horizontal-alignment: center;
+            text: "1";
+            font-family: Theme.display-face;
+            font-size: 16 * root.u;
+            font-weight: 700;
+        }
+        if root.kind == 4: Crest {
+            x: 148 * root.u;
+            y: 4 * root.u;
+            k: root.k;
+            image: root.away-crest;
+            has-image: root.away-has;
+            code: root.away-code;
+            tint: root.away-tint;
+            ink: root.away-ink;
+        }
+    }
+}

@@ -1,0 +1,76 @@
+// Window tokens: Raycast's Theme Studio in its Nocturne theme, sampled from the reference
+// screenshot (design: .taste-skill/v9). One warm accent (Nocturne's Selection yellow) marks
+// state; colour otherwise comes from content (pills, crests, app badges).
+
+export global Theme {
+    in-out property <bool> dark: true;
+    /// The window ground, lit from below the preview panel.
+    out property <color> ground: dark ? #161618 : #EDEDEF;
+    out property <color> ground-lit: dark ? #2A2A2C : #FAFAFB;
+    /// The inset list panel: lighter at the top.
+    out property <color> side-top: dark ? #292929 : #F7F7F8;
+    out property <color> side-bot: dark ? #1D1D1D : #EEEEF0;
+    out property <color> side-edge: dark ? #FFFFFF12 : #00000012;
+    /// The preview panel: warm light from its lower left.
+    out property <color> pv-dark: dark ? #171717 : #F2F1EF;
+    out property <color> pv-mid: dark ? #222120 : #F7F6F4;
+    out property <color> pv-lit: dark ? #2C2A27 : #FFFFFF;
+    out property <color> pv-edge: dark ? #FFFFFF14 : #00000014;
+    out property <color> pv-rule: dark ? #00000059 : #0000000F;
+    out property <color> insp: dark ? #141414 : #FBFBFB;
+    out property <color> insp-edge: dark ? #0B0B0B : #E2E2E5;
+    out property <color> line: dark ? #1F1F1F : #ECECEE;
+    out property <color> field: dark ? #1F1F1F : #FFFFFF;
+    out property <color> field-edge: dark ? #464646 : #CFCFD3;
+    out property <color> sel: dark ? #FFFFFF14 : #0000000D;
+    out property <color> hov: dark ? #FFFFFF0A : #00000008;
+    out property <color> tile: dark ? #212121 : #EFEEEC;
+    /// Warm off-white text (Nocturne's Text) and pure white for the inspector's labels.
+    out property <color> text: dark ? #F6EEE3 : #1C1813;
+    out property <color> strong: dark ? #FFFFFF : #111111;
+    out property <color> text2: dark ? #9C978F : #6B665E;
+    out property <color> text3: dark ? #6F6A63 : #8E8982;
+    out property <color> section: dark ? #A9A49C : #7A756D;
+    out property <color> label: dark ? #8F8F8F : #7A7A7E;
+    out property <color> placeholder: dark ? #8A8580 : #9A958E;
+    out property <color> key: dark ? #3B3734 : #E6E3DE;
+    out property <color> key-text: dark ? #D8D2CA : #4A453E;
+    out property <color> chip: dark ? #1A1714E6 : #FFFFFFE6;
+    out property <color> act: dark ? #221E1BEB : #FFFFFFEB;
+    out property <color> seg-on: dark ? #2A2A2A : #E6E6E8;
+    out property <color> glyph: dark ? #CFCFCF : #55555A;
+    /// The accent: Nocturne's Selection; Loader for the multicolour mark.
+    out property <color> acc: #FFD968;
+    out property <color> loader: #F4A301;
+    out property <color> sel-row: dark ? #FFD96821 : #FFD9684D;
+    out property <color> tile-on: dark ? #D9C07E : #C9A84E;
+    out property <color> knob-on: #1A1612;
+    out property <color> track: dark ? #333333 : #D6D6DA;
+    out property <color> off-track: dark ? #3A3A3A : #CBCBD0;
+    out property <color> off-knob: dark ? #A0A0A0 : #FFFFFF;
+    out property <color> ring: dark ? #EDE3D4 : #FFFFFF;
+    out property <color> danger: dark ? #FF7A7A : #C73A3A;
+    out property <color> pop: dark ? #1E1E1E : #FFFFFF;
+    out property <color> pop-edge: dark ? #FFFFFF1A : #00000017;
+    out property <color> pop-shadow: dark ? #00000099 : #0000002E;
+    out property <color> scrim: dark ? #00000099 : #0000004D;
+    /// The system's fonts, set from Rust (gfx::SystemFaces): Windows 10 has Segoe MDL2 Assets
+    /// and Segoe UI for Windows 11's Segoe Fluent Icons and Segoe UI Variable.
+    in-out property <string> icons: "Segoe Fluent Icons";
+    in-out property <bool> mdl2: false;
+    in-out property <string> text-face: "Segoe UI Variable Text";
+    in-out property <string> display-face: "Segoe UI Variable Display";
+    /// MDL2's battery is wider than Fluent's: drawn smaller, to Fluent's width (icons::mdl2_scale).
+    in-out property <float> battery-scale: 1;
+}
+
+/// Tag colours (Raycast's support colours): text on the colour at about 20 %.
+export global Tags {
+    out property <color> red: #FF6B6B;
+    out property <color> green: #59D499;
+    out property <color> yellow: #FFD968;
+    out property <color> orange: #F4A301;
+    out property <color> blue: #5DB3FF;
+    out property <color> purple: #A78BFA;
+    out property <color> grey: #9C978F;
+}

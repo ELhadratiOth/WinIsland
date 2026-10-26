@@ -1,0 +1,271 @@
+// Every setting the window edits. The Rust side (src/bin/winisland-settings.rs) fills it from
+// settings.json and saves it back on `changed()`. Names match the json keys' meaning (notes
+// §10); ints for choices are the index in the order the control shows them.
+
+/// A row of a list setting: a media app or an output device.
+export struct Item {
+    id: string,
+    name: string,
+    sub: string,
+    shown: bool,
+    /// The app playing now, the output in use now (that one can't be hidden).
+    current: bool,
+    /// Badge colour (media apps).
+    tint: color,
+    /// Badge letter (media apps).
+    letter: string,
+}
+
+/// One app of today's screen time on the Dijital Denge page.
+export struct UsageRow {
+    exe: string,
+    name: string,
+    time: string,
+    /// Its share of the longest app's time today.
+    share: float,
+    /// Its limit's place in the page's choices (0: none).
+    limit: int,
+}
+
+/// A followed team, or a team search result.
+export struct Team {
+    id: string,
+    name: string,
+    /// Competition shown under the name ("Trendyol Süper Lig").
+    league: string,
+    /// Up to three letters for the crest stand-in ("FB").
+    abbr: string,
+    primary: color,
+    secondary: color,
+    /// The cached crest, when there is one (else the stand-in: `abbr` on `primary`).
+    crest: image,
+    has-crest: bool,
+    /// Search results: already followed ("Takipte").
+    followed: bool,
+}
+
+/// A place for the weather: the one picked, or a city search result (Open-Meteo).
+export struct City {
+    name: string,
+    country: string,
+    /// Coordinates as Rust's f64 wrote them, so they go back unchanged.
+    lat: string,
+    lon: string,
+}
+
+/// One search result (notes §5.19, §9).
+export struct Hit {
+    /// Page index (see `Store.page`).
+    page: int,
+    /// Row key the page scrolls to and flashes.
+    row: string,
+    title: string,
+    /// "Görünüm › Pil".
+    path: string,
+    desc: string,
+    /// Matched part of the title, in characters.
+    mark-start: int,
+    mark-len: int,
+}
+
+export global Store {
+    in-out property <bool> enabled: true;
+    // Görünüm
+    in-out property <int> pill-size: 1;
+    in-out property <float> pill-offset: 0;
+    in-out property <float> pill-opacity: 92;
+    in-out property <bool> pill-slivers: true;
+    in-out property <string> accent: "#5D57D2";
+    /// The accent the pills use, as a colour (kept in sync by the Rust side): the wallpaper's
+    /// while `wallpaper-accent` is on and it has one, else `accent`.
+    in-out property <color> accent-color: #5D57D2;
+    in-out property <bool> wallpaper-accent: true;
+    /// The wallpaper has a colour (a grey one keeps `accent`).
+    in-out property <bool> wallpaper-found: false;
+    in-out property <bool> cover-color: true;
+    /// 0 compact, 1 large.
+    in-out property <int> card-size: 1;
+    in-out property <bool> card-blur: true;
+    /// Windows 10 can't blur behind the card (os::card_blur).
+    in-out property <bool> blur-available: true;
+    in-out property <float> darkness: 35;
+    in-out property <float> saturation: 200;
+    /// 0 off, 1 slow, 2 normal, 3 fast.
+    in-out property <int> speed: 2;
+    /// 0 on change and hover, 1 hover only, 2 off.
+    in-out property <int> marquee: 0;
+    in-out property <float> marquee-speed: 30;
+    // Genel
+    in-out property <bool> autostart: true;
+    /// 0 Win+Alt+N, 1 Win+Alt+T, 2 Ctrl+Alt+N, 3 Win+Shift+N, 4 off.
+    in-out property <int> hotkey: 0;
+    /// 0 picker, 1 settings.
+    in-out property <int> tray-click: 0;
+    in-out property <bool> close-on-leave: true;
+    in-out property <float> leave-ms: 600;
+    in-out property <bool> wheel-switches: true;
+    in-out property <bool> keep-user-front: true;
+    /// 0 system, 1 dark, 2 light.
+    in-out property <int> theme: 0;
+    // Medya
+    in-out property <bool> media-on: true;
+    /// An app (not hidden) has a media session now: the list panel marks Medya.
+    in-out property <bool> media-live;
+    /// 0 all three, 1 play only, 2 none.
+    in-out property <int> pill-buttons: 0;
+    in-out property <bool> pill-artist: true;
+    /// Bars between the cover and the title that move with the sound.
+    in-out property <bool> media-waveform: true;
+    /// Synced lyrics (lrclib.net) on the card.
+    in-out property <bool> media-lyrics: true;
+    in-out property <bool> card-wave: true;
+    in-out property <bool> middle-click: true;
+    /// 0 1 min, 1 5 min, 2 10 min, 3 30 min, 4 forever.
+    in-out property <int> paused-keep: 2;
+    in-out property <[Item]> apps;
+    in-out property <[Item]> devices;
+    // Zamanlayıcı ve kronometre
+    in-out property <bool> timer-on: true;
+    in-out property <bool> stopwatch-on: true;
+    in-out property <[string]> sounds;
+    /// Short sounds for a goal of a followed team, and the one picked.
+    in-out property <[string]> goal-sounds;
+    in-out property <string> goal-sound: "tada";
+    in-out property <string> sound: "Alarm01";
+    in-out property <bool> done-card: true;
+    /// 0 +1, 1 +5, 2 +10 min.
+    in-out property <int> add-minutes: 0;
+    /// Minutes, ascending, at most six, each 1–180.
+    in-out property <[int]> presets: [1, 3, 5, 10, 15, 30];
+    in-out property <bool> tenths: true;
+    // Galaxy Buds
+    in-out property <bool> buds-on: true;
+    in-out property <string> buds-status: "";
+    in-out property <float> buds-low: 15;
+    /// 0 no, 1 5 s, 2 15 s, 3 30 s.
+    in-out property <int> buds-front: 1;
+    in-out property <bool> buds-case: true;
+    in-out property <bool> buds-ear-pause: true;
+    /// Which pair: "Otomatik", then the paired devices that may be Buds; and the one picked.
+    in-out property <[string]> buds-devices: ["Otomatik"];
+    in-out property <int> buds-device: 0;
+    callback buds-device-picked(int);
+    // Canlı maç
+    in-out property <bool> match-on: true;
+    in-out property <[Team]> teams;
+    in-out property <[Team]> team-results;
+    /// 0 idle, 1 searching, 2 done, 3 failed.
+    in-out property <int> team-search-state: 0;
+    in-out property <float> show-before: 60;
+    in-out property <float> keep-after: 30;
+    in-out property <bool> opponent-moment: true;
+    // Sistem
+    in-out property <bool> volume-moment: true;
+    in-out property <bool> power-moment: true;
+    /// Percent, 5–50.
+    in-out property <float> power-low: 15;
+    in-out property <bool> privacy-on: true;
+    in-out property <bool> headsets-on: true;
+    in-out property <bool> live-on: true;
+    in-out property <bool> capture-moment: true;
+    in-out property <bool> capture-to-shelf: true;
+    in-out property <bool> claude-ask: true;
+    /// Seconds, 10–300.
+    in-out property <float> claude-ask-wait: 60;
+    /// Other apps may show notifications through the API (off until turned on).
+    in-out property <bool> api-on: false;
+    /// Where it listens: "127.0.0.1:20034".
+    in property <string> api-address: "127.0.0.1:20034";
+    /// The apps that asked; `shown` is the answer (allowed), `id` the app's key.
+    in-out property <[Item]> api-apps;
+    /// Nothing else on: the pill shows the clock and the weather instead of hiding.
+    in-out property <bool> idle-clock: true;
+    in-out property <bool> weather-in-stack: true;
+    in-out property <bool> weather-effects: true;
+    in-out property <bool> brief-morning: true;
+    in-out property <string> brief-name;
+    /// The Windows account's first name, the name box's placeholder.
+    in property <string> windows-name;
+    /// The weather's city; `name` "" for none.
+    in-out property <City> city;
+    /// Up to five places for what was typed.
+    in-out property <[City]> city-results;
+    /// 0 idle, 1 searching, 2 done, 3 failed.
+    in-out property <int> city-search-state: 0;
+    /// Without a city, the weather where the PC is; the WinIsland's last look ("Kadıköy · Türkiye",
+    /// "Windows'ta konum kapalı") and the place's name once found.
+    in-out property <bool> weather-locate: true;
+    in-out property <string> located;
+    in-out property <string> located-name;
+    /// The place the weather is for: the picked city, else where the PC was found ("" for none).
+    out property <string> place-name: city.name != "" ? city.name : weather-locate ? located-name : "";
+    in-out property <bool> rain-moment: true;
+    in-out property <bool> weather-alerts: true;
+    // Oyunlar
+    in-out property <bool> games-steam: true;
+    in-out property <bool> games-epic: true;
+    in-out property <bool> games-downloads: true;
+    in-out property <bool> games-playtime: true;
+    in-out property <bool> island-on: true;
+    /// What the window found on this PC: "3 oyun · THE FINALS, Feign…" ("" without the store).
+    in-out property <string> steam-library;
+    in-out property <string> epic-library;
+    // Dijital Denge
+    in-out property <bool> wellbeing-on: true;
+    in-out property <bool> wellbeing-in-brief: true;
+    in-out property <bool> wellbeing-limit-moments: true;
+    in-out property <[UsageRow]> usage-apps;
+    /// "Toplam 3 sa 40 dk".
+    in-out property <string> usage-total;
+    // Tam ekran
+    in-out property <bool> fullscreen-hide: true;
+    in-out property <[string]> exceptions;
+    /// Visible apps' exe names, for exception suggestions.
+    in-out property <[Item]> running-apps;
+    // Hakkında
+    in-out property <string> version: "";
+    in-out property <bool> update-check: true;
+    /// "0.3.0 hazır · şimdiki 0.2.0", "0.2.0 · güncel".
+    in-out property <string> update-line: "";
+    /// A newer release is out: the row installs it.
+    in-out property <bool> update-ready: false;
+    // Window state (remembered in settings.json, not settings of the WinIsland itself)
+    /// 0 Görünüm, 1 Genel, 2 Medya, 3 Zamanlayıcı, 4 Galaxy Buds, 5 Canlı maç, 6 Tam ekran, 7 Hakkında, 8 Sistem.
+    in-out property <int> page: 0;
+    in-out property <bool> preview-collapsed: false;
+    /// Windows' own mode (the preview taskbar follows it).
+    in-out property <bool> system-dark: true;
+
+    /// Any value above changed (the Rust side saves after a short pause).
+    callback changed();
+    /// A list row's switch: list is "apps" or "devices".
+    callback item-toggled(string, string, bool);
+    /// An app's answer flipped (its key, allowed now), or the app forgotten (asked again).
+    callback api-app-toggled(string, bool);
+    callback api-app-forget(string);
+    /// Adds an exception as typed; returns the error to show ("" when it was added).
+    callback exception-added(string) -> string;
+    callback exception-removed(int);
+    /// A preset chip edited (index -1: a new chip) or removed; the Rust side tidies the list.
+    callback preset-set(int, int);
+    callback preset-removed(int);
+    callback team-search(string);
+    /// An app's limit picked (its exe, the choice's index).
+    callback limit-set(string, int);
+    callback city-search(string);
+    callback team-added(Team);
+    callback team-removed(int);
+    /// Puts back the team or exception removed last ("Geri al").
+    callback undo-remove();
+    /// Plays a sound from C:\Windows\Media; again stops it.
+    callback preview-sound(string);
+    pure callback search(string) -> [Hit];
+    /// How many of `search`'s results are on a page.
+    pure callback search-count(string, int) -> int;
+    /// `#RRGGBB` the WinIsland can use.
+    pure callback hex-ok(string) -> bool;
+    /// Running apps matching what's typed in the exception box, at most five.
+    pure callback suggestions(string) -> [Item];
+    /// "log", "file", "reset" (after the in-window confirm).
+    callback action(string);
+}

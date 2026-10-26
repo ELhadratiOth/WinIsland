@@ -1,0 +1,141 @@
+[package]
+name = "winisland"
+version = "0.3.0"
+edition = "2021"
+publish = false
+
+[workspace]
+members = ["ui", "setup"]
+
+[dependencies]
+winisland-ui = { path = "ui" }
+serde = { version = "1", features = ["derive"] }
+# preserve_order: `claude-hooks` rewrites Claude Code's settings.json in the user's own key order.
+serde_json = { version = "1", features = ["preserve_order"] }
+slint = { version = "1.18", features = ["raw-window-handle-06", "software-renderer-systemfonts", "unstable-winit-030"] }
+raw-window-handle = "0.6"
+windows-core = "0.62.2"
+# Already in the tree under windows; named here for IIterable (windows doesn't re-export it).
+windows-collections = "0.3"
+windows-numerics = "0.3"
+# Already in the tree under windows; named here for AsyncStatus (a read with a deadline).
+windows-future = "0.3"
+
+[dependencies.windows]
+version = "0.62.2"
+features = [
+  "Devices_Bluetooth",
+  "Devices_Bluetooth_Rfcomm",
+  "Devices_Enumeration",
+  "Devices_Geolocation",
+  "Foundation",
+  "Foundation_Collections",
+  "Foundation_Numerics",
+  "Graphics",
+  "Graphics_DirectX",
+  "Graphics_Effects",
+  "Graphics_Imaging",
+  "Media",
+  "Media_Control",
+  "Networking",
+  "Networking_Sockets",
+  "Storage_Streams",
+  "System",
+  "UI",
+  "UI_Composition",
+  "UI_Composition_Desktop",
+  "UI_ViewManagement",
+  "Web_Http",
+  "Web_Http_Filters",
+  "Web_Http_Headers",
+  "Win32_Devices_FunctionDiscovery",
+  "Win32_Foundation",
+  "Win32_Graphics_Direct2D",
+  "Win32_Graphics_Direct2D_Common",
+  "Win32_Graphics_Direct3D",
+  "Win32_Graphics_Direct3D11",
+  "Win32_Graphics_DirectWrite",
+  "Win32_Graphics_Dwm",
+  "Win32_Graphics_Dxgi",
+  "Win32_Graphics_Dxgi_Common",
+  "Win32_Graphics_Gdi",
+  "Win32_Graphics_Imaging",
+  "Win32_Networking_WinHttp",
+  "Win32_Media_Audio",
+  "Win32_Media_Audio_Endpoints",
+  "Win32_NetworkManagement_IpHelper",
+  "Win32_NetworkManagement_NetManagement",
+  "Win32_Security",
+  "Win32_Security_Cryptography",
+  "Win32_Storage_FileSystem",
+  "Win32_Storage_Xps",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_DataExchange",
+  "Win32_System_IO",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Ole",
+  "Win32_System_Power",
+  "Win32_System_Registry",
+  "Win32_System_RemoteDesktop",
+  "Win32_System_SystemServices",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+  "Win32_System_Time",
+  "Win32_System_Variant",
+  "Win32_System_WinRT",
+  "Win32_System_WinRT_Composition",
+  "Win32_System_WinRT_Graphics_Direct2D",
+  "Win32_UI_Accessibility",
+  "Win32_UI_HiDpi",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_Shell",
+  "Win32_UI_Shell_Common",
+  "Win32_UI_Shell_PropertiesSystem",
+  "Win32_UI_WindowsAndMessaging",
+]
+
+# Full debug info (gigabytes of PDBs and incremental caches) isn't needed: our own code keeps
+# line tables, so a panic still says where; the dependencies keep none.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.release]
+opt-level = 3
+lto = true
+
+# What goes into bin/ while developing: release speed without the minutes whole-program LTO
+# takes on every build (`cargo build --profile quick`).
+[profile.quick]
+inherits = "release"
+lto = false
+incremental = true
+
+# The settings window's generated code (its bindings and layouts; Slint's runtime and renderer
+# stay optimised) is most of a .slint change's build: measured 2026-10-24, rustc took 270 s on it
+# at opt-level 3, 210 s at 1, 93 s at 0, and an edit after an incremental build 41 s at 0 (182 s
+# at 1: the generated code shifts as a whole). The setup's window is small: no cache.
+[profile.quick.package.winisland-ui]
+incremental = true
+opt-level = 0
+
+[profile.quick.package.winisland-setup]
+incremental = false
+
+# The released exes (tools/make-setup.ps1): thin LTO (fat LTO ran this machine out of memory),
+# symbols stripped; the default codegen units (one per crate made the first build 26 minutes for
+# a few per cent of size). The setup's build script packs ~30 MB: optimised, or it takes minutes.
+[profile.dist]
+inherits = "release"
+lto = "thin"
+strip = true
+
+[profile.dist.build-override]
+opt-level = 3
+
+# The released settings window: its generated code at 1 builds in half the time of 3.
+[profile.dist.package.winisland-ui]
+opt-level = 1

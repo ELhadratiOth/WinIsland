@@ -1,0 +1,48 @@
+// The window's own state (not settings): the search bar, its error line, the save status, the
+// reset dialog and the actions menu.
+
+import { Store } from "store.slint";
+
+export global Ui {
+    /// The preview pane's search bar. Settings pages search the settings; Canlı maç searches
+    /// teams; Tam ekran takes an app name to add.
+    in-out property <string> query;
+    /// Why the last exception wasn't added ("" when it was).
+    in-out property <string> error;
+    /// Bumped by every change: the action bar says "Kaydedildi".
+    in-out property <int> saved-serial;
+    in-out property <bool> dialog;
+    in-out property <bool> actions;
+    /// Bumped to put the keyboard in the search bar (the shell watches it).
+    in-out property <int> focus-serial;
+    /// The preview pane's width (the shell keeps it), for tiles: set from outside the
+    /// content so a tile's width can't feed back into the pane's.
+    in-out property <length> pane-width: 640px;
+
+    public function focus-search() {
+        focus-serial += 1;
+    }
+
+    // The window draws its own title bar (no Windows caption): the Rust side moves, sizes,
+    // minimises, maximises and closes it.
+    in-out property <bool> maximized;
+    /// Set once the Rust side has taken over the frame's title bar (until then the window opens
+    /// frameless, so Windows' title bar never shows, not even for a frame).
+    in-out property <bool> framed;
+    /// The mouse went down on an empty part of the chrome: move the window (a second click
+    /// soon after maximises or restores it).
+    callback drag-window();
+    /// The mouse went down on an edge: size the window from it (Windows' HT* code, 10-17).
+    callback resize-window(int);
+    callback minimize-window();
+    callback toggle-maximize();
+    callback close-window();
+    /// The window's size changed (it may have been maximised or restored some other way).
+    callback sized();
+
+    /// A setting changed: save (after the Rust side's pause) and say so.
+    public function changed() {
+        Store.changed();
+        saved-serial += 1;
+    }
+}

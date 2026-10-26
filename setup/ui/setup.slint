@@ -1,0 +1,493 @@
+// The setup's one window: a stage on the left where real WinIsland pills turn in a taskbar, the
+// app and its choices on the right. Same family as the settings window (Raycast Nocturne, Inter,
+// Windows' own frame without its title bar).
+
+import "../../ui/fonts/Inter-Regular.ttf";
+import "../../ui/fonts/Inter-Medium.ttf";
+import "../../ui/fonts/Inter-SemiBold.ttf";
+import { Theme, Tags } from "../../ui/theme.slint";
+import { Icon, Toggle } from "../../ui/kit.slint";
+// For Rust: the system's fonts go into it (Windows 10 has other ones).
+export { Theme }
+
+/// A choice: its label (and a quieter line under it) and the yellow toggle at the right.
+component Choice inherits Rectangle {
+    in property <string> label;
+    in property <string> hint;
+    in property <bool> enabled: true;
+    in-out property <bool> checked;
+    height: root.hint != "" ? 56px : 40px;
+    if root.hint == "": Text {
+        x: 0;
+        width: parent.width - 50px;
+        text: root.label;
+        font-size: 13.5px;
+        color: Theme.text;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    if root.hint != "": VerticalLayout {
+        x: 0;
+        width: parent.width - 50px;
+        alignment: center;
+        spacing: 2px;
+        Text {
+            text: root.label;
+            font-size: 13.5px;
+            color: Theme.text;
+            overflow: elide;
+        }
+        Text {
+            text: root.hint;
+            font-size: 12px;
+            color: Theme.text2;
+            wrap: word-wrap;
+        }
+    }
+    Toggle {
+        x: parent.width - self.width;
+        y: (parent.height - self.height) / 2;
+        enabled: root.enabled;
+        checked <=> root.checked;
+    }
+}
+
+/// The wide button at the bottom right.
+component Primary inherits Rectangle {
+    in property <string> label;
+    in property <bool> danger;
+    callback clicked;
+    height: 40px;
+    border-radius: 10px;
+    background: (root.danger ? Theme.danger : Theme.acc).darker(t.pressed ? 0.12 : t.has-hover ? 0.05 : 0);
+    Text {
+        text: root.label;
+        font-size: 14px;
+        font-weight: 600;
+        color: Theme.knob-on;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    t := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+/// The left panel: a strip of taskbar at the bottom and the pill in it, turning through what the
+/// WinIsland shows (each pill drawn by the WinIsland's own painter; the body is drawn here so its
+/// width and colours can glide from one to the next).
+component Stage inherits Rectangle {
+    in property <[image]> pills;
+    in property <[length]> widths;
+    in property <[color]> tops;
+    in property <[color]> bottoms;
+    in property <[color]> accents;
+    in property <[color]> glows;
+    in property <[string]> names;
+    in property <[string]> lines;
+    in property <length> pill-h: 32px;
+    in property <bool> moving: true;
+    in-out property <int> index: 0;
+    property <int> count: pills.length;
+    property <color> accent: count > 0 ? accents[index] : transparent;
+    property <color> top: count > 0 ? tops[index] : transparent;
+    property <color> bottom: count > 0 ? bottoms[index] : transparent;
+    property <color> glow: count > 0 ? glows[index] : Theme.acc;
+    animate accent, top, bottom { duration: 420ms; easing: cubic-bezier(0.2, 0.9, 0.25, 1); }
+    animate glow { duration: 900ms; easing: ease-in-out; }
+    border-radius: 14px;
+    border-width: 1px;
+    border-color: Theme.pv-edge;
+    clip: true;
+    background: @linear-gradient(160deg, Theme.pv-lit 0%, Theme.pv-mid 45%, Theme.pv-dark 100%);
+
+    Timer {
+        interval: 2600ms;
+        running: root.moving && root.count > 1;
+        triggered => { root.index = Math.mod(root.index + 1, root.count); }
+    }
+    // The wallpaper's light, in the colour of what plays: it shifts as the pill does.
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: parent.height - 330px;
+        width: 420px;
+        height: 420px;
+        background: @radial-gradient(circle, root.glow.with-alpha(0.30) 0%, root.glow.with-alpha(0.10) 38%, root.glow.with-alpha(0) 70%);
+    }
+    Rectangle {
+        x: -120px;
+        y: -150px;
+        width: 320px;
+        height: 320px;
+        background: @radial-gradient(circle, #FFFFFF0D 0%, #FFFFFF00 70%);
+    }
+    // What the pill is, and where in the turn it is.
+    for name[i] in root.names: Rectangle {
+        x: 24px;
+        y: parent.height * 0.34;
+        width: parent.width - 48px;
+        height: 64px;
+        opacity: i == root.index ? 1 : 0;
+        animate opacity { duration: 320ms; easing: ease-in-out; }
+        Text {
+            y: 0;
+            width: parent.width;
+            height: 26px;
+            text: name;
+            font-size: 19px;
+            font-weight: 600;
+            color: Theme.strong;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        Text {
+            y: 32px;
+            width: parent.width;
+            height: 34px;
+            text: root.lines[i];
+            font-size: 13px;
+            color: Theme.text2;
+            horizontal-alignment: center;
+            vertical-alignment: TextVerticalAlignment.top;
+            wrap: word-wrap;
+        }
+    }
+    HorizontalLayout {
+        x: (parent.width - self.preferred-width) / 2;
+        y: parent.height * 0.34 + 80px;
+        height: 6px;
+        spacing: 6px;
+        for _[i] in root.count: Rectangle {
+            width: i == root.index ? 18px : 6px;
+            height: 6px;
+            border-radius: 3px;
+            background: i == root.index ? Theme.acc : #FFFFFF2E;
+            animate width, background { duration: 320ms; easing: cubic-bezier(0.2, 0.9, 0.25, 1); }
+        }
+    }
+    strip := Rectangle {
+        y: parent.height - self.height;
+        height: 52px;
+        background: #1B1B1BF2;
+        Rectangle {
+            height: 1px;
+            y: 0;
+            background: #FFFFFF12;
+        }
+        pill := Rectangle {
+            visible: root.count > 0;
+            width: root.count > 0 ? root.widths[root.index] : 0;
+            animate width { duration: 420ms; easing: cubic-bezier(0.2, 0.9, 0.25, 1); }
+            height: root.pill-h;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: self.height / 2;
+            clip: true;
+            background: @linear-gradient(180deg, root.top 0%, root.bottom 100%);
+            Rectangle {
+                x: 0;
+                width: parent.width / 2;
+                background: @linear-gradient(90deg, root.accent.with-alpha(0.38) 0%, root.accent.with-alpha(0) 100%);
+            }
+            for img[i] in root.pills: Image {
+                source: img;
+                width: root.widths[i];
+                height: root.pill-h;
+                x: (parent.width - self.width) / 2;
+                image-fit: fill;
+                opacity: i == root.index ? 1 : 0;
+                animate opacity { duration: 260ms; easing: ease-in-out; }
+            }
+        }
+    }
+}
+
+export component SetupWindow inherits Window {
+    /// "install" or "uninstall".
+    in property <string> mode: "install";
+    /// "ready", "working", "done" or "error".
+    in property <string> phase: "ready";
+    in property <string> heading: "WinIsland";
+    in property <string> subtitle: @tr("Görev çubuğunda canlı etkinlikler");
+    in property <string> version;
+    in property <string> location;
+    in property <bool> location-visible: true;
+    in property <bool> claude-available: true;
+    in property <string> step;
+    in property <float> progress;
+    in property <string> message;
+    in property <string> primary: @tr("Kur");
+    in-out property <bool> autostart: true;
+    in-out property <bool> claude: true;
+    /// Other apps' notifications (the API): off unless the user turns it on.
+    in-out property <bool> api: false;
+    in-out property <bool> desktop: true;
+    in-out property <bool> open-settings: true;
+    in-out property <bool> wipe: false;
+    in property <[image]> pills;
+    in property <[length]> pill-widths;
+    in property <[color]> pill-tops;
+    in property <[color]> pill-bottoms;
+    in property <[color]> pill-accents;
+    in property <[color]> pill-glows;
+    in property <[string]> pill-names;
+    in property <[string]> pill-lines;
+    in property <length> pill-height: 32px;
+    /// False for still screenshots: the stage holds its first pill.
+    in property <bool> moving: true;
+    in-out property <int> stage-index;
+    /// Set once Windows' frame is back (the window starts frameless, as the settings window).
+    in-out property <bool> framed;
+    callback primary-clicked();
+    callback change-location();
+    callback close-clicked();
+    callback drag();
+
+    property <bool> busy: phase == "working";
+    property <length> col-x: 368px;
+    property <length> col-w: self.width - col-x - 28px;
+
+    title: mode == "uninstall" ? @tr("WinIsland'ı kaldır") : @tr("WinIsland kurulumu");
+    icon: @image-url("../../assets/winisland-256.png");
+    width: 700px;
+    height: 496px;
+    no-frame: !root.framed;
+    background: Theme.ground;
+    default-font-family: "Inter";
+    default-font-size: 13px;
+
+    // Anywhere empty moves the window.
+    TouchArea {
+        pointer-event(e) => {
+            if e.kind == PointerEventKind.down && e.button == PointerEventButton.left {
+                root.drag();
+            }
+        }
+    }
+
+    Stage {
+        x: 12px;
+        y: 12px;
+        width: 328px;
+        height: parent.height - 24px;
+        pills: root.pills;
+        widths: root.pill-widths;
+        tops: root.pill-tops;
+        bottoms: root.pill-bottoms;
+        accents: root.pill-accents;
+        glows: root.pill-glows;
+        names: root.pill-names;
+        lines: root.pill-lines;
+        pill-h: root.pill-height;
+        moving: root.moving;
+        index <=> root.stage-index;
+    }
+
+    close-button := Rectangle {
+        x: parent.width - 12px - self.width;
+        y: 10px;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: close-touch.has-hover ? Theme.hov : transparent;
+        opacity: root.busy ? 0.35 : 1;
+        Icon {
+            glyph: "\u{E8BB}";
+            size: 11px;
+        }
+        close-touch := TouchArea {
+            enabled: !root.busy;
+            mouse-cursor: pointer;
+            clicked => { root.close-clicked(); }
+        }
+    }
+
+    // The app: its pill on a tile.
+    Rectangle {
+        x: root.col-x;
+        y: 36px;
+        width: 52px;
+        height: 52px;
+        border-radius: 14px;
+        border-width: 1px;
+        border-color: #FFFFFF1A;
+        background: @linear-gradient(160deg, #3A3836 0%, #1E1D1C 100%);
+        Rectangle {
+            width: 36px;
+            height: 15px;
+            border-radius: 7.5px;
+            background: #FFFFFF;
+        }
+    }
+    HorizontalLayout {
+        x: root.col-x;
+        y: 100px;
+        height: 30px;
+        spacing: 10px;
+        alignment: start;
+        Text {
+            text: root.heading;
+            font-size: 24px;
+            font-weight: 600;
+            color: Theme.strong;
+            vertical-alignment: center;
+        }
+        if root.version != "" && root.mode == "install": Rectangle {
+            y: 7px;
+            height: 20px;
+            width: v.preferred-width + 14px;
+            border-radius: 6px;
+            background: Theme.key;
+            v := Text {
+                text: root.version;
+                font-size: 11.5px;
+                font-weight: 500;
+                color: Theme.key-text;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+    Text {
+        x: root.col-x;
+        y: 134px;
+        width: root.col-w;
+        text: root.subtitle;
+        font-size: 13px;
+        color: Theme.text2;
+        wrap: word-wrap;
+    }
+
+    // The choices (locked while it works), or what happened.
+    if root.phase == "ready" || root.phase == "working": VerticalLayout {
+        x: root.col-x;
+        y: root.mode == "uninstall" ? 196px : 168px;
+        width: root.col-w;
+        opacity: root.busy ? 0.45 : 1;
+        if root.mode == "install": Choice { label: @tr("Windows'la başlat"); enabled: !root.busy; checked <=> root.autostart; }
+        if root.mode == "install" && root.claude-available: Choice { label: @tr("Claude Code'a bağlan"); enabled: !root.busy; checked <=> root.claude; }
+        if root.mode == "install": Choice {
+            label: @tr("Uygulama bildirimlerini aç");
+            hint: @tr("İzin verdiğin uygulamalar ve gösterdikleri senin sorumluluğunda");
+            enabled: !root.busy;
+            checked <=> root.api;
+        }
+        if root.mode == "install": Choice { label: @tr("Masaüstü kısayolu"); enabled: !root.busy; checked <=> root.desktop; }
+        if root.mode == "install": Choice { label: @tr("Bitince ayarları aç"); enabled: !root.busy; checked <=> root.open-settings; }
+        if root.mode == "uninstall": Choice { label: @tr("Ayarlarımı da sil"); enabled: !root.busy; checked <=> root.wipe; }
+    }
+    if root.phase == "done" || root.phase == "error": Rectangle {
+        x: root.col-x;
+        y: root.mode == "uninstall" ? 200px : 176px;
+        width: root.col-w;
+        height: 120px;
+        Rectangle {
+            x: 0;
+            y: 0;
+            width: 28px;
+            height: 28px;
+            border-radius: 14px;
+            background: (root.phase == "done" ? Tags.green : Theme.danger).with-alpha(0.18);
+            Icon {
+                glyph: root.phase == "done" ? "\u{E73E}" : "\u{E7BA}";
+                size: 13px;
+                color: root.phase == "done" ? Tags.green : Theme.danger;
+            }
+        }
+        Text {
+            x: 40px;
+            y: 0;
+            width: parent.width - 40px;
+            height: 28px;
+            vertical-alignment: center;
+            text: root.phase == "done" ? (root.mode == "uninstall" ? @tr("WinIsland kaldırıldı") : @tr("WinIsland kuruldu")) : (root.mode == "uninstall" ? @tr("Kaldırma tamamlanamadı") : @tr("Kurulum tamamlanamadı"));
+            font-size: 15px;
+            font-weight: 600;
+            color: Theme.strong;
+        }
+        Text {
+            x: 40px;
+            y: 34px;
+            width: parent.width - 40px;
+            text: root.message;
+            font-size: 13px;
+            color: Theme.text2;
+            wrap: word-wrap;
+        }
+    }
+
+    // Where it goes.
+    if root.location-visible && root.mode == "install" && (root.phase == "ready" || root.phase == "working"): HorizontalLayout {
+        x: root.col-x;
+        // 91 px over the bottom, as before the window grew.
+        y: root.height - 91px;
+        width: root.col-w;
+        height: 18px;
+        spacing: 8px;
+        opacity: root.busy ? 0.45 : 1;
+        Icon {
+            width: 16px;
+            glyph: "\u{E8B7}";
+            size: 13px;
+            color: Theme.text3;
+        }
+        Text {
+            horizontal-stretch: 1;
+            text: root.location;
+            font-size: 12.5px;
+            color: Theme.text2;
+            overflow: elide;
+            vertical-alignment: center;
+        }
+        Text {
+            text: @tr("Değiştir");
+            font-size: 12.5px;
+            font-weight: 500;
+            color: change.has-hover && !root.busy ? Theme.acc.brighter(0.15) : Theme.acc;
+            vertical-alignment: center;
+            change := TouchArea {
+                enabled: !root.busy;
+                mouse-cursor: pointer;
+                clicked => { root.change-location(); }
+            }
+        }
+    }
+
+    // The button, or the progress in its place.
+    if !root.busy: Primary {
+        x: root.col-x;
+        y: root.height - 12px - self.height;
+        width: root.col-w;
+        label: root.primary;
+        danger: root.mode == "uninstall" && root.phase == "ready";
+        clicked => { root.primary-clicked(); }
+    }
+    if root.busy: Rectangle {
+        x: root.col-x;
+        y: root.height - 12px - 40px;
+        width: root.col-w;
+        height: 40px;
+        Text {
+            x: 0;
+            y: 0;
+            width: parent.width;
+            text: root.step;
+            font-size: 13px;
+            color: Theme.text;
+        }
+        Rectangle {
+            y: 28px;
+            height: 6px;
+            border-radius: 3px;
+            background: Theme.track;
+            Rectangle {
+                x: 0;
+                width: max(6px, parent.width * root.progress);
+                animate width { duration: 240ms; easing: ease-out; }
+                border-radius: 3px;
+                background: root.mode == "uninstall" ? Theme.danger : Theme.acc;
+            }
+        }
+    }
+}

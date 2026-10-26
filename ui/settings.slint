@@ -1,0 +1,845 @@
+// WinIsland Ayarları, laid out like Raycast's Theme Studio (design: .taste-skill/v9): an inset
+// list panel on the left, a preview panel in the middle (search bar, the page's lists and
+// tiles, the action bar), an inspector on the right. Every value lives in `Store`; the Rust
+// side fills it from settings.json and saves it on `changed()`.
+
+import "fonts/Inter-Regular.ttf";
+import "fonts/Inter-Medium.ttf";
+import "fonts/Inter-SemiBold.ttf";
+import "fonts/Inter-Bold.ttf";
+
+import { Theme, Tags } from "theme.slint";
+import { Store, Hit } from "store.slint";
+import { Ui } from "ui-state.slint";
+import { Icon, Toggle, Keycap, IconButton, H4, LRow, SideItem } from "kit.slint";
+import {
+    AppearanceBody, AppearanceInspector, GeneralBody, GeneralInspector, MediaBody, MediaInspector, TimerBody, TimerInspector,
+    BudsBody, BudsInspector, MatchBody, MatchInspector, FullscreenBody, FullscreenInspector, AboutBody, AboutInspector,
+    SystemBody, SystemInspector, GamesBody, GamesInspector, WellbeingBody, WellbeingInspector
+} from "pages.slint";
+
+/// The WinIsland mark: a pill with the accent dot.
+component Mark inherits Rectangle {
+    width: 22px;
+    height: 22px;
+    Rectangle {
+        y: 6px;
+        width: 20px;
+        x: 1px;
+        height: 10px;
+        border-radius: 5px;
+        background: Theme.text;
+    }
+    Rectangle {
+        x: 3.2px;
+        y: 8.2px;
+        width: 5.6px;
+        height: 5.6px;
+        border-radius: 2.8px;
+        background: Theme.loader;
+    }
+}
+
+/// "Ayarlar  2" in the list panel.
+component SideLabel inherits HorizontalLayout {
+    in property <string> title;
+    in property <string> count;
+    padding-left: 10px;
+    padding-top: 10px;
+    padding-bottom: 6px;
+    spacing: 8px;
+    alignment: start;
+    Text {
+        text: root.title;
+        font-size: 13px;
+        font-weight: 500;
+        color: Theme.dark ? #B0B0B0 : #6E6E73;
+    }
+    Text {
+        text: root.count;
+        font-size: 13px;
+        color: Theme.text3;
+    }
+}
+
+/// A capsule at the bottom of the preview panel.
+component Capsule inherits Rectangle {
+    in property <color> fill: Theme.act;
+    height: 36px;
+    border-radius: 18px;
+    border-width: 1px;
+    border-color: Theme.pv-edge;
+    background: fill;
+}
+
+/// One entry of the actions menu.
+component ActionItem inherits Rectangle {
+    in property <string> text;
+    in property <string> glyph;
+    in property <bool> danger;
+    callback clicked;
+    height: 34px;
+    border-radius: 8px;
+    background: t.has-hover ? Theme.sel-row : transparent;
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 10px;
+        Icon {
+            glyph: root.glyph;
+            size: 13px;
+            width: 16px;
+            color: root.danger ? Theme.danger : Theme.text2;
+        }
+        Text {
+            text: root.text;
+            font-size: 14px;
+            font-weight: 500;
+            color: root.danger ? Theme.danger : Theme.text;
+            vertical-alignment: center;
+        }
+    }
+    t := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+/// An empty part of the chrome: pressing it moves the window (Windows does the dragging, so
+/// snapping works); a second press soon after maximises or restores.
+component DragArea inherits TouchArea {
+    pointer-event(e) => {
+        if e.kind == PointerEventKind.down && e.button == PointerEventButton.left {
+            Ui.drag-window();
+        }
+    }
+}
+
+/// A caption button at the top right: minimise, maximise/restore, close (red under the mouse).
+component CaptionButton inherits Rectangle {
+    in property <string> glyph;
+    in property <bool> close;
+    callback clicked;
+    width: 40px;
+    height: 32px;
+    border-radius: 8px;
+    background: t.pressed ? (close ? #C42B1CCC : Theme.sel) : t.has-hover ? (close ? #C42B1C : Theme.hov) : transparent;
+    animate background { duration: 83ms; }
+    Icon {
+        glyph: root.glyph;
+        size: 10px;
+        color: t.has-hover && root.close ? #FFFFFF : Theme.strong;
+    }
+    t := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+/// Invisible handles along the edges and corners: pressing one sizes the window from it.
+component ResizeEdges inherits Rectangle {
+    property <length> e: 5px;
+    property <length> c: 12px;
+    for h in [
+        { code: 12, x: c, y: 0px, w: root.width - 2 * c, ht: e, cursor: MouseCursor.ns-resize },
+        { code: 15, x: c, y: root.height - e, w: root.width - 2 * c, ht: e, cursor: MouseCursor.ns-resize },
+        { code: 10, x: 0px, y: c, w: e, ht: root.height - 2 * c, cursor: MouseCursor.ew-resize },
+        { code: 11, x: root.width - e, y: c, w: e, ht: root.height - 2 * c, cursor: MouseCursor.ew-resize },
+        { code: 13, x: 0px, y: 0px, w: c, ht: c, cursor: MouseCursor.nwse-resize },
+        { code: 17, x: root.width - c, y: root.height - c, w: c, ht: c, cursor: MouseCursor.nwse-resize },
+        { code: 14, x: root.width - c, y: 0px, w: c, ht: c, cursor: MouseCursor.nesw-resize },
+        { code: 16, x: 0px, y: root.height - c, w: c, ht: c, cursor: MouseCursor.nesw-resize },
+    ]: TouchArea {
+        x: h.x;
+        y: h.y;
+        width: h.w;
+        height: h.ht;
+        mouse-cursor: h.cursor;
+        pointer-event(ev) => {
+            if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
+                Ui.resize-window(h.code);
+            }
+        }
+    }
+}
+
+export component SettingsWindow inherits Window {
+    title: @tr("WinIsland Ayarları");
+    // Its own title bar: the caption buttons sit in the inspector's header (Raycast's layout).
+    no-frame: !Ui.framed;
+    // The tray's white pill (assets/make_icon.py).
+    icon: @image-url("../assets/winisland-256.png");
+    preferred-width: 1240px;
+    preferred-height: 760px;
+    min-width: 1040px;
+    min-height: 640px;
+    default-font-family: "Inter";
+    default-font-size: 14px;
+    background: Theme.ground;
+    changed width => { Ui.sized(); }
+    changed height => { Ui.sized(); }
+
+    /// Settings pages search the settings; Canlı maç and Tam ekran use the bar for their lists.
+    property <bool> settings-search: Store.page != 5 && Store.page != 6;
+    property <bool> searching: settings-search && Ui.query != "";
+    property <[Hit]> hits: searching ? Store.search(Ui.query) : [];
+    property <string> primary: searching ? (hits.length > 0 ? @tr("Aç") : "")
+        : Store.page == 5 && Ui.query != "" && Store.team-results.length > 0 && !Store.team-results[0].followed ? @tr("Takip et")
+        : Store.page == 6 && Ui.query != "" ? @tr("Ekle") : "";
+    property <string> placeholder: Store.page == 5 ? @tr("Takım ara…") : Store.page == 6 ? @tr("Uygulama ekle, ör. vlc.exe") : @tr("Ayar ara…");
+    property <string> status: Ui.error != "" ? Ui.error : Ui.saved-serial > 0 ? @tr("Kaydedildi") : @tr("Değişiklikler anında uygulanır");
+    property <int> focus-serial: Ui.focus-serial;
+    changed focus-serial => { search.focus(); }
+
+    function go(p: int) {
+        Store.page = p;
+        root.clear();
+    }
+    function clear() {
+        Ui.query = "";
+        Ui.error = "";
+        search.text = "";
+        Store.team-search("");
+    }
+    /// Enter in the search bar, or the action bar's primary action.
+    function submit() {
+        if root.searching {
+            if root.hits.length > 0 {
+                root.go(root.hits[0].page);
+            }
+        } else if Store.page == 5 {
+            if Store.team-results.length > 0 && !Store.team-results[0].followed {
+                Store.team-added(Store.team-results[0]);
+            }
+        } else if Store.page == 6 && Ui.query != "" {
+            Ui.error = Store.exception-added(Ui.query);
+            if Ui.error == "" {
+                Ui.query = "";
+                search.text = "";
+            }
+        }
+    }
+
+    // The ground's light, below the preview panel.
+    Rectangle {
+        width: root.width * 1.3;
+        height: self.width;
+        x: root.width * 0.52 - self.width / 2;
+        y: root.height - self.height / 2 + 60px;
+        background: @radial-gradient(circle, Theme.ground-lit 0%, Theme.ground 50%);
+    }
+
+    keys := FocusScope {
+        key-pressed(e) => {
+            if e.modifiers.control && (e.text == "f" || e.text == "F") {
+                search.focus();
+                return accept;
+            }
+            if e.modifiers.control && (e.text == "k" || e.text == "K") {
+                Ui.actions = true;
+                actions.show();
+                return accept;
+            }
+            if e.text == Key.Escape {
+                if Ui.dialog {
+                    Ui.dialog = false;
+                } else {
+                    root.clear();
+                }
+                return accept;
+            }
+            reject
+        }
+
+        HorizontalLayout {
+            // ------------------------------------------------ the list panel
+            Rectangle {
+                width: 276px;
+                DragArea { }
+                Rectangle {
+                    x: 10px;
+                    y: 10px;
+                    width: parent.width - 10px;
+                    height: parent.height - 20px;
+                    border-radius: 16px;
+                    border-width: 1px;
+                    border-color: Theme.side-edge;
+                    background: @linear-gradient(180deg, Theme.side-top 0%, Theme.side-bot.mix(Theme.side-top, 0.5) 30%, Theme.side-bot 100%);
+                    VerticalLayout {
+                        padding: 10px;
+                        spacing: 2px;
+                        HorizontalLayout {
+                            height: 40px;
+                            padding-left: 8px;
+                            padding-right: 6px;
+                            spacing: 10px;
+                            VerticalLayout {
+                                alignment: center;
+                                Mark { }
+                            }
+                            Text {
+                                text: "WinIsland";
+                                font-size: 14.5px;
+                                font-weight: 600;
+                                color: Theme.strong;
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
+                            }
+                            Text {
+                                text: Store.enabled ? @tr("Açık") : @tr("Kapalı");
+                                font-size: 13px;
+                                color: Theme.text2;
+                                vertical-alignment: center;
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Toggle {
+                                    checked <=> Store.enabled;
+                                    toggled => { Ui.changed(); }
+                                }
+                            }
+                        }
+                        Rectangle { height: 6px; }
+                        SideLabel {
+                            title: @tr("Ayarlar");
+                            count: "2";
+                        }
+                        SideItem {
+                            title: @tr("Görünüm");
+                            glyph: "\u{E790}";
+                            light: true;
+                            current: Store.page == 0;
+                            clicked => { root.go(0); }
+                        }
+                        SideItem {
+                            title: @tr("Genel");
+                            glyph: "\u{E713}";
+                            light: true;
+                            current: Store.page == 1;
+                            clicked => { root.go(1); }
+                        }
+                        SideLabel {
+                            title: @tr("Etkinlikler");
+                            count: "8";
+                        }
+                        SideItem {
+                            title: @tr("Medya");
+                            glyph: "\u{E8D6}";
+                            current: Store.page == 2;
+                            live: Store.media-live;
+                            off: !Store.media-on;
+                            clicked => { root.go(2); }
+                        }
+                        SideItem {
+                            title: @tr("Zamanlayıcı");
+                            glyph: "\u{E823}";
+                            current: Store.page == 3;
+                            off: !Store.timer-on && !Store.stopwatch-on;
+                            clicked => { root.go(3); }
+                        }
+                        SideItem {
+                            title: "Galaxy Buds";
+                            glyph: "\u{E7F6}";
+                            current: Store.page == 4;
+                            off: !Store.buds-on;
+                            clicked => { root.go(4); }
+                        }
+                        SideItem {
+                            title: @tr("Canlı maç");
+                            ball: true;
+                            current: Store.page == 5;
+                            off: !Store.match-on;
+                            clicked => { root.go(5); }
+                        }
+                        SideItem {
+                            title: @tr("Sistem");
+                            glyph: "\u{E770}";
+                            current: Store.page == 8;
+                            off: !Store.volume-moment && !Store.power-moment && !Store.privacy-on && !Store.headsets-on;
+                            clicked => { root.go(8); }
+                        }
+                        SideItem {
+                            title: @tr("Tam ekran");
+                            glyph: "\u{E740}";
+                            current: Store.page == 6;
+                            off: !Store.fullscreen-hide;
+                            clicked => { root.go(6); }
+                        }
+                        SideItem {
+                            title: @tr("Dijital Denge");
+                            glyph: "\u{E95E}";
+                            current: Store.page == 10;
+                            off: !Store.wellbeing-on;
+                            clicked => { root.go(10); }
+                        }
+                        SideItem {
+                            title: @tr("Oyunlar");
+                            glyph: "\u{E7FC}";
+                            current: Store.page == 9;
+                            off: !Store.games-steam && !Store.games-epic && !Store.island-on;
+                            clicked => { root.go(9); }
+                        }
+                        Rectangle { vertical-stretch: 1; }
+                        SideItem {
+                            title: @tr("Hakkında");
+                            glyph: "\u{E946}";
+                            light: true;
+                            current: Store.page == 7;
+                            clicked => { root.go(7); }
+                        }
+                    }
+                }
+            }
+
+            // ------------------------------------------------ the preview panel
+            Rectangle {
+                horizontal-stretch: 1;
+                // The margins around the preview panel move the window.
+                DragArea { }
+                panel := Rectangle {
+                    x: 28px;
+                    y: 34px;
+                    width: parent.width - 56px;
+                    height: parent.height - 64px;
+                    border-radius: 28px;
+                    border-width: 1px;
+                    border-color: Theme.pv-edge;
+                    background: @linear-gradient(200deg, Theme.pv-dark 0%, Theme.pv-mid 50%, Theme.pv-lit 100%);
+                    VerticalLayout {
+                        // The search bar.
+                        Rectangle {
+                            height: 62px;
+                            HorizontalLayout {
+                                padding-left: 20px;
+                                padding-right: 18px;
+                                spacing: 14px;
+                                Rectangle {
+                                    width: 22px;
+                                    Icon {
+                                        glyph: "\u{E76B}";
+                                        size: 12px;
+                                        color: Theme.text2;
+                                    }
+                                    TouchArea {
+                                        mouse-cursor: pointer;
+                                        clicked => { root.clear(); }
+                                    }
+                                }
+                                Rectangle {
+                                    horizontal-stretch: 1;
+                                    Text {
+                                        x: 0px;
+                                        width: parent.width;
+                                        height: parent.height;
+                                        visible: search.text == "";
+                                        text: root.placeholder;
+                                        font-size: 18px;
+                                        color: Theme.placeholder;
+                                        vertical-alignment: center;
+                                    }
+                                    search := TextInput {
+                                        x: 0px;
+                                        width: parent.width;
+                                        height: parent.height;
+                                        font-size: 18px;
+                                        color: Theme.text;
+                                        selection-background-color: Theme.acc.with-alpha(0.35);
+                                        vertical-alignment: center;
+                                        single-line: true;
+                                        edited => {
+                                            Ui.query = self.text;
+                                            Ui.error = "";
+                                            if Store.page == 5 {
+                                                Store.team-search(self.text);
+                                            }
+                                        }
+                                        accepted => { root.submit(); }
+                                    }
+                                }
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    alignment: end;
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Keycap { key: "Ctrl"; }
+                                    }
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Keycap { key: "F"; }
+                                    }
+                                }
+                            }
+                            Rectangle {
+                                y: parent.height - 1px;
+                                height: 1px;
+                                background: Theme.pv-rule;
+                            }
+                        }
+                        // The page's lists and tiles.
+                        Flickable {
+                            vertical-stretch: 1;
+                            init => { Ui.pane-width = self.width; }
+                            changed width => { Ui.pane-width = self.width; }
+                            VerticalLayout {
+                                padding-left: 10px;
+                                padding-right: 10px;
+                                padding-top: 6px;
+                                alignment: start;
+                                if root.searching: VerticalLayout {
+                                    H4 {
+                                        title: @tr("Sonuçlar");
+                                        count: root.hits.length + @tr(" ayar");
+                                    }
+                                    if root.hits.length == 0: LRow {
+                                        title: @tr("Bulunamadı");
+                                        sub: @tr("başka bir kelime dene");
+                                        lead: 1;
+                                        glyph: "\u{E721}";
+                                    }
+                                    for h[i] in root.hits: LRow {
+                                        title: h.title;
+                                        sub: h.path;
+                                        selected: i == 0;
+                                        clickable: true;
+                                        lead: 1;
+                                        glyph: "\u{E721}";
+                                        clicked => { root.go(h.page); }
+                                        if i == 0: Keycap { key: "↵"; }
+                                    }
+                                }
+                                if !root.searching && Store.page == 0: AppearanceBody { }
+                                if !root.searching && Store.page == 1: GeneralBody { }
+                                if !root.searching && Store.page == 2: MediaBody { }
+                                if !root.searching && Store.page == 3: TimerBody { }
+                                if !root.searching && Store.page == 4: BudsBody { }
+                                if Store.page == 5: MatchBody { }
+                                if Store.page == 6: FullscreenBody { }
+                                if !root.searching && Store.page == 7: AboutBody { }
+                                if !root.searching && Store.page == 8: SystemBody { }
+                                if !root.searching && Store.page == 9: GamesBody { }
+                                if !root.searching && Store.page == 10: WellbeingBody { }
+                            }
+                        }
+                    }
+                    // The list fades under the action bar.
+                    Rectangle {
+                        x: 1px;
+                        y: parent.height - 93px;
+                        width: parent.width - 2px;
+                        height: 92px;
+                        border-bottom-left-radius: 27px;
+                        border-bottom-right-radius: 27px;
+                        background: @linear-gradient(180deg, Theme.pv-lit.with-alpha(0) 0%, Theme.pv-lit.mix(Theme.pv-mid, 0.6) 62%);
+                    }
+                    // The action bar: what happened on the left, what Enter and Ctrl K do on the right.
+                    Capsule {
+                        x: 12px;
+                        y: parent.height - 48px;
+                        width: chip.preferred-width;
+                        fill: Theme.chip;
+                        chip := HorizontalLayout {
+                            padding-left: 12px;
+                            padding-right: 16px;
+                            spacing: 10px;
+                            VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    width: 16px;
+                                    height: 16px;
+                                    border-radius: 8px;
+                                    background: @conic-gradient(#FFD968 0deg, #F4A301 60deg, #FF6B6B 120deg, #A78BFA 180deg, #5DB3FF 240deg, #59D499 300deg, #FFD968 360deg);
+                                }
+                            }
+                            Text {
+                                text: root.status;
+                                font-size: 14px;
+                                font-weight: 500;
+                                color: Ui.error != "" ? Theme.danger : Theme.text;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                    Capsule {
+                        x: parent.width - self.width - 12px;
+                        y: parent.height - 48px;
+                        width: act.preferred-width;
+                        act := HorizontalLayout {
+                            padding-left: 18px;
+                            padding-right: 8px;
+                            spacing: 10px;
+                            if root.primary != "": Text {
+                                text: root.primary;
+                                font-size: 14px;
+                                font-weight: 500;
+                                color: Theme.text;
+                                vertical-alignment: center;
+                            }
+                            if root.primary != "": VerticalLayout {
+                                alignment: center;
+                                Keycap { key: "↵"; }
+                            }
+                            if root.primary != "": Rectangle {
+                                width: 1px;
+                                Rectangle {
+                                    y: (parent.height - 14px) / 2;
+                                    height: 14px;
+                                    background: Theme.text3;
+                                }
+                            }
+                            Text {
+                                text: @tr("Eylemler");
+                                font-size: 14px;
+                                font-weight: 500;
+                                color: Theme.text2;
+                                vertical-alignment: center;
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Keycap { key: "Ctrl"; }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Keycap { key: "K"; }
+                            }
+                        }
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                if root.primary != "" && self.mouse-x < parent.width / 2 {
+                                    root.submit();
+                                } else {
+                                    actions.show();
+                                }
+                            }
+                        }
+                        actions := PopupWindow {
+                            x: parent.width - 260px;
+                            y: -178px;
+                            width: 260px;
+                            close-policy: close-on-click-outside;
+                            Rectangle {
+                                border-radius: 12px;
+                                background: Theme.pop;
+                                border-width: 1px;
+                                border-color: Theme.pop-edge;
+                                drop-shadow-blur: 24px;
+                                drop-shadow-offset-y: 10px;
+                                drop-shadow-color: Theme.pop-shadow;
+                                VerticalLayout {
+                                    padding: 6px;
+                                    ActionItem {
+                                        text: @tr("Ayar dosyasını aç");
+                                        glyph: "\u{E8A5}";
+                                        clicked => { Store.action("file"); actions.close(); }
+                                    }
+                                    ActionItem {
+                                        text: @tr("Günlüğü aç");
+                                        glyph: "\u{E9F9}";
+                                        clicked => { Store.action("log"); actions.close(); }
+                                    }
+                                    ActionItem {
+                                        text: @tr("Son silineni geri al");
+                                        glyph: "\u{E7A7}";
+                                        clicked => { Store.undo-remove(); actions.close(); }
+                                    }
+                                    ActionItem {
+                                        text: @tr("Varsayılanlara dön…");
+                                        glyph: "\u{E72C}";
+                                        danger: true;
+                                        clicked => { Ui.dialog = true; actions.close(); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ------------------------------------------------ the inspector
+            Rectangle {
+                width: 316px;
+                background: Theme.insp;
+                Rectangle {
+                    x: 0px;
+                    width: 1px;
+                    background: Theme.insp-edge;
+                }
+                DragArea {
+                    height: 58px;
+                    y: 0px;
+                }
+                VerticalLayout {
+                    HorizontalLayout {
+                        height: 58px;
+                        padding-left: 20px;
+                        padding-right: 6px;
+                        spacing: 4px;
+                        cross-axis-alignment: center;
+                        // The page's name and the undo / file pill right after it take what the caption buttons
+                        // leave: a long name elides, a short one leaves the room after the pill. The caption
+                        // buttons keep the same place on every page. 88 px are left for the name, the longest
+                        // (Galaxy Buds) is 86.
+                        HorizontalLayout {
+                            horizontal-stretch: 1;
+                            alignment: start;
+                            spacing: 8px;
+                            cross-axis-alignment: center;
+                            Text {
+                                text: Store.page == 0 ? @tr("Görünüm") : Store.page == 1 ? @tr("Genel") : Store.page == 2 ? @tr("Medya") : Store.page == 3 ? @tr("Zamanlayıcı")
+                                    : Store.page == 4 ? "Galaxy Buds" : Store.page == 5 ? @tr("Canlı maç") : Store.page == 6 ? @tr("Tam ekran") : Store.page == 7 ? @tr("Hakkında") : Store.page == 9 ? @tr("Oyunlar") : Store.page == 10 ? @tr("Dijital Denge") : @tr("Sistem");
+                                font-size: 14.5px;
+                                font-weight: 600;
+                                color: Theme.strong;
+                                vertical-alignment: center;
+                                overflow: elide;
+                                // Shrinks first when the name doesn't fit (the pill can't).
+                                horizontal-stretch: 1;
+                            }
+                            // Its buttons 3 px inside all round.
+                            Rectangle {
+                                height: 36px;
+                                width: 66px;
+                                border-radius: 18px;
+                                border-width: 1px;
+                                border-color: Theme.pv-edge;
+                                HorizontalLayout {
+                                    padding-left: 3px;
+                                    padding-right: 3px;
+                                    alignment: center;
+                                    VerticalLayout {
+                                        alignment: center;
+                                        IconButton {
+                                            glyph: "\u{E7A7}";
+                                            clicked => { Store.undo-remove(); }
+                                        }
+                                    }
+                                    VerticalLayout {
+                                        alignment: center;
+                                        IconButton {
+                                            glyph: "\u{E8A5}";
+                                            clicked => { Store.action("file"); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            horizontal-stretch: 0;
+                            HorizontalLayout {
+                                spacing: 2px;
+                                CaptionButton {
+                                    glyph: "\u{E921}";
+                                    clicked => { Ui.minimize-window(); }
+                                }
+                                CaptionButton {
+                                    glyph: Ui.maximized ? "\u{E923}" : "\u{E922}";
+                                    clicked => { Ui.toggle-maximize(); }
+                                }
+                                CaptionButton {
+                                    glyph: "\u{E8BB}";
+                                    close: true;
+                                    clicked => { Ui.close-window(); }
+                                }
+                            }
+                        }
+                    }
+                    Flickable {
+                        vertical-stretch: 1;
+                        VerticalLayout {
+                            alignment: start;
+                            if Store.page == 0: AppearanceInspector { }
+                            if Store.page == 1: GeneralInspector { }
+                            if Store.page == 2: MediaInspector { }
+                            if Store.page == 3: TimerInspector { }
+                            if Store.page == 4: BudsInspector { }
+                            if Store.page == 5: MatchInspector { }
+                            if Store.page == 6: FullscreenInspector { }
+                            if Store.page == 7: AboutInspector { }
+                            if Store.page == 8: SystemInspector { }
+                            if Store.page == 9: GamesInspector { }
+                            if Store.page == 10: WellbeingInspector { }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------ "Varsayılanlara dön" asks first
+    if Ui.dialog: Rectangle {
+        background: Theme.scrim;
+        TouchArea {
+            clicked => { Ui.dialog = false; }
+        }
+        Rectangle {
+            width: 380px;
+            height: box.preferred-height;
+            border-radius: 16px;
+            background: Theme.pop;
+            border-width: 1px;
+            border-color: Theme.pop-edge;
+            drop-shadow-blur: 30px;
+            drop-shadow-offset-y: 12px;
+            drop-shadow-color: Theme.pop-shadow;
+            TouchArea { }
+            box := VerticalLayout {
+                padding: 22px;
+                spacing: 10px;
+                Text {
+                    text: @tr("Varsayılanlara dönülsün mü?");
+                    font-size: 17px;
+                    font-weight: 600;
+                    color: Theme.strong;
+                }
+                Text {
+                    text: @tr("Bütün ayarlar ilk hallerine döner; takip ettiğin takımlar, gizlediğin uygulamalar ve istisnalar da silinir.");
+                    font-size: 13.5px;
+                    color: Theme.text2;
+                    wrap: word-wrap;
+                }
+                Rectangle { height: 8px; }
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+                    Rectangle {
+                        width: 96px;
+                        height: 34px;
+                        border-radius: 10px;
+                        background: Theme.seg-on;
+                        Text {
+                            text: @tr("Vazgeç");
+                            font-size: 14px;
+                            font-weight: 500;
+                            color: Theme.text;
+                        }
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { Ui.dialog = false; }
+                        }
+                    }
+                    Rectangle {
+                        width: 96px;
+                        height: 34px;
+                        border-radius: 10px;
+                        background: Tags.red.with-alpha(0.22);
+                        Text {
+                            text: @tr("Sıfırla");
+                            font-size: 14px;
+                            font-weight: 600;
+                            color: Theme.danger;
+                        }
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                Ui.dialog = false;
+                                Store.action("reset");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if !Ui.maximized: ResizeEdges { }
+}

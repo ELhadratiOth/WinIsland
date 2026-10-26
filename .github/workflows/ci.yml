@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build EXEs
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build winisland.exe, winisland-settings.exe and winisland-setup.exe
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File tools\make-setup.ps1 -Jobs 4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: winisland-exe
+          path: dist/
+          if-no-files-found: error
+
+  test:
+    name: Tests
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo test
+        run: cargo test --workspace --profile quick

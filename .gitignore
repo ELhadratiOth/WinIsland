@@ -1,0 +1,12 @@
+/target
+/bin
+/dist
+# One machine's notes, and agent tools' working folders.
+/CLAUDE.local.md
+# Working notes for agents and designs: kept on this machine, not on GitHub.
+/CLAUDE.md
+/PRODUCT.md
+/docs/superpowers/
+/.impeccable/
+/.superpowers/
+/.taste-skill/

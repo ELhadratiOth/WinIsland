@@ -1,0 +1,59 @@
+name: Smoke test
+
+# Builds WinIsland, starts it on a Windows desktop with a demo timer, clicks the pill and takes
+# screenshots (uploaded as the smoke-shots artifact, together with the app's log).
+on:
+  workflow_dispatch:
+    inputs:
+      publish_shots:
+        description: Also push the screenshots to the ci-shots branch
+        type: boolean
+        default: false
+      cleanup:
+        description: Only delete the ci-shots branch
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    if: ${{ !inputs.cleanup }}
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --profile quick --bin winisland --bin winisland-settings
+      - name: Run and take screenshots
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File tools\smoke.ps1 -Exe target\quick\winisland.exe -Out shots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-shots
+          path: shots/
+      - name: Push the screenshots to ci-shots
+        if: ${{ always() && inputs.publish_shots }}
+        shell: bash
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          cd shots
+          git init -q
+          git checkout -q -b ci-shots
+          git add .
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -qm "Smoke test screenshots"
+          git push -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ci-shots
+
+  cleanup:
+    if: ${{ inputs.cleanup }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete ci-shots
+        env:
+          TOKEN: ${{ github.token }}
+        run: git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" --delete ci-shots || true

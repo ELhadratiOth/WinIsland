@@ -1,0 +1,2128 @@
+// The nine pages. Each has a preview body (the middle pane: lists are real data, tiles are
+// visual choices, pills are drawn at 1:1) and an inspector (the right pane: one-value settings).
+
+import { Theme, Tags } from "theme.slint";
+import { Store, Item, Team, UsageRow } from "store.slint";
+import { Ui } from "ui-state.slint";
+import { Icon, Toggle, MiniSlider, Seg, Keycap, Tag, IconButton, Select, Swatch, ISection, IRow, H4, LRow, Tile } from "kit.slint";
+import { Pill, Pills, Art } from "pills.slint";
+
+/// Formats for slider values.
+global Fmt {
+    public pure function pct(v: float) -> string { return @tr("%{}", round(v)); }
+    public pure function offset(v: float) -> string {
+        return abs(v) < 1 ? @tr("Ortada") : (v > 0 ? "+" : "−") + round(abs(v));
+    }
+    public pure function seconds(v: float) -> string {
+        let s = round(v);
+        return s < 60 ? @tr("{} sn", s) : Math.mod(s, 60) == 0 ? @tr("{} dk", s / 60) : @tr("{} dk {} sn", floor(s / 60), Math.mod(s, 60));
+    }
+    public pure function minutes(v: float) -> string {
+        let m = round(v);
+        return m == 0 ? @tr("Hemen") : m >= 60 && Math.mod(m, 60) == 0 ? @tr("{} sa", m / 60) : m >= 60 ? @tr("{} sa {} dk", floor(m / 60), Math.mod(m, 60)) : @tr("{} dk", m);
+    }
+}
+
+/// A small button with a label ("Takip et", "Ekle").
+component Small inherits Rectangle {
+    in property <string> text;
+    in property <string> glyph;
+    callback clicked;
+    height: 28px;
+    width: row.preferred-width + 26px;
+    border-radius: 8px;
+    background: t.has-hover ? Theme.seg-on.brighter(20%) : Theme.seg-on;
+    row := HorizontalLayout {
+        x: 12px;
+        width: self.preferred-width;
+        spacing: 6px;
+        if root.glyph != "": Icon {
+            glyph: root.glyph;
+            size: 11px;
+            color: Theme.text;
+        }
+        Text {
+            text: root.text;
+            font-size: 13px;
+            font-weight: 500;
+            color: Theme.text;
+            vertical-alignment: center;
+        }
+    }
+    t := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+/// A row of tiles.
+component Tiles inherits HorizontalLayout {
+    /// A third of the row: every tile takes it, so rows of one, two or three line up.
+    out property <length> tw: (Ui.pane-width - 40px - 24px) / 3;
+    padding-left: 10px;
+    padding-right: 10px;
+    spacing: 12px;
+    alignment: start;
+}
+
+/// Room at the end of a body so its last line clears the action bar.
+component Tail inherits Rectangle {
+    height: 76px;
+}
+
+/// A pill in miniature for the size and button tiles: cover, title bar, buttons.
+component MiniPill inherits Rectangle {
+    in property <length> h: 28px;
+    in property <length> w: 132px;
+    in property <int> buttons: 1;
+    width: w;
+    height: h;
+    border-radius: h / 2;
+    background: #4A1820;
+    HorizontalLayout {
+        padding-left: root.h * 0.16;
+        padding-right: root.h * 0.3;
+        spacing: root.h * 0.22;
+        VerticalLayout {
+            alignment: center;
+            Art {
+                width: root.h * 0.72;
+                height: root.h * 0.72;
+                border-radius: self.width / 2;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            Rectangle {
+                height: max(3px, root.h * 0.14);
+                border-radius: 2px;
+                background: #FFFFFFB3;
+            }
+        }
+        for b in root.buttons: VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: root.h * 0.3;
+                height: root.h * 0.3;
+                border-radius: 2px;
+                background: #FFFFFFE6;
+            }
+        }
+    }
+}
+
+/// A card in miniature (cover, bar, three buttons).
+component MiniCard inherits Rectangle {
+    in property <float> k: 1;
+    width: 74px * k;
+    height: 78px * k;
+    border-radius: 12px * k;
+    background: #2B1015;
+    VerticalLayout {
+        padding: 4px * root.k;
+        spacing: 4px * root.k;
+        Art {
+            border-radius: 8px * root.k;
+            vertical-stretch: 1;
+        }
+        Rectangle {
+            height: 3px;
+            border-radius: 2px;
+            background: #FFFFFF8C;
+        }
+        HorizontalLayout {
+            height: 10px * root.k;
+            alignment: center;
+            spacing: 5px;
+            for d in 3: Rectangle {
+                width: 8px;
+                height: 8px;
+                border-radius: 4px;
+                background: #FFFFFF3D;
+            }
+        }
+    }
+}
+
+/// A window in miniature for the theme tiles.
+component MiniWindow inherits Rectangle {
+    in property <color> ground;
+    in property <color> side;
+    in property <color> panel;
+    in property <color> ink;
+    width: 118px;
+    height: 76px;
+    border-radius: 8px;
+    background: ground;
+    border-width: 1px;
+    border-color: #FFFFFF1A;
+    HorizontalLayout {
+        padding: 6px;
+        spacing: 5px;
+        Rectangle {
+            width: 26px;
+            border-radius: 5px;
+            background: root.side;
+        }
+        Rectangle {
+            border-radius: 5px;
+            background: root.panel;
+            VerticalLayout {
+                padding: 7px;
+                spacing: 5px;
+                alignment: start;
+                for w in [36px, 49px, 27px]: Rectangle {
+                    height: 4px;
+                    width: w;
+                    border-radius: 2px;
+                    background: root.ink;
+                }
+            }
+        }
+    }
+}
+
+// ================================================================== 0 Görünüm
+
+export component AppearanceBody inherits VerticalLayout {
+    alignment: start;
+    H4 {
+        title: @tr("Pil");
+        count: @tr("önde ve arkada");
+    }
+    if Store.media-on: LRow {
+        title: @tr("Medya");
+        sub: @tr("önde");
+        selected: true;
+        Pill {
+            kind: 0;
+            behind1: Store.timer-on ? 1 : -1;
+            behind2: Store.buds-on ? 3 : -1;
+        }
+    }
+    if Store.timer-on: LRow {
+        title: @tr("Zamanlayıcı");
+        sub: Store.media-on ? @tr("arkada") : @tr("önde");
+        selected: !Store.media-on;
+        Pill { kind: 1; }
+    }
+    if Store.buds-on: LRow {
+        title: "Galaxy Buds";
+        sub: @tr("arkada");
+        Pill { kind: 3; }
+    }
+    H4 {
+        title: @tr("Pil boyutu");
+        count: @tr("3 seçenek");
+    }
+    Tiles {
+        for o[i] in [{ t: @tr("Küçük"), s: "176 × 28", h: 22px, w: 104px }, { t: @tr("Normal"), s: "300 × 32", h: 28px, w: 132px }, { t: @tr("Büyük"), s: "338 × 36", h: 34px, w: 158px }]: Tile {
+            width: parent.tw;
+            title: o.t;
+            sub: o.s;
+            selected: Store.pill-size == i;
+            clicked => {
+                Store.pill-size = i;
+                Ui.changed();
+            }
+            MiniPill {
+                h: o.h;
+                w: o.w;
+                buttons: 1;
+            }
+        }
+    }
+    H4 {
+        title: @tr("Kart boyutu");
+        count: @tr("2 seçenek");
+    }
+    Tiles {
+        Tile {
+            width: parent.tw;
+            title: @tr("Kompakt");
+            sub: @tr("bütün kartlar %88");
+            selected: Store.card-size == 0;
+            clicked => {
+                Store.card-size = 0;
+                Ui.changed();
+            }
+            MiniCard { k: 0.78; }
+        }
+        Tile {
+            width: parent.tw;
+            title: @tr("Büyük");
+            sub: "340 × 350";
+            selected: Store.card-size == 1;
+            clicked => {
+                Store.card-size = 1;
+                Ui.changed();
+            }
+            MiniCard { k: 0.92; }
+        }
+    }
+    Tail { }
+}
+
+export component AppearanceInspector inherits VerticalLayout {
+    alignment: start;
+    ISection {
+        title: @tr("Pil");
+        first: true;
+        IRow {
+            label: @tr("Konum");
+            MiniSlider {
+                value <=> Store.pill-offset;
+                minimum: -200;
+                maximum: 200;
+                step: 2;
+                centred: true;
+                text: Fmt.offset(Store.pill-offset);
+                moved => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Opaklık");
+            MiniSlider {
+                value <=> Store.pill-opacity;
+                minimum: 70;
+                maximum: 100;
+                text: Fmt.pct(Store.pill-opacity);
+                moved => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Arkadakileri göster");
+            Toggle {
+                checked <=> Store.pill-slivers;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Renk");
+        IRow {
+            label: @tr("Duvar kâğıdından");
+            note: !Store.wallpaper-accent ? @tr("Kapalı") : Store.wallpaper-found ? @tr("Vurgu duvar kâğıdının renginde") : @tr("Duvar kâğıdı gri: seçtiğin renk");
+            Toggle {
+                checked <=> Store.wallpaper-accent;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Vurgu rengi");
+            note: Store.wallpaper-accent && Store.wallpaper-found ? @tr("Seçince duvar kâğıdı kapanır") : "";
+            Swatch {
+                hex <=> Store.accent;
+                value: Store.accent-color;
+                presets: [#5D57D2, #3579FF, #2FBF71, #FF8A3D, #F2557A, #14A3B8, #F4A301, #8E8E93];
+                preset-hex: ["#5D57D2", "#3579FF", "#2FBF71", "#FF8A3D", "#F2557A", "#14A3B8", "#F4A301", "#8E8E93"];
+                valid(t) => { return Store.hex-ok(t); }
+                // A colour picked by hand is the one wanted: the wallpaper's gives way.
+                picked => {
+                    Store.wallpaper-accent = false;
+                    Ui.changed();
+                }
+            }
+        }
+        IRow {
+            label: @tr("Kapak rengini kullan");
+            Toggle {
+                checked <=> Store.cover-color;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Kart");
+        IRow {
+            label: @tr("Bulanıklık");
+            note: Store.blur-available ? "" : @tr("Windows 11 gerekir");
+            Toggle {
+                checked <=> Store.card-blur;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Koyuluk");
+            MiniSlider {
+                value <=> Store.darkness;
+                minimum: 10;
+                maximum: 60;
+                step: 5;
+                text: Fmt.pct(Store.darkness);
+                moved => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Doygunluk");
+            MiniSlider {
+                value <=> Store.saturation;
+                minimum: 100;
+                maximum: 250;
+                step: 10;
+                text: Fmt.pct(Store.saturation);
+                moved => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Hareket");
+        IRow {
+            label: @tr("Animasyon hızı");
+            Select {
+                options: [@tr("Kapalı"), @tr("Yavaş"), @tr("Normal"), @tr("Hızlı")];
+                selected <=> Store.speed;
+                box-width: 110px;
+                picked => { Ui.changed(); }
+            }
+        }
+    }
+}
+
+// ================================================================== 1 Genel
+
+global Keys {
+    public pure function of(i: int, n: int) -> string {
+        // Win+Alt+N, Win+Alt+T, Ctrl+Alt+N, Win+Shift+N
+        if (n == 0) { return i == 2 ? "Ctrl" : "Win"; }
+        if (n == 1) { return i == 3 ? "Shift" : "Alt"; }
+        return i == 1 ? "T" : "N";
+    }
+}
+
+export component GeneralBody inherits VerticalLayout {
+    alignment: start;
+    H4 {
+        title: @tr("Kısayollar");
+        count: @tr("1 kısayol");
+    }
+    LRow {
+        title: @tr("Zamanlayıcı seçicisi");
+        sub: @tr("seçiciyi açar");
+        selected: true;
+        lead: 1;
+        glyph: "\u{E765}";
+        if Store.hotkey < 4: HorizontalLayout {
+            spacing: 4px;
+            Keycap { key: Keys.of(Store.hotkey, 0); size: 26px; }
+            Keycap { key: Keys.of(Store.hotkey, 1); size: 26px; }
+            Keycap { key: Keys.of(Store.hotkey, 2); size: 26px; }
+        }
+        if Store.hotkey == 4: Tag { text: @tr("Kapalı"); }
+    }
+    LRow {
+        title: @tr("Tepsi simgesi");
+        sub: @tr("sol tık");
+        lead: 1;
+        glyph: "\u{E7C4}";
+        Tag { text: Store.tray-click == 0 ? @tr("Seçiciyi açar") : @tr("Ayarları açar"); }
+    }
+    H4 {
+        title: @tr("Bu pencere");
+        count: @tr("3 tema");
+    }
+    Tiles {
+        Tile {
+            width: parent.tw;
+            title: @tr("Sistem");
+            sub: @tr("Windows'a uyar");
+            selected: Store.theme == 0;
+            clicked => {
+                Store.theme = 0;
+                Ui.changed();
+            }
+            MiniWindow {
+                ground: #1F1F21;
+                side: #2A2A2A;
+                panel: #F2F2F3;
+                ink: #9C978F;
+            }
+        }
+        Tile {
+            width: parent.tw;
+            title: @tr("Koyu");
+            sub: @tr("her zaman koyu");
+            selected: Store.theme == 1;
+            clicked => {
+                Store.theme = 1;
+                Ui.changed();
+            }
+            MiniWindow {
+                ground: #141416;
+                side: #262626;
+                panel: #1E1E1E;
+                ink: #9C978F;
+            }
+        }
+        Tile {
+            width: parent.tw;
+            title: @tr("tema" => "Açık");
+            sub: @tr("her zaman açık");
+            selected: Store.theme == 2;
+            clicked => {
+                Store.theme = 2;
+                Ui.changed();
+            }
+            MiniWindow {
+                ground: #ECECEE;
+                side: #DADADC;
+                panel: #FFFFFF;
+                ink: #B5B0A8;
+            }
+        }
+    }
+    Tail { }
+}
+
+export component GeneralInspector inherits VerticalLayout {
+    alignment: start;
+    ISection {
+        title: @tr("Başlangıç");
+        first: true;
+        IRow {
+            label: @tr("Windows ile başlat");
+            Toggle {
+                checked <=> Store.autostart;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Kısayol ve tepsi");
+        IRow {
+            label: @tr("Seçici kısayolu");
+            Select {
+                options: ["Win + Alt + N", "Win + Alt + T", "Ctrl + Alt + N", "Win + Shift + N", @tr("Kapalı")];
+                selected <=> Store.hotkey;
+                box-width: 142px;
+                picked => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Tepsiye sol tık");
+            Select {
+                options: [@tr("Seçici"), @tr("Ayarlar")];
+                selected <=> Store.tray-click;
+                box-width: 110px;
+                picked => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Fare");
+        IRow {
+            label: @tr("Ayrılınca kartı kapat");
+            Toggle {
+                checked <=> Store.close-on-leave;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Gecikme");
+            MiniSlider {
+                value <=> Store.leave-ms;
+                minimum: 200;
+                maximum: 3000;
+                step: 100;
+                enabled: Store.close-on-leave;
+                text: round(Store.leave-ms) + @tr(" ms");
+                moved => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Tekerlek gezer");
+            note: @tr("Pilin ve kartın üstünde");
+            Toggle {
+                checked <=> Store.wheel-switches;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Seçtiğim önde kalsın");
+            note: @tr("Yeni bir şey olana dek");
+            Toggle {
+                checked <=> Store.keep-user-front;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+}
+
+// ================================================================== 2 Medya
+
+export component MediaBody inherits VerticalLayout {
+    alignment: start;
+    H4 {
+        title: @tr("Uygulamalar");
+        count: Store.apps.length + @tr(" uygulama · tıkla: göster / gizle");
+    }
+    if Store.apps.length == 0: LRow {
+        title: @tr("Henüz uygulama yok");
+        sub: @tr("bir şey çalınca burada görünür");
+        lead: 1;
+        glyph: "\u{E8D6}";
+    }
+    for app[i] in Store.apps: LRow {
+        title: app.name;
+        sub: app.current ? @tr("şu an çalıyor") : "";
+        selected: app.current;
+        clickable: true;
+        lead: 3;
+        letter: app.letter;
+        badge: app.tint;
+        clicked => {
+            Store.item-toggled("apps", app.id, !app.shown);
+            Ui.changed();
+        }
+        Tag {
+            text: app.shown ? @tr("Gösteriliyor") : @tr("Gizli");
+            tint: app.shown ? Tags.green : Tags.red;
+        }
+    }
+    H4 {
+        title: @tr("Pil düğmeleri");
+        count: @tr("3 seçenek");
+    }
+    Tiles {
+        for o[i] in [{ t: @tr("Üç düğme"), s: @tr("önceki, oynat, sonraki"), n: 3 }, { t: @tr("Sadece oynat"), s: @tr("başlığa daha çok yer"), n: 1 }, { t: @tr("Düğmesiz"), s: @tr("yalnızca başlık"), n: 0 }]: Tile {
+            width: parent.tw;
+            title: o.t;
+            sub: o.s;
+            selected: Store.pill-buttons == i;
+            clicked => {
+                Store.pill-buttons = i;
+                Ui.changed();
+            }
+            MiniPill {
+                h: 28px;
+                w: 132px;
+                buttons: o.n;
+            }
+        }
+    }
+    H4 {
+        title: @tr("Medya pili");
+        count: @tr("şu anki ayarlarla");
+    }
+    LRow {
+        title: @tr("Örnek");
+        sub: Store.pill-artist ? @tr("sanatçıyla") : @tr("sanatçısız");
+        lead: 4;
+        Pill { kind: 0; }
+    }
+    Tail { }
+}
+
+export component MediaInspector inherits VerticalLayout {
+    alignment: start;
+    ISection {
+        title: @tr("Etkinlik");
+        first: true;
+        IRow {
+            label: @tr("Medya");
+            Toggle {
+                checked <=> Store.media-on;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Pil");
+        IRow {
+            label: @tr("Sanatçıyı göster");
+            Toggle {
+                checked <=> Store.pill-artist;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Ses dalgası");
+            note: @tr("Kapağın yanında, sesle oynar");
+            Toggle {
+                checked <=> Store.media-waveform;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Kayan başlık");
+            Select {
+                options: [@tr("Değişince"), @tr("Üstündeyken"), @tr("Kapalı")];
+                selected <=> Store.marquee;
+                box-width: 124px;
+                picked => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Kayma hızı");
+            MiniSlider {
+                value <=> Store.marquee-speed;
+                minimum: 15;
+                maximum: 60;
+                step: 5;
+                enabled: Store.marquee != 2;
+                text: round(Store.marquee-speed);
+                moved => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Kart");
+        IRow {
+            label: @tr("Dalgalı çubuk");
+            Toggle {
+                checked <=> Store.card-wave;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Şarkı sözleri");
+            note: @tr("Eşzamanlı, lrclib.net'ten");
+            Toggle {
+                checked <=> Store.media-lyrics;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Orta tıkla oynat");
+            Toggle {
+                checked <=> Store.middle-click;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Duraklayınca kal");
+            Select {
+                options: [@tr("1 dk"), @tr("5 dk"), @tr("10 dk"), @tr("30 dk"), @tr("Hep")];
+                selected <=> Store.paused-keep;
+                box-width: 84px;
+                picked => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Ses çıkışları");
+        for d in Store.devices: IRow {
+            label: d.name;
+            if d.current: Tag {
+                text: @tr("Kullanılıyor");
+                tint: Tags.yellow;
+                small: true;
+            }
+            if !d.current: Toggle {
+                checked: d.shown;
+                toggled(v) => {
+                    Store.item-toggled("devices", d.id, v);
+                    Ui.changed();
+                }
+            }
+        }
+    }
+}
+
+// ================================================================== 3 Zamanlayıcı
+
+export component TimerBody inherits VerticalLayout {
+    alignment: start;
+    H4 {
+        title: @tr("Pilde");
+        count: @tr("şu anki ayarlarla");
+    }
+    LRow {
+        title: @tr("Zamanlayıcı");
+        sub: Store.timer-on ? @tr("örnek") : @tr("kapalı");
+        selected: true;
+        Pill { kind: 1; }
+    }
+    LRow {
+        title: @tr("Kronometre");
+        sub: Store.stopwatch-on ? @tr("örnek") : @tr("kapalı");
+        Pill { kind: 2; }
+    }
+    H4 {
+        title: @tr("Hazır süreler");
+        count: Store.presets.length + @tr(" süre · en çok altı");
+    }
+    // Three tiles a row, placed by hand (hidden elements would still take room in a layout).
+    property <length> tw: (self.width - 20px - 24px) / 3;
+    property <length> th: 110px + 52px;
+    property <int> n: Store.presets.length + (Store.presets.length < 6 ? 1 : 0);
+    Rectangle {
+        height: Math.ceil(root.n / 3) * (root.th + 12px) - 12px;
+        for m[i] in Store.presets: Tile {
+            x: 10px + Math.mod(i, 3) * (root.tw + 12px);
+            y: Math.floor(i / 3) * (root.th + 12px);
+            width: root.tw;
+            height: self.preferred-height;
+            title: m + @tr(" dakika");
+            sub: @tr("seçicide");
+            clickable: false;
+            picture-height: 110px;
+            Text {
+                text: m;
+                font-size: 46px;
+                font-weight: 700;
+                color: Theme.text;
+            }
+            if Store.presets.length > 1: IconButton {
+                x: parent.width - 34px;
+                y: 4px;
+                glyph: "\u{E711}";
+                clicked => { Store.preset-removed(i); }
+            }
+        }
+        if Store.presets.length < 6: Tile {
+            x: 10px + Math.mod(Store.presets.length, 3) * (root.tw + 12px);
+            y: Math.floor(Store.presets.length / 3) * (root.th + 12px);
+            width: root.tw;
+            height: self.preferred-height;
+            title: @tr("Süre ekle");
+            sub: @tr("dakika yaz, Enter");
+            clickable: false;
+            picture-height: 110px;
+            Rectangle {
+                width: 96px;
+                height: 40px;
+                border-radius: 10px;
+                background: Theme.field;
+                border-width: 1px;
+                border-color: add.has-focus ? Theme.acc : Theme.field-edge;
+                add := TextInput {
+                    width: parent.width - 20px;
+                    font-size: 18px;
+                    font-weight: 600;
+                    color: Theme.text;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    single-line: true;
+                    accepted => {
+                        let m = self.text.to-float();
+                        if m >= 1 && m <= 180 {
+                            Store.preset-set(-1, round(m));
+                            self.text = "";
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Tail { }
+}
+
+export component TimerInspector inherits VerticalLayout {
+    alignment: start;
+    ISection {
+        title: @tr("Etkinlik");
+        first: true;
+        IRow {
+            label: @tr("Zamanlayıcı");
+            Toggle {
+                checked <=> Store.timer-on;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Kronometre");
+            Toggle {
+                checked <=> Store.stopwatch-on;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Süre dolunca");
+        IRow {
+            label: @tr("Alarm sesi");
+            HorizontalLayout {
+                spacing: 4px;
+                IconButton {
+                    glyph: "\u{E768}";
+                    clicked => { Store.preview-sound(Store.sound); }
+                }
+                Select {
+                    options: Store.sounds;
+                    current-text: Store.sound;
+                    box-width: 112px;
+                    picked(i) => {
+                        Store.sound = Store.sounds[i];
+                        Ui.changed();
+                    }
+                }
+            }
+        }
+        IRow {
+            label: @tr("Kartı aç");
+            Toggle {
+                checked <=> Store.done-card;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Ekle düğmesi");
+            Seg {
+                options: ["+1", "+5", "+10"];
+                selected <=> Store.add-minutes;
+                picked => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Kronometre");
+        IRow {
+            label: @tr("Saliseyi göster");
+            Toggle {
+                checked <=> Store.tenths;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+}
+
+// ================================================================== 4 Galaxy Buds
+
+export component BudsBody inherits VerticalLayout {
+    alignment: start;
+    H4 {
+        title: @tr("Pilde");
+        count: @tr("şu anki ayarlarla");
+    }
+    LRow {
+        title: "Galaxy Buds";
+        sub: Store.buds-on ? @tr("örnek") : @tr("kapalı");
+        selected: true;
+        lead: 1;
+        glyph: "\u{E7F6}";
+        Pill { kind: 3; }
+    }
+    H4 {
+        title: @tr("Bağlanınca öne gel");
+        count: @tr("4 seçenek");
+    }
+    Tiles {
+        for o[i] in [{ n: "—", s: @tr("öne gelmez") }, { n: "5", s: @tr("saniye önde") }, { n: "15", s: @tr("saniye önde") }, { n: "30", s: @tr("saniye önde") }]: Tile {
+            width: (Ui.pane-width - 40px - 36px) / 4;
+            title: i == 0 ? @tr("Hayır") : o.n + @tr(" sn");
+            sub: o.s;
+            selected: Store.buds-front == i;
+            picture-height: 110px;
+            clicked => {
+                Store.buds-front = i;
+                Ui.changed();
+            }
+            Text {
+                text: o.n;
+                font-size: 42px;
+                font-weight: 700;
+                color: Theme.text;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+    Tail { }
+}
+
+export component BudsInspector inherits VerticalLayout {
+    alignment: start;
+    ISection {
+        title: @tr("Etkinlik");
+        first: true;
+        IRow {
+            label: "Galaxy Buds";
+            Toggle {
+                checked <=> Store.buds-on;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Kulaklık");
+            note: Store.buds-device == 0 ? @tr("Bağlanan ilk Buds") : @tr("Yalnız bu cihaz");
+            Select {
+                options: Store.buds-devices;
+                current-text: Store.buds-devices[Store.buds-device];
+                box-width: 140px;
+                picked(i) => { Store.buds-device-picked(i); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Pil uyarısı");
+        IRow {
+            label: @tr("Düşük pil");
+            note: @tr("Altında öne gelir");
+            MiniSlider {
+                value <=> Store.buds-low;
+                minimum: 5;
+                maximum: 50;
+                step: 5;
+                text: Fmt.pct(Store.buds-low);
+                moved => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Pilde");
+        IRow {
+            label: @tr("Kutu pilini göster");
+            note: @tr("Bir kulaklık kutudayken");
+            Toggle {
+                checked <=> Store.buds-case;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Müzik");
+        IRow {
+            label: @tr("Kulaktan çıkınca duraklat");
+            note: @tr("Geri takınca devam eder");
+            Toggle {
+                checked <=> Store.buds-ear-pause;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+}
+
+// ================================================================== 5 Canlı maç
+
+component TeamLead inherits Rectangle {
+    in property <Team> team;
+    width: 22px;
+    height: 22px;
+    border-radius: 11px;
+    background: team.has-crest ? transparent : team.primary;
+    if root.team.has-crest: Image {
+        width: parent.width;
+        height: parent.height;
+        source: root.team.crest;
+        image-fit: contain;
+    }
+    if !root.team.has-crest: Text {
+        text: root.team.abbr;
+        font-size: 8.5px;
+        font-weight: 800;
+        color: root.team.secondary;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+export component MatchBody inherits VerticalLayout {
+    alignment: start;
+    if Ui.query != "": VerticalLayout {
+        H4 {
+            title: @tr("Sonuçlar");
+            count: Store.team-search-state == 1 ? @tr("aranıyor…") : Store.team-search-state == 3 ? @tr("ESPN'e ulaşılamadı") : Store.team-results.length + @tr(" takım · ESPN");
+        }
+        if Store.team-search-state == 2 && Store.team-results.length == 0: LRow {
+            title: @tr("Takım bulunamadı");
+            sub: @tr("başka bir ad dene");
+            lead: 1;
+            glyph: "\u{E721}";
+        }
+        for t[i] in Store.team-results: LRow {
+            title: t.name;
+            sub: t.league;
+            selected: i == 0;
+            clickable: !t.followed;
+            lead: 4;
+            clicked => { Store.team-added(t); }
+            TeamLead { team: t; }
+            if t.followed: Tag {
+                text: @tr("Takipte");
+                tint: Tags.green;
+            }
+            if !t.followed && i == 0: Keycap { key: "↵"; }
+        }
+    }
+    if Ui.query == "": VerticalLayout {
+        H4 {
+            title: @tr("Maç pili");
+            count: @tr("şu anki ayarlarla");
+        }
+        LRow {
+            title: Store.teams.length >= 2 ? Store.teams[0].name + " – " + Store.teams[1].name : @tr("Örnek maç");
+            sub: Store.match-on ? @tr("canlı, örnek") : @tr("kapalı");
+            selected: true;
+            lead: Store.teams[0].has-crest ? 2 : 4;
+            image: Store.teams[0].crest;
+            Tag {
+                text: @tr("Canlı");
+                tint: Tags.red;
+            }
+            Pill {
+                kind: 4;
+                // Out of range reads the default (no crest): the stand-ins then show.
+                home-has: Store.teams[0].has-crest;
+                home-crest: Store.teams[0].crest;
+                home-code: Store.teams.length >= 1 ? Store.teams[0].abbr : "FB";
+                home-tint: Store.teams.length >= 1 ? Store.teams[0].primary : #0B2A6F;
+                home-ink: Store.teams.length >= 1 ? Store.teams[0].secondary : #FFE500;
+                away-has: Store.teams[1].has-crest;
+                away-crest: Store.teams[1].crest;
+                away-code: Store.teams.length >= 2 ? Store.teams[1].abbr : "GS";
+                away-tint: Store.teams.length >= 2 ? Store.teams[1].primary : #A90432;
+                away-ink: Store.teams.length >= 2 ? Store.teams[1].secondary : #FDB912;
+            }
+        }
+        H4 {
+            title: @tr("Takip ettiklerin");
+            count: Store.teams.length + @tr(" takım");
+        }
+        Rectangle {
+            property <length> tw: (self.width - 20px - 24px) / 3;
+            property <length> th: 140px + 52px;
+            height: Math.ceil((Store.teams.length + 1) / 3) * (self.th + 12px) - 12px;
+            for t[i] in Store.teams: Tile {
+                x: 10px + Math.mod(i, 3) * (parent.tw + 12px);
+                y: Math.floor(i / 3) * (parent.th + 12px);
+                width: parent.tw;
+                height: self.preferred-height;
+                title: t.name;
+                sub: t.league;
+                clickable: false;
+                fill: @radial-gradient(circle, t.primary.with-alpha(0.55) 0%, Theme.tile 70%);
+                if t.has-crest: Image {
+                    width: 64px;
+                    height: 64px;
+                    source: t.crest;
+                    image-fit: contain;
+                }
+                if !t.has-crest: Rectangle {
+                    width: 64px;
+                    height: 64px;
+                    border-radius: 32px;
+                    background: t.primary;
+                    Text {
+                        text: t.abbr;
+                        font-size: 20px;
+                        font-weight: 800;
+                        color: t.secondary;
+                    }
+                }
+                IconButton {
+                    x: parent.width - 34px;
+                    y: 4px;
+                    glyph: "\u{E711}";
+                    clicked => { Store.team-removed(i); }
+                }
+            }
+            Tile {
+                x: 10px + Math.mod(Store.teams.length, 3) * (parent.tw + 12px);
+                y: Math.floor(Store.teams.length / 3) * (parent.th + 12px);
+                width: parent.tw;
+                height: self.preferred-height;
+                title: @tr("Takım ekle");
+                sub: @tr("yukarıda ara");
+                clicked => { Ui.focus-search(); }
+                Rectangle {
+                    width: 44px;
+                    height: 44px;
+                    border-radius: 22px;
+                    border-width: 1.5px;
+                    border-color: Theme.text3;
+                    Icon {
+                        glyph: "\u{E710}";
+                        size: 14px;
+                        color: Theme.text2;
+                    }
+                }
+            }
+        }
+    }
+    Tail { }
+}
+
+export component MatchInspector inherits VerticalLayout {
+    alignment: start;
+    ISection {
+        title: @tr("Etkinlik");
+        first: true;
+        IRow {
+            label: @tr("Canlı maç");
+            Toggle {
+                checked <=> Store.match-on;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Ne zaman");
+        IRow {
+            label: @tr("Maçtan önce");
+            MiniSlider {
+                value <=> Store.show-before;
+                minimum: 0;
+                maximum: 180;
+                step: 15;
+                text: Store.show-before == 0 ? @tr("Başlayınca") : Fmt.minutes(Store.show-before);
+                moved => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Bitince kalsın");
+            MiniSlider {
+                value <=> Store.keep-after;
+                minimum: 0;
+                maximum: 120;
+                step: 5;
+                text: Fmt.minutes(Store.keep-after);
+                moved => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Anlar");
+        IRow {
+            label: @tr("Rakip golünde de an");
+            note: @tr("Gol olunca pil kısa süre büyür");
+            Toggle {
+                checked <=> Store.opponent-moment;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Gol sesi");
+            note: @tr("Takımın gol atınca");
+            HorizontalLayout {
+                spacing: 4px;
+                IconButton {
+                    glyph: "\u{E768}";
+                    clicked => { Store.preview-sound(Store.goal-sound); }
+                }
+                Select {
+                    options: Store.goal-sounds;
+                    current-text: Store.goal-sound;
+                    box-width: 112px;
+                    picked(i) => {
+                        Store.goal-sound = Store.goal-sounds[i];
+                        Ui.changed();
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ================================================================== 6 Tam ekran
+
+export component FullscreenBody inherits VerticalLayout {
+    alignment: start;
+    H4 {
+        title: @tr("İstisnalar");
+        count: Store.exceptions.length + @tr(" uygulama · tam ekranda da görünür");
+    }
+    if Store.exceptions.length == 0: LRow {
+        title: @tr("Henüz istisna yok");
+        sub: @tr("yukarıya bir uygulama adı yaz");
+        lead: 1;
+        glyph: "\u{E737}";
+    }
+    for e[i] in Store.exceptions: LRow {
+        title: e;
+        sub: "";
+        selected: i == 0;
+        lead: 1;
+        glyph: "\u{E737}";
+        Tag {
+            text: @tr("Görünür");
+            tint: Tags.green;
+        }
+        IconButton {
+            glyph: "\u{E711}";
+            clicked => { Store.exception-removed(i); }
+        }
+    }
+    H4 {
+        title: @tr("Açık uygulamalar");
+        count: @tr("tıkla: istisna yap");
+    }
+    for a in Store.running-apps: LRow {
+        title: a.id;
+        sub: a.name;
+        clickable: true;
+        lead: 1;
+        glyph: "\u{E737}";
+        clicked => { Ui.error = Store.exception-added(a.id); }
+        Small {
+            text: @tr("Ekle");
+            glyph: "\u{E710}";
+            clicked => { Ui.error = Store.exception-added(a.id); }
+        }
+    }
+    Tail { }
+}
+
+export component FullscreenInspector inherits VerticalLayout {
+    alignment: start;
+    ISection {
+        title: @tr("Etkinlik");
+        first: true;
+        IRow {
+            label: @tr("Tam ekranda gizle");
+            note: @tr("Oyun, video ya da sunum açıkken");
+            Toggle {
+                checked <=> Store.fullscreen-hide;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+}
+
+// ================================================================== 7 Hakkında
+
+export component AboutBody inherits VerticalLayout {
+    alignment: start;
+    Rectangle { height: 14px; }
+    Tiles {
+        Tile {
+            width: parent.tw;
+            title: "WinIsland";
+            sub: Store.version;
+            selected: true;
+            clickable: false;
+            // The WinIsland mark, large: a pill with the accent dot.
+            Rectangle {
+                width: 96px;
+                height: 44px;
+                border-radius: 22px;
+                background: Theme.text;
+                Rectangle {
+                    x: 10px;
+                    width: 26px;
+                    height: 26px;
+                    border-radius: 13px;
+                    background: Theme.loader;
+                }
+            }
+        }
+        Tile {
+            width: parent.tw;
+            title: @tr("Maç verileri");
+            sub: @tr("skor, dakika, armalar");
+            clickable: false;
+            Text {
+                text: "ESPN";
+                font-size: 30px;
+                font-weight: 700;
+                color: Theme.text;
+            }
+        }
+        Tile {
+            width: parent.tw;
+            title: @tr("Esin kaynağı");
+            sub: @tr("Samsung'un WinIsland'ı");
+            clickable: false;
+            Text {
+                text: "One UI 9";
+                font-size: 22px;
+                font-weight: 600;
+                color: Theme.text;
+            }
+        }
+    }
+    H4 {
+        title: @tr("Güncelleme");
+        count: Store.update-check ? @tr("günde bir kez GitHub'dan") : @tr("denetim kapalı");
+    }
+    LRow {
+        title: Store.update-ready ? @tr("Güncelle") : @tr("Sürüm");
+        sub: Store.update-line;
+        clickable: Store.update-ready;
+        lead: 1;
+        glyph: "\u{E896}";
+        clicked => { Store.action("update"); }
+        if Store.update-ready: Keycap { key: "↵"; }
+    }
+    H4 {
+        title: @tr("Dosyalar");
+        count: @tr("sorun bildirirken işine yarar");
+    }
+    LRow {
+        title: @tr("Günlük");
+        sub: "%LOCALAPPDATA%\\WinIsland\\log.txt";
+        clickable: true;
+        lead: 1;
+        glyph: "\u{E8A5}";
+        clicked => { Store.action("log"); }
+        Keycap { key: "↵"; }
+    }
+    LRow {
+        title: @tr("Ayar dosyası");
+        sub: "%APPDATA%\\WinIsland\\settings.json";
+        clickable: true;
+        lead: 1;
+        glyph: "\u{E8A5}";
+        clicked => { Store.action("file"); }
+        Keycap { key: "↵"; }
+    }
+    Tail { }
+}
+
+export component AboutInspector inherits VerticalLayout {
+    alignment: start;
+    ISection {
+        title: @tr("Güncelleme");
+        first: true;
+        IRow {
+            label: @tr("Güncellemeleri denetle");
+            note: @tr("Günde bir kez GitHub'a sorar");
+            Toggle {
+                checked <=> Store.update-check;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Sıfırla");
+        Text {
+            text: @tr("Bütün ayarlar ilk hallerine döner; takımlar, gizlenen uygulamalar ve istisnalar da silinir.");
+            font-size: 13px;
+            color: Theme.text2;
+            wrap: word-wrap;
+        }
+        Rectangle { height: 12px; }
+        Rectangle {
+            height: 34px;
+            border-radius: 10px;
+            background: t.has-hover ? Tags.red.with-alpha(0.16) : Tags.red.with-alpha(0.08);
+            border-width: 1px;
+            border-color: Tags.red.with-alpha(0.3);
+            Text {
+                text: @tr("Varsayılanlara dön…");
+                font-size: 14px;
+                font-weight: 500;
+                color: Theme.danger;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            t := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { Ui.dialog = true; }
+            }
+        }
+    }
+}
+
+// ================================================================== 8 Sistem
+
+export component SystemBody inherits VerticalLayout {
+    alignment: start;
+    H4 {
+        title: @tr("Pilde");
+        count: @tr("5 etkinlik · tıkla: aç / kapat");
+    }
+    LRow {
+        title: @tr("Ses seviyesi");
+        sub: Store.volume-moment ? @tr("ses değişince, bir an") : @tr("kapalı");
+        clickable: true;
+        lead: 1;
+        glyph: "\u{E767}";
+        clicked => {
+            Store.volume-moment = !Store.volume-moment;
+            Ui.changed();
+        }
+        Pill {
+            kind: 5;
+            opacity: Store.volume-moment ? 1 : 0.4;
+        }
+    }
+    LRow {
+        title: @tr("Şarj");
+        sub: Store.power-moment ? @tr("takınca ve pil azalınca") : @tr("kapalı");
+        clickable: true;
+        lead: 1;
+        glyph: "\u{EBB3}";
+        clicked => {
+            Store.power-moment = !Store.power-moment;
+            Ui.changed();
+        }
+        Pill {
+            kind: 6;
+            opacity: Store.power-moment ? 1 : 0.4;
+        }
+    }
+    LRow {
+        title: @tr("Mikrofon / kamera");
+        sub: Store.privacy-on ? @tr("kullanılırken") : @tr("kapalı");
+        clickable: true;
+        lead: 1;
+        glyph: "\u{E720}";
+        clicked => {
+            Store.privacy-on = !Store.privacy-on;
+            Ui.changed();
+        }
+        Pill {
+            kind: 7;
+            opacity: Store.privacy-on ? 1 : 0.4;
+        }
+    }
+    LRow {
+        title: @tr("Diğer kulaklıklar");
+        sub: Store.headsets-on ? @tr("Bluetooth, piliyle") : @tr("kapalı");
+        clickable: true;
+        lead: 1;
+        glyph: "\u{E7F6}";
+        clicked => {
+            Store.headsets-on = !Store.headsets-on;
+            Ui.changed();
+        }
+        Pill {
+            kind: 8;
+            opacity: Store.headsets-on ? 1 : 0.4;
+        }
+    }
+    LRow {
+        title: @tr("Saat ve hava");
+        // With a city the weather can also wait at the back of the stack.
+        property <string> when: Store.place-name == "" ? (Store.idle-clock ? @tr("boştayken") : "")
+            : Store.idle-clock && Store.weather-in-stack ? @tr("hep") : Store.idle-clock ? @tr("boştayken") : Store.weather-in-stack ? @tr("yığında") : "";
+        sub: self.when == "" ? @tr("kapalı") : Store.place-name != "" ? self.when + " · " + Store.place-name : self.when;
+        clickable: true;
+        lead: 1;
+        glyph: "\u{E121}";
+        clicked => {
+            Store.idle-clock = !Store.idle-clock;
+            Ui.changed();
+        }
+        Pill {
+            kind: 9;
+            weather: Store.place-name != "";
+            opacity: Store.idle-clock || (Store.place-name != "" && Store.weather-in-stack) ? 1 : 0.4;
+        }
+    }
+    H4 {
+        title: @tr("Uygulama bildirimleri");
+        count: Store.api-on ? Store.api-apps.length + @tr(" uygulama · tıkla: izin ver / engelle") : @tr("kapalı");
+    }
+    if Store.api-apps.length == 0: LRow {
+        title: @tr("Henüz uygulama yok");
+        sub: Store.api-on ? @tr("bir uygulama sorunca burada görünür") : @tr("sağdan aç");
+        lead: 1;
+        glyph: "\u{EA8F}";
+    }
+    for app in Store.api-apps: LRow {
+        title: app.name;
+        sub: app.sub;
+        clickable: true;
+        lead: 3;
+        letter: app.letter;
+        badge: app.tint;
+        opacity: Store.api-on ? 1 : 0.4;
+        clicked => { Store.api-app-toggled(app.id, !app.shown); }
+        Tag {
+            text: app.shown ? @tr("İzinli") : @tr("Engelli");
+            tint: app.shown ? Tags.green : Tags.red;
+        }
+        IconButton {
+            glyph: "\u{E711}";
+            clicked => { Store.api-app-forget(app.id); }
+        }
+    }
+    Tail { }
+}
+
+/// The weather's city: a box that searches Open-Meteo on Enter, with up to five places under
+/// it; once one is picked, the city and a clear button.
+component CityPicker inherits VerticalLayout {
+    property <bool> picked: Store.city.name != "";
+    // Still editable with the clock and the stack both off, only dimmed.
+    opacity: Store.idle-clock || Store.weather-in-stack ? 1 : 0.4;
+    IRow {
+        label: @tr("Şehir");
+        note: root.picked ? "" : Store.city-search-state == 1 ? @tr("Aranıyor…") : Store.city-search-state == 3 ? @tr("Bağlantı kurulamadı")
+            : Store.city-search-state == 2 && Store.city-results.length == 0 ? @tr("Bulunamadı") : Store.city-search-state == 2 ? @tr("Birini seç") : @tr("Ad yaz, Enter");
+        if root.picked: HorizontalLayout {
+            spacing: 2px;
+            HorizontalLayout {
+                spacing: 5px;
+                Text {
+                    max-width: 120px;
+                    text: Store.city.name;
+                    font-size: 14px;
+                    font-weight: 500;
+                    color: Theme.strong;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                Text {
+                    max-width: 66px;
+                    text: "· " + Store.city.country;
+                    font-size: 14px;
+                    color: Theme.text2;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+            IconButton {
+                glyph: "\u{E711}";
+                clicked => {
+                    Store.city = { name: "", country: "", lat: "", lon: "" };
+                    Store.city-search("");
+                    Ui.changed();
+                }
+            }
+        }
+        if !root.picked: Rectangle {
+            width: 140px;
+            height: 30px;
+            border-radius: 8px;
+            background: Theme.field;
+            border-width: 1px;
+            border-color: input.has-focus ? Theme.acc : hover.has-hover ? Theme.text3 : Theme.field-edge;
+            hover := TouchArea {
+                mouse-cursor: text;
+                clicked => { input.focus(); }
+            }
+            Icon {
+                x: 9px;
+                width: 12px;
+                height: parent.height;
+                glyph: "\u{E721}";
+                size: 11px;
+                color: Theme.text2;
+            }
+            if input.text == "": Text {
+                x: 27px;
+                width: parent.width - 37px;
+                height: parent.height;
+                text: @tr("İzmir, Berlin…");
+                font-size: 13.5px;
+                color: Theme.text3;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            input := TextInput {
+                x: 27px;
+                width: parent.width - 37px;
+                height: parent.height;
+                font-size: 13.5px;
+                color: Theme.strong;
+                vertical-alignment: center;
+                single-line: true;
+                accepted => { Store.city-search(self.text); }
+                edited => {
+                    if self.text == "" {
+                        Store.city-search("");
+                    }
+                }
+            }
+        }
+    }
+    // The places found, best first; a row's hover reaches into the section's margin.
+    if !root.picked: VerticalLayout {
+        for c in Store.city-results: Rectangle {
+            height: 32px;
+            Rectangle {
+                x: -10px;
+                width: parent.width + 20px;
+                border-radius: 8px;
+                background: pick.has-hover ? Theme.hov : transparent;
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    spacing: 8px;
+                    Icon {
+                        width: 14px;
+                        glyph: "\u{E774}";
+                        size: 12px;
+                        color: Theme.text2;
+                    }
+                    HorizontalLayout {
+                        spacing: 5px;
+                        Text {
+                            text: c.name;
+                            font-size: 14px;
+                            font-weight: 500;
+                            color: Theme.strong;
+                            vertical-alignment: center;
+                            overflow: elide;
+                            horizontal-stretch: 0;
+                        }
+                        Text {
+                            text: "· " + c.country;
+                            font-size: 14px;
+                            color: Theme.text2;
+                            vertical-alignment: center;
+                            overflow: elide;
+                            horizontal-stretch: 1;
+                        }
+                    }
+                }
+                pick := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        Store.city = c;
+                        Store.city-search("");
+                        Ui.changed();
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component SystemInspector inherits VerticalLayout {
+    alignment: start;
+    ISection {
+        title: @tr("Ses seviyesi");
+        first: true;
+        IRow {
+            label: @tr("Ses seviyesini göster");
+            note: @tr("Ses değişince kısa bir an pilde");
+            Toggle {
+                checked <=> Store.volume-moment;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Şarj");
+        IRow {
+            label: @tr("Şarjı göster");
+            note: @tr("Takınca ve pil azalınca bir an");
+            Toggle {
+                checked <=> Store.power-moment;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Düşük pil");
+            note: @tr("Altına inince uyarır");
+            MiniSlider {
+                value <=> Store.power-low;
+                minimum: 5;
+                maximum: 50;
+                step: 5;
+                enabled: Store.power-moment;
+                text: Fmt.pct(Store.power-low);
+                moved => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Mikrofon / kamera");
+        IRow {
+            label: @tr("Kullanımı göster");
+            note: @tr("Bir uygulama kullanırken pilde");
+            Toggle {
+                checked <=> Store.privacy-on;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Diğer kulaklıklar");
+        IRow {
+            label: @tr("Kulaklıkları göster");
+            note: @tr("Galaxy Buds dışındakiler, piliyle");
+            Toggle {
+                checked <=> Store.headsets-on;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Ekran görüntüleri");
+        IRow {
+            label: @tr("Pilde göster");
+            note: @tr("ShareX ve Ekran Alıntısı Aracı");
+            Toggle {
+                checked <=> Store.capture-moment;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Rafa ekle");
+            note: @tr("Sonra sürükleyip atmak için");
+            Toggle {
+                checked <=> Store.capture-to-shelf;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Canlı etkinlikler");
+        IRow {
+            label: @tr("Canlı etkinlikler");
+            note: @tr("Betikler ve Claude Code pilde");
+            Toggle {
+                checked <=> Store.live-on;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Claude izinleri");
+            note: @tr("Kartta İzin ver / Reddet");
+            Toggle {
+                checked <=> Store.claude-ask;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Bekleme");
+            note: @tr("Sonra Claude sorar");
+            MiniSlider {
+                value <=> Store.claude-ask-wait;
+                minimum: 10;
+                maximum: 300;
+                step: 5;
+                text: Fmt.seconds(Store.claude-ask-wait);
+                moved => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Uygulama bildirimleri");
+        IRow {
+            label: @tr("Uygulama bildirimleri");
+            note: Store.api-address;
+            Toggle {
+                checked <=> Store.api-on;
+                toggled => { Ui.changed(); }
+            }
+        }
+        Text {
+            text: @tr("Açıkken, izin verdiğin uygulamalar pilde bildirim gösterebilir. Hangi uygulamalara izin verdiğin ve gösterdikleri senin sorumluluğunda; WinIsland yalnızca gösterir.");
+            font-size: 13px;
+            color: Theme.text2;
+            wrap: word-wrap;
+        }
+        Rectangle { height: 8px; }
+    }
+    ISection {
+        title: "Now Brief";
+        IRow {
+            label: @tr("Sabah aç");
+            note: @tr("Günün ilk kilit açılışında");
+            Toggle {
+                checked <=> Store.brief-morning;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Adın");
+            note: @tr("Selamlamada");
+            // The city box's look, without its icon.
+            Rectangle {
+                width: 140px;
+                height: 30px;
+                border-radius: 8px;
+                background: Theme.field;
+                border-width: 1px;
+                border-color: name.has-focus ? Theme.acc : name-hover.has-hover ? Theme.text3 : Theme.field-edge;
+                name-hover := TouchArea {
+                    mouse-cursor: text;
+                    clicked => { name.focus(); }
+                }
+                if name.text == "": Text {
+                    x: 10px;
+                    width: parent.width - 20px;
+                    height: parent.height;
+                    text: Store.windows-name != "" ? Store.windows-name : @tr("Ad");
+                    font-size: 13.5px;
+                    color: Theme.text3;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                name := TextInput {
+                    x: 10px;
+                    width: parent.width - 20px;
+                    height: parent.height;
+                    font-size: 13.5px;
+                    color: Theme.strong;
+                    vertical-alignment: center;
+                    single-line: true;
+                    text <=> Store.brief-name;
+                    edited => { Ui.changed(); }
+                }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Saat ve hava");
+        IRow {
+            label: @tr("Boşta göster");
+            note: @tr("Etkinlik yokken pil gizlenmez");
+            Toggle {
+                checked <=> Store.idle-clock;
+                toggled => { Ui.changed(); }
+            }
+        }
+        // These two act on a place's weather: dimmed until there is one.
+        IRow {
+            opacity: Store.place-name != "" ? 1 : 0.4;
+            label: @tr("Hep göster");
+            note: @tr("Diğerlerinin arkasında, yığında");
+            Toggle {
+                checked <=> Store.weather-in-stack;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            opacity: Store.place-name != "" ? 1 : 0.4;
+            label: @tr("Hava efektleri");
+            note: @tr("Kar, yağmur, güneş, yıldız");
+            Toggle {
+                checked <=> Store.weather-effects;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Konumumu kullan");
+            note: Store.city.name != "" ? @tr("Seçili şehir öncelikli") : Store.weather-locate ? Store.located : @tr("Kapalı");
+            Toggle {
+                checked <=> Store.weather-locate;
+                toggled => { Ui.changed(); }
+            }
+        }
+        CityPicker { }
+        IRow {
+            label: @tr("Yağmur uyarısı");
+            note: Store.place-name != "" ? @tr("Başlamadan önce bir an") : @tr("Bir şehir seç");
+            Toggle {
+                checked <=> Store.rain-moment;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Hava uyarıları");
+            note: Store.place-name != "" ? @tr("Fırtına, rüzgâr, sıcak, don, hava kalitesi") : @tr("Bir şehir seç");
+            Toggle {
+                checked <=> Store.weather-alerts;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+}
+
+// ================================================================== 9 Oyunlar
+
+export component GamesBody inherits VerticalLayout {
+    alignment: start;
+    H4 {
+        title: @tr("Pilde");
+        count: @tr("2 an · tıkla: aç / kapat");
+    }
+    LRow {
+        title: @tr("İndirmeler");
+        sub: Store.games-downloads ? @tr("ilerleme, hız") : @tr("kapalı");
+        clickable: true;
+        lead: 1;
+        glyph: "\u{E896}";
+        clicked => {
+            Store.games-downloads = !Store.games-downloads;
+            Ui.changed();
+        }
+        Pill {
+            kind: 10;
+            opacity: Store.games-downloads ? 1 : 0.4;
+        }
+    }
+    LRow {
+        title: @tr("Oyun süresi");
+        sub: Store.games-playtime ? @tr("oynarken ve sonra") : @tr("kapalı");
+        clickable: true;
+        lead: 1;
+        glyph: "\u{E823}";
+        clicked => {
+            Store.games-playtime = !Store.games-playtime;
+            Ui.changed();
+        }
+        Pill {
+            kind: 11;
+            opacity: Store.games-playtime ? 1 : 0.4;
+        }
+    }
+    H4 {
+        title: @tr("Kütüphaneler");
+        count: @tr("bu bilgisayarda");
+    }
+    LRow {
+        title: "Steam";
+        sub: !Store.games-steam ? @tr("kapalı") : Store.steam-library != "" ? Store.steam-library : @tr("bulunamadı");
+        clickable: true;
+        lead: 3;
+        letter: "S";
+        badge: #1B2838;
+        badge-text: #66C0F4;
+        clicked => {
+            Store.games-steam = !Store.games-steam;
+            Ui.changed();
+        }
+    }
+    LRow {
+        title: "Epic Games";
+        sub: !Store.games-epic ? @tr("kapalı") : Store.epic-library != "" ? Store.epic-library : @tr("bulunamadı");
+        clickable: true;
+        lead: 3;
+        letter: "E";
+        badge: #2A2A2A;
+        badge-text: white;
+        clicked => {
+            Store.games-epic = !Store.games-epic;
+            Ui.changed();
+        }
+    }
+    Tail { }
+}
+
+export component GamesInspector inherits VerticalLayout {
+    alignment: start;
+    ISection {
+        title: @tr("Mağazalar");
+        first: true;
+        IRow {
+            label: "Steam";
+            note: @tr("Kayıt defteri ve kütüphane dosyaları");
+            Toggle {
+                checked <=> Store.games-steam;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: "Epic Games";
+            note: @tr("Yeni Epic launcher'ın klasörü");
+            Toggle {
+                checked <=> Store.games-epic;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Pilde");
+        IRow {
+            label: @tr("İndirmeler");
+            note: @tr("İlerleme, hız ve duraklatma");
+            Toggle {
+                checked <=> Store.games-downloads;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Oyun süresi");
+            note: @tr("Tam ekran değilken pilde");
+            Toggle {
+                checked <=> Store.games-playtime;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Tam ekran");
+        IRow {
+            label: @tr("Oyun içi ada");
+            note: @tr("Acil anlar üstte, tıklamayı geçirir");
+            Toggle {
+                checked <=> Store.island-on;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+}
+
+// ================================================================== 10 Dijital Denge
+
+export component WellbeingBody inherits VerticalLayout {
+    alignment: start;
+    H4 {
+        title: @tr("Bugün");
+        count: Store.usage-total;
+    }
+    if Store.usage-apps.length == 0: LRow {
+        title: @tr("Henüz ekran süresi yok");
+        sub: Store.wellbeing-on ? @tr("uygulamalar öndeyken sayılır") : @tr("kapalı");
+        lead: 1;
+        glyph: "\u{E95E}";
+    }
+    for a in Store.usage-apps: Rectangle {
+        height: 54px;
+        HorizontalLayout {
+            padding-left: 10px;
+            padding-right: 10px;
+            spacing: 16px;
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 1;
+                spacing: 7px;
+                HorizontalLayout {
+                    spacing: 8px;
+                    Text {
+                        text: a.name;
+                        font-size: 14px;
+                        font-weight: 500;
+                        color: Theme.strong;
+                        overflow: elide;
+                        horizontal-stretch: 1;
+                    }
+                    Text {
+                        text: a.time;
+                        font-size: 13px;
+                        color: Theme.text2;
+                        horizontal-stretch: 0;
+                    }
+                }
+                // Its share of the longest app's time, in Dijital Denge's green.
+                Rectangle {
+                    height: 3px;
+                    border-radius: 1.5px;
+                    background: Theme.field;
+                    Rectangle {
+                        x: 0px;
+                        width: max(3px, parent.width * a.share);
+                        border-radius: 1.5px;
+                        background: #2FB37E;
+                    }
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                Select {
+                    options: [@tr("Sınır yok"), @tr("30 dk"), @tr("1 sa"), @tr("2 sa"), @tr("3 sa"), @tr("4 sa")];
+                    selected: a.limit;
+                    box-width: 112px;
+                    picked(i) => { Store.limit-set(a.exe, i); }
+                }
+            }
+        }
+    }
+    Tail { }
+}
+
+export component WellbeingInspector inherits VerticalLayout {
+    alignment: start;
+    ISection {
+        title: @tr("Dijital Denge");
+        first: true;
+        IRow {
+            label: @tr("Ekran süresini say");
+            note: @tr("Bu bilgisayarda kalır, bir hafta");
+            Toggle {
+                checked <=> Store.wellbeing-on;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            opacity: Store.wellbeing-on ? 1 : 0.4;
+            label: @tr("Now Brief'te göster");
+            note: @tr("Dünün ya da bugünün toplamı");
+            Toggle {
+                checked <=> Store.wellbeing-in-brief;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+    ISection {
+        title: @tr("Sınırlar");
+        IRow {
+            opacity: Store.wellbeing-on ? 1 : 0.4;
+            label: @tr("Sınır uyarıları");
+            note: @tr("Sınırı geçince pilde bir an");
+            Toggle {
+                checked <=> Store.wellbeing-limit-moments;
+                toggled => { Ui.changed(); }
+            }
+        }
+    }
+}
