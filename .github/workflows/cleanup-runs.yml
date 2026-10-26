@@ -1,10 +1,10 @@
 name: Clean up old runs
 
-# After every CI, Release or Smoke test run, deletes the older runs: only the newest run of each
+# After every CI, Release, Smoke test or Claude Code check run, deletes the older runs: only the newest run of each
 # workflow stays in the Actions tab.
 on:
   workflow_run:
-    workflows: [CI, Release, Smoke test]
+    workflows: [CI, Release, Smoke test, Claude Code check]
     types: [completed]
   workflow_dispatch:
 
