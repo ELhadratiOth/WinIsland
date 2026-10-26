@@ -33,4 +33,22 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: cargo test
-        run: cargo test --workspace --profile quick
+        shell: pwsh
+        run: |
+          cargo test --workspace --profile quick --no-fail-fast 2>&1 | Tee-Object -FilePath test-output.txt
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            # The failing tests' names, then each one with the first lines of its panic (GitHub keeps
+            # 10 error annotations per step).
+            $text = Get-Content test-output.txt -Raw
+            $names = [regex]::Matches($text, '(?m)^    (\S+)$') | ForEach-Object { $_.Groups[1].Value }
+            Write-Output "::error title=failing tests::$($names -join ', ')"
+            $blocks = [regex]::Matches($text, '(?ms)^---- (\S+) stdout ----\r?\n(.*?)(?=^---- |^failures:)')
+            foreach ($b in $blocks) {
+              $title = $b.Groups[1].Value -replace ':', '%3A' -replace ',', '%2C'
+              $msg = ($b.Groups[2].Value -split "`n" | Select-Object -First 6) -join ' | '
+              $msg = $msg -replace '%', '%25' -replace "`r", ''
+              Write-Output "::error title=$title::$msg"
+            }
+            exit $code
+          }

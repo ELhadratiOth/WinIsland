@@ -101,6 +101,11 @@ function Windows([string]$when) {
     }
 }
 
+# No location prompt over the desktop: the weather doesn't ask Windows where the PC is.
+$settingsDir = Join-Path $env:APPDATA 'WinIsland'
+New-Item -ItemType Directory -Force $settingsDir | Out-Null
+Set-Content -Path (Join-Path $settingsDir 'settings.json') -Value '{"weather_locate": false}' -Encoding ascii
+
 $away = @{ X = $screen.Width - 10; Y = [int]($screen.Height / 2) }
 [Smoke]::SetCursorPos($away.X, $away.Y) | Out-Null
 $app = $null
@@ -127,7 +132,11 @@ if ($app) {
     Click ([int]($screen.Width / 2)) $pillCenterY
     Start-Sleep -Seconds 2
     Shot '03-card-open'
-    Windows 'card open' | Out-Null
+    $open = Windows 'card open'
+    if (-not ($open | Where-Object { $_ -match '^WinIslandCardInput visible' })) {
+        $failures.Add('no card window after clicking the pill')
+        Say 'no card window after clicking the pill'
+    }
 
     [Smoke]::SetCursorPos($away.X, $away.Y) | Out-Null
     Start-Sleep -Seconds 4

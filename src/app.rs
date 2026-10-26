@@ -3307,6 +3307,7 @@ impl App {
     }
 
     fn toggle_card(&mut self, which: OpenCard, by_pointer: bool) -> Result<()> {
+        log(&format!("card: toggle {which:?} while {:?}", self.card_state));
         match self.card_state {
             CardState::Closed => self.open_card(which, by_pointer),
             CardState::Closing => Ok(()),
@@ -3444,6 +3445,7 @@ impl App {
                 self.toggle_card(OpenCard::Activity(ActivityKind::Shelf), true)
             }
             UiEvent::Pill(PillEvent::Click { x }) => {
+                log(&format!("pill: click at {x} ({:?})", self.front_kind()));
                 let button = if self.card_state == CardState::Closed { self.ui.pill.button_at(x) } else { None };
                 match (self.front_kind(), button) {
                     (Some(kind), Some(PillButton::Toggle)) => {
