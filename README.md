@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/readme/hero.png" width="880" alt="The pill showing the playing song, with a music card opened from it; beside it Claude Code, a match, a timer, Galaxy Buds, weather and battery pills">
+<img src="assets/readme/pill.png" width="800" alt="The WinIsland pill at the top centre of the screen, showing a running timer">
 
 # WinIsland
 
@@ -21,8 +21,6 @@ score, what Claude Code is doing. Click the pill and a card opens below it.
 <br>
 
 ## What it shows
-
-<img src="assets/readme/pills.png" width="880" alt="Examples of pills: music, a Claude Code permission request, a match, a timer, weather, a rain warning, charging, Galaxy Buds, camera and microphone, a Steam download, the shelf, a screen-time limit, the clock and volume">
 
 - **Music:** any app that opens a Windows media session (Spotify, YouTube Music, browsers).
   The pill takes the colour of the album cover; the card has the cover, a wavy progress bar, lyrics
@@ -49,30 +47,20 @@ score, what Claude Code is doing. Click the pill and a card opens below it.
 
 ## Cards
 
-<img src="assets/readme/music.png" width="880" alt="Music card: cover, progress bar and buttons; beside it the lyrics of the same song; below it the music pill">
-
 The card grows out of the pill when it opens and shrinks back into it when the mouse leaves. On the
 music card, **Lyrics** in the corner of the cover opens the song's lyrics; they come from `lrclib.net`
 and scroll along with the song.
 
-<img src="assets/readme/day.png" width="880" alt="Day summary card, timer card, hourly weather card and Digital Wellbeing card">
-
 When idle, click the clock to open the day's summary: weather, matches, the last song played and screen
 time.
 
-<img src="assets/readme/live.png" width="880" alt="Live match card, Claude Code permission card, Galaxy Buds card and shelf card">
-
 ## Settings
-
-<img src="assets/readme/settings.png" width="880" alt="Settings window: pages on the left, previews of the pill and card sizes in the middle, appearance options on the right">
 
 The settings window opens from **Settings…** in the tray menu; every change applies to the pill
 immediately. The search box at the top finds settings; on the Live match page it searches for teams,
 and on the Full screen page it adds exceptions. Ctrl+F goes to search, Ctrl+K opens the actions menu.
 
 ## Installation
-
-<img src="assets/readme/setup.png" width="480" align="right" alt="Setup window">
 
 Download `winisland-setup.exe` from the [latest release](https://github.com/ELhadratiOth/WinIsland/releases/latest)
 and run it. It needs no administrator rights and installs to `%LOCALAPPDATA%\Programs\WinIsland` (use
@@ -94,8 +82,6 @@ running WinIsland is closed, its files are replaced and it starts again.
 
 For a silent install, use `winisland-setup.exe --quiet` (it doesn't change the app notifications
 setting); for a silent uninstall, use `"%LOCALAPPDATA%\Programs\WinIsland\winisland-setup.exe" --uninstall --quiet`.
-
-<br clear="right">
 
 ## Usage
 
