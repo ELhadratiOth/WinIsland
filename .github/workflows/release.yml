@@ -1,7 +1,7 @@
 name: Release
 
 # Push a tag like v0.3.0 (it must match `version` in Cargo.toml), or run this workflow by hand:
-# it builds the EXEs on Windows and publishes them as a GitHub release.
+# it builds the EXEs on Windows and publishes them as a GitHub release (from the Actions tab).
 on:
   push:
     tags: ['v*']

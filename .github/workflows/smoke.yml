@@ -1,7 +1,8 @@
 name: Smoke test
 
 # Builds WinIsland, starts it on a Windows desktop with a demo timer, clicks the pill and takes
-# screenshots (uploaded as the smoke-shots artifact, together with the app's log).
+# screenshots (uploaded as the smoke-shots artifact, together with the app's log). Run it from the
+# Actions tab.
 on:
   workflow_dispatch:
     inputs:
