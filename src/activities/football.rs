@@ -668,7 +668,7 @@ mod tests {
         let goals: Vec<(u16, Side, Option<&str>)> = m.events.iter().map(|e| (e.minute, e.side, e.player.as_deref())).collect();
         assert_eq!(goals, vec![(4, Side::Away, Some("Mikautadze")), (29, Side::Away, Some("Cardona"))]);
         assert_eq!(m.followed, None);
-        assert_eq!(m.competition, "Şampiyonlar Ligi");
+        assert_eq!(m.competition, "Champions League");
     }
 
     #[test]
@@ -707,9 +707,9 @@ mod tests {
         let live = parse_event(&fixture("live"), &ucl(), &[]).unwrap();
         assert_eq!(centre_text(&live, 0, tr), "33′");
         let mut m = live.clone();
-        for (status, text) in [(MatchStatus::HalfTime, "İY"), (MatchStatus::FullTime, "MS"), (MatchStatus::FullTimeAet, "MS"),
-            (MatchStatus::EtBreak, "UZ"), (MatchStatus::Pens, "PEN"), (MatchStatus::Postponed, "ERT"), (MatchStatus::Cancelled, "İPT"),
-            (MatchStatus::Abandoned, "TAT"), (MatchStatus::Suspended, "TAT")] {
+        for (status, text) in [(MatchStatus::HalfTime, "HT"), (MatchStatus::FullTime, "FT"), (MatchStatus::FullTimeAet, "FT"),
+            (MatchStatus::EtBreak, "ET"), (MatchStatus::Pens, "PEN"), (MatchStatus::Postponed, "PST"), (MatchStatus::Cancelled, "CAN"),
+            (MatchStatus::Abandoned, "ABD"), (MatchStatus::Suspended, "ABD")] {
             m.status = status;
             assert_eq!(centre_text(&m, 0, tr), text, "{status:?}");
         }

@@ -396,7 +396,7 @@ mod tests {
         assert_eq!(next_snapshot(&update(1), None), None, "a mode alone, before any battery reading");
         let status = take_frames(&mut hex(STATUS_IN_CASE)).remove(0);
         assert_eq!(next_snapshot(&status, Some(anc)).unwrap().noise, Some(NoiseControl::Anc), "0x60 has no mode: the last one stays");
-        assert_eq!(NoiseControl::Adaptive.label(), "Uyarlanabilir");
+        assert_eq!(NoiseControl::Adaptive.label(), "Adaptive");
         assert!(!NoiseControl::ALL.contains(&NoiseControl::Adaptive), "not a button: setting it is untested");
     }
 
@@ -405,7 +405,7 @@ mod tests {
         assert_eq!(model_id(&extended_with_noise(1)), Some(316), "a Buds2 (GalaxyBudsClient's DeviceIds 313-321)");
         assert_eq!(model_name(316), "Galaxy Buds2");
         assert_eq!(model_name(341), "Galaxy Buds3 Pro");
-        assert_eq!(model_name(1), "bilinmeyen model");
+        assert_eq!(model_name(1), "unknown model");
     }
 
     #[test]
@@ -543,14 +543,14 @@ mod tests {
     #[test]
     fn zero_means_no_reading() {
         let s = BudsSnapshot { left: 0, right: 80, case: None, noise: None, worn: Worn::default() };
-        assert_eq!(buds_labels(&s).0, "— · %80");
+        assert_eq!(buds_labels(&s).0, "— · 80%");
         assert!(!is_low(&s));
     }
 
     #[test]
     fn labels_show_case_only_when_known() {
         let s = BudsSnapshot { left: 85, right: 80, case: Some(60), noise: None, worn: Worn::default() };
-        assert_eq!(buds_labels(&s), ("%85 · %80".to_string(), Some("Kutu %60".to_string())));
+        assert_eq!(buds_labels(&s), ("85% · 80%".to_string(), Some("Case 60%".to_string())));
         assert_eq!(buds_labels(&BudsSnapshot { case: None, ..s }).1, None);
     }
 

@@ -210,23 +210,23 @@ mod tests {
 
     #[test]
     fn today_against_yesterday() {
-        assert_eq!(compare_text(3 * 3600, 3 * 3600 + 25 * 60), "dünden 25 dk az");
-        assert_eq!(compare_text(4 * 3600 + 5 * 60, 3 * 3600), "dünden 1 sa 5 dk fazla");
-        assert_eq!(compare_text(3 * 3600, 3 * 3600 + 120), "dünle aynı");
+        assert_eq!(compare_text(3 * 3600, 3 * 3600 + 25 * 60), "25 min less than yesterday");
+        assert_eq!(compare_text(4 * 3600 + 5 * 60, 3 * 3600), "1 h 5 min more than yesterday");
+        assert_eq!(compare_text(3 * 3600, 3 * 3600 + 120), "same as yesterday");
         assert_eq!(compare_text(3 * 3600, 0), "");
     }
 
     #[test]
     fn a_limit_in_words() {
-        assert_eq!(limit_text(120), "2 saati geçtin");
-        assert_eq!(limit_text(30), "30 dakikayı geçtin");
-        assert_eq!(limit_text(90), "1 saat 30 dakikayı geçtin");
+        assert_eq!(limit_text(120), "over 2 h");
+        assert_eq!(limit_text(30), "over 30 min");
+        assert_eq!(limit_text(90), "over 1 h 30 min");
     }
 
     #[test]
     fn apps_by_their_names() {
         assert_eq!(app_name("Code.exe", Some("Visual Studio Code")), "VS Code");
-        assert_eq!(app_name("explorer.exe", None), "Dosya Gezgini");
+        assert_eq!(app_name("explorer.exe", None), "File Explorer");
         assert_eq!(app_name("Discord.exe", None), "Discord");
         assert_eq!(app_name("FortniteClient-Win64-Shipping.exe", Some("Fortnite")), "Fortnite");
         assert_eq!(app_name("obs64.exe", Some("")), "obs64", "an empty description");
@@ -237,7 +237,7 @@ mod tests {
     fn days_from_midnight_local() {
         // 21 Oct 2026 23:30 and 22 Oct 00:30 in İstanbul (UTC+3).
         assert_eq!(local_day(1_792_614_600, 10_800) + 1, local_day(1_792_618_200, 10_800));
-        assert_eq!(weekday(local_day(1_792_614_600, 10_800)), "Ça", "a Wednesday");
-        assert_eq!(weekday(0), "Pe", "1 January 1970 was a Thursday");
+        assert_eq!(weekday(local_day(1_792_614_600, 10_800)), "We", "a Wednesday");
+        assert_eq!(weekday(0), "Th", "1 January 1970 was a Thursday");
     }
 }

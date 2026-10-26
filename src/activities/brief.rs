@@ -167,13 +167,13 @@ mod tests {
         let now = h13 + 20 * 60;
         let hour = |t: i64, code: u8| (t, 12.0, code, true);
         let mut hours = vec![hour(h13, 61), hour(h13 + 3600, 0), hour(h13 + 7200, 61), hour(h13 + 12 * 3600, 73)];
-        assert_eq!(rain_later(&hours, now, TR).as_deref(), Some("15:00 civarı yağmur"), "not the hour it already is");
+        assert_eq!(rain_later(&hours, now, TR).as_deref(), Some("rain around 15:00"), "not the hour it already is");
         hours[2].2 = 0;
         assert_eq!(rain_later(&hours, now, TR), None, "tomorrow's snow is tomorrow's");
         hours[2].2 = 73;
-        assert_eq!(rain_later(&hours, now, TR).as_deref(), Some("15:00 civarı kar"));
+        assert_eq!(rain_later(&hours, now, TR).as_deref(), Some("snow around 15:00"));
         hours[2].2 = 95;
-        assert_eq!(rain_later(&hours, now, TR).as_deref(), Some("15:00 civarı yağmur"), "a storm rains");
+        assert_eq!(rain_later(&hours, now, TR).as_deref(), Some("rain around 15:00"), "a storm rains");
     }
 
     mod matches {
@@ -233,13 +233,13 @@ mod tests {
             let hidden = vec!["hid".to_string()];
             assert_eq!(
                 ids(&pick_matches(&all, NOW, TICK, TR, &hidden)),
-                vec![("live", "65′ · Canlı"), ("up18", "18:00 · Süper Lig"), ("up20", "20:00 · Süper Lig")]
+                vec![("live", "65′ · Live"), ("up18", "18:00 · Süper Lig"), ("up20", "20:00 · Süper Lig")]
             );
             assert!(pick_matches(&all, NOW, TICK, TR, &hidden)[0].live);
             let results: Vec<MatchSnapshot> = all.iter().filter(|x| x.status == MatchStatus::FullTime).cloned().collect();
-            assert_eq!(ids(&pick_matches(&results, NOW, TICK, TR, &hidden)), vec![("yest", "2–1 · Dün")], "21 h ago is too old");
+            assert_eq!(ids(&pick_matches(&results, NOW, TICK, TR, &hidden)), vec![("yest", "2–1 · Yesterday")], "21 h ago is too old");
             let today = vec![m("early", NOW_LOCAL - 3 * 3600, MatchStatus::FullTime, (1, 0))];
-            assert_eq!(ids(&pick_matches(&today, NOW, TICK, TR, &[])), vec![("early", "1–0 · Bitti")]);
+            assert_eq!(ids(&pick_matches(&today, NOW, TICK, TR, &[])), vec![("early", "1–0 · Final")]);
             let off = vec![m("pp", NOW_LOCAL + 3600, MatchStatus::Postponed, (0, 0))];
             assert!(pick_matches(&off, NOW, TICK, TR, &[]).is_empty(), "called off");
         }

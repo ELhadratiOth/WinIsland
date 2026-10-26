@@ -423,18 +423,18 @@ mod tests {
 
     #[test]
     fn steps_say_what_and_on_what() {
-        assert_eq!(step("Edit", json!({"file_path": r"C:\Users\K\winisland\src\app.rs"})), "Düzenliyor: app.rs");
-        assert_eq!(step("Write", json!({"file_path": "C:/x/notes.md"})), "Yazıyor: notes.md");
-        assert_eq!(step("Read", json!({"file_path": r"C:\x\pill.rs"})), "Okuyor: pill.rs");
-        assert_eq!(step("Bash", json!({"command": "cargo test --lib", "description": "Run the tests"})), "Çalıştırıyor: Run the tests");
-        assert_eq!(step("PowerShell", json!({"command": "Get-Process winisland\nmore"})), "Çalıştırıyor: Get-Process winisland");
-        assert_eq!(step("Grep", json!({"pattern": "paint_shelf"})), "Arıyor: paint_shelf");
-        assert_eq!(step("Glob", json!({"pattern": "**/*.rs"})), "Arıyor: **/*.rs");
-        assert_eq!(step("WebFetch", json!({"url": "https://code.claude.com/docs/en/hooks.md"})), "Okuyor: code.claude.com");
-        assert_eq!(step("WebSearch", json!({"query": "rust ole drag"})), "Arıyor: rust ole drag");
-        assert_eq!(step("Agent", json!({"description": "Review the shelf branch"})), "Alt ajan: Review the shelf branch");
-        assert_eq!(step("mcp__ccd_turn__update_plan", json!({})), "Araç: update_plan");
-        assert_eq!(step("Skill", json!({"skill": "brainstorming"})), "Araç: Skill");
+        assert_eq!(step("Edit", json!({"file_path": r"C:\Users\K\winisland\src\app.rs"})), "Editing: app.rs");
+        assert_eq!(step("Write", json!({"file_path": "C:/x/notes.md"})), "Writing: notes.md");
+        assert_eq!(step("Read", json!({"file_path": r"C:\x\pill.rs"})), "Reading: pill.rs");
+        assert_eq!(step("Bash", json!({"command": "cargo test --lib", "description": "Run the tests"})), "Running: Run the tests");
+        assert_eq!(step("PowerShell", json!({"command": "Get-Process winisland\nmore"})), "Running: Get-Process winisland");
+        assert_eq!(step("Grep", json!({"pattern": "paint_shelf"})), "Searching: paint_shelf");
+        assert_eq!(step("Glob", json!({"pattern": "**/*.rs"})), "Searching: **/*.rs");
+        assert_eq!(step("WebFetch", json!({"url": "https://code.claude.com/docs/en/hooks.md"})), "Reading: code.claude.com");
+        assert_eq!(step("WebSearch", json!({"query": "rust ole drag"})), "Searching: rust ole drag");
+        assert_eq!(step("Agent", json!({"description": "Review the shelf branch"})), "Subagent: Review the shelf branch");
+        assert_eq!(step("mcp__ccd_turn__update_plan", json!({})), "Tool: update_plan");
+        assert_eq!(step("Skill", json!({"skill": "brainstorming"})), "Tool: Skill");
     }
 
     #[test]
@@ -493,7 +493,7 @@ mod tests {
 
     #[test]
     fn asks_show_the_command_or_the_file() {
-        assert_eq!(ask_detail("Bash", &json!({"command": "cargo build --release\necho done"})), "cargo build --release (+1 satır)", "the lines it hides are counted");
+        assert_eq!(ask_detail("Bash", &json!({"command": "cargo build --release\necho done"})), "cargo build --release (+1 lines)", "the lines it hides are counted");
         assert_eq!(ask_detail("WebFetch", &json!({"url": "https://unpkg.com/x.svg"})), "https://unpkg.com/x.svg");
         assert_eq!(ask_detail("mcp__github__create_pr", &json!({})), "github: create_pr");
     }
@@ -511,7 +511,7 @@ mod tests {
             info.apply(&ClaudeNote { step: Some(step_of("Edit", &input)), file: file_of("Edit", &input), ..note() });
         }
         assert_eq!(info.steps.len(), 3, "the last three");
-        assert_eq!(step_label(&info.steps[0]), "Düzenliyor: c.rs", "newest first");
+        assert_eq!(step_label(&info.steps[0]), "Editing: c.rs", "newest first");
         assert_eq!(info.files.len(), 3, "a.rs counted once");
         assert_eq!(info.window, Some(42));
         info.apply(&ClaudeNote { ask: Some(Ask { tool: "Bash".into(), detail: "ls".into(), ..Default::default() }), ..note() });
@@ -535,18 +535,18 @@ mod tests {
 
     #[test]
     fn run_lengths_read_like_a_person_says_them() {
-        assert_eq!(run_length(4_000), "4 sn");
-        assert_eq!(run_length(59_400), "59 sn");
-        assert_eq!(run_length(60_000), "1 dk");
-        assert_eq!(run_length(12 * 60_000 + 40_000), "12 dk");
-        assert_eq!(run_length(2 * 3_600_000 + 5 * 60_000), "2 sa 5 dk");
-        assert_eq!(run_length(3_600_000), "1 sa");
+        assert_eq!(run_length(4_000), "4 s");
+        assert_eq!(run_length(59_400), "59 s");
+        assert_eq!(run_length(60_000), "1 min");
+        assert_eq!(run_length(12 * 60_000 + 40_000), "12 min");
+        assert_eq!(run_length(2 * 3_600_000 + 5 * 60_000), "2 h 5 min");
+        assert_eq!(run_length(3_600_000), "1 h");
     }
 
     #[test]
     fn done_status_says_how_long_and_how_many_files() {
-        assert_eq!(done_status("Bitti", 12 * 60_000, 9), "Bitti · 12 dk · 9 dosya");
-        assert_eq!(done_status("Bitti", 30_000, 0), "Bitti · 30 sn");
+        assert_eq!(done_status("Bitti", 12 * 60_000, 9), "Done · 12 min · 9 files");
+        assert_eq!(done_status("Bitti", 30_000, 0), "Done · 30 s");
         assert_eq!(done_status("Kota doldu", 30_000, 2), "Kota doldu", "an error says only itself");
     }
 
@@ -566,13 +566,13 @@ mod tests {
 
     #[test]
     fn asks_show_their_whole_target() {
-        assert_eq!(ask_detail("Bash", &json!({"command": "cd build\nmake\nmake install"})), "cd build (+2 satır)");
+        assert_eq!(ask_detail("Bash", &json!({"command": "cd build\nmake\nmake install"})), "cd build (+2 lines)");
         assert_eq!(ask_detail("Monitor", &json!({"command": "tail -f log.txt"})), "tail -f log.txt");
         assert_eq!(ask_detail("Grep", &json!({"pattern": "TODO", "path": r"C:\Users\K"})), r"TODO · C:\Users\K");
         assert_eq!(ask_detail("WebSearch", &json!({"query": "rust ole"})), "rust ole");
         assert_eq!(ask_detail("Skill", &json!({"skill": "brainstorming"})), "brainstorming");
         assert_eq!(ask_detail("AskUserQuestion", &json!({"questions": [{"question": "Hangi renk?"}]})), "Hangi renk?");
-        assert_eq!(ask_detail("ExitPlanMode", &json!({"plan": "x"})), "Plan onayı");
+        assert_eq!(ask_detail("ExitPlanMode", &json!({"plan": "x"})), "Plan approval");
     }
 
     #[test]
@@ -616,7 +616,7 @@ mod tests {
         info.apply(&ClaudeNote { tool_done: Some(Call { tool: "Read".into(), detail: "a.rs".into() }), ..note() });
         info.apply(&ClaudeNote { step: Some(step_of("Edit", &json!({"file_path": "b.rs"}))), ..note() });
         let labels: Vec<String> = info.steps.iter().map(step_label).collect();
-        assert_eq!(labels, ["Düzenliyor: b.rs", "Okuyor: a.rs"]);
+        assert_eq!(labels, ["Editing: b.rs", "Reading: a.rs"]);
     }
 
     #[test]

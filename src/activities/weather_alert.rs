@@ -270,7 +270,7 @@ mod tests {
         let mut watch = AlertWatch::default();
         let alerts = watch.update(&w, NOW);
         assert_eq!(alerts, vec![Alert { kind: AlertKind::Storm, value: 0, at_utc: HOUR + 2700 }]);
-        assert_eq!(alert_text(&alerts[0], NOW, OFFSET), ("Fırtına", "~35 dk içinde".to_string()));
+        assert_eq!(alert_text(&alerts[0], NOW, OFFSET), ("Storm", "in ~35 min".to_string()));
         assert!(watch.update(&w, NOW + 600).is_empty(), "already warned");
         let mut now = sky_at(NOW + 3600);
         now.code = 96;
@@ -314,12 +314,12 @@ mod tests {
         let mut watch = AlertWatch::default();
         let alerts = watch.update(&w, NOW);
         assert_eq!(alerts, vec![Alert { kind: AlertKind::Wind, value: 65, at_utc: HOUR + 3600 }]);
-        assert_eq!(alert_text(&alerts[0], NOW, OFFSET), ("Kuvvetli rüzgâr", "65 km/sa · 21:00".to_string()));
+        assert_eq!(alert_text(&alerts[0], NOW, OFFSET), ("Strong wind", "65 km/h · 21:00".to_string()));
         assert!(watch.update(&w, NOW + 900).is_empty(), "once a spell");
         let mut now = sky();
         now.gusts[0].1 = 72.0;
         let first = AlertWatch::default().update(&now, NOW);
-        assert_eq!(alert_text(&first[0], NOW, OFFSET).1, "70 km/sa · şimdi", "to five, and the hour under way");
+        assert_eq!(alert_text(&first[0], NOW, OFFSET).1, "70 km/h · now", "to five, and the hour under way");
         let mut later = sky();
         later.gusts[4].1 = 90.0;
         assert!(AlertWatch::default().update(&later, NOW).is_empty(), "midnight: past three hours");
@@ -368,7 +368,7 @@ mod tests {
         let mut watch = AlertWatch::default();
         let alerts = watch.update(&w, morning);
         assert_eq!(kinds(&alerts), vec![AlertKind::Heat]);
-        assert_eq!(alert_text(&alerts[0], morning, OFFSET), ("Aşırı sıcak", "bugün 36°".to_string()));
+        assert_eq!(alert_text(&alerts[0], morning, OFFSET), ("Extreme heat", "today 36°".to_string()));
         assert!(watch.update(&w, morning + 3600).is_empty(), "once a day");
         assert_eq!(kinds(&watch.update(&w, morning + 86_400)), vec![AlertKind::Heat], "and again the next");
         assert!(AlertWatch::default().update(&w, NOW).is_empty(), "20:10: the day is done");
@@ -385,12 +385,12 @@ mod tests {
         let alerts = watch.update(&w, NOW);
         // Down to -8 eleven hours on (07:00 local).
         assert_eq!(alerts, vec![Alert { kind: AlertKind::Frost, value: -8, at_utc: HOUR + 11 * 3600 }]);
-        assert_eq!(alert_text(&alerts[0], NOW, OFFSET), ("Don", "sabah -8°".to_string()));
+        assert_eq!(alert_text(&alerts[0], NOW, OFFSET), ("Frost", "morning -8°".to_string()));
         assert!(watch.update(&w, NOW + 1800).is_empty(), "once a day");
         let mut night = sky();
         night.temp = 2.0;
         night.hourly[4].1 = -1.4;
-        assert_eq!(alert_text(&AlertWatch::default().update(&night, NOW)[0], NOW, OFFSET).1, "gece -1°");
+        assert_eq!(alert_text(&AlertWatch::default().update(&night, NOW)[0], NOW, OFFSET).1, "tonight -1°");
         let mut frozen = w.clone();
         frozen.temp = -1.0;
         assert!(AlertWatch::default().update(&frozen, NOW).is_empty(), "already freezing: no news");
@@ -402,13 +402,13 @@ mod tests {
         let mut watch = AlertWatch::default();
         let alerts = watch.update(&air(72), NOW);
         assert_eq!(alerts, vec![Alert { kind: AlertKind::Air, value: 72, at_utc: NOW }]);
-        assert_eq!(alert_text(&alerts[0], NOW, OFFSET), ("Hava kalitesi kötü", "AQI 72".to_string()));
+        assert_eq!(alert_text(&alerts[0], NOW, OFFSET), ("Poor air quality", "AQI 72".to_string()));
         assert!(watch.update(&air(85), NOW + 900).is_empty());
         assert!(watch.update(&air(45), NOW + 1800).is_empty(), "better, not clean");
         assert!(watch.update(&air(65), NOW + 2700).is_empty(), "the same spell");
         assert!(watch.update(&air(30), NOW + 3600).is_empty());
         let again = watch.update(&air(88), NOW + 4500);
-        assert_eq!(alert_text(&again[0], NOW, OFFSET), ("Hava kalitesi çok kötü", "AQI 88".to_string()));
+        assert_eq!(alert_text(&again[0], NOW, OFFSET), ("Very poor air quality", "AQI 88".to_string()));
         assert!(AlertWatch::default().update(&Weather { aqi: None, ..sky() }, NOW).is_empty(), "no answer for the air");
     }
 
@@ -419,11 +419,11 @@ mod tests {
         w.gusts[0].1 = 66.0;
         let now = alerts_now(&w, NOW);
         assert_eq!(kinds(&now), vec![AlertKind::Storm, AlertKind::Wind]);
-        assert_eq!(alert_text(&now[0], NOW, OFFSET), ("Fırtına", "şu an".to_string()));
+        assert_eq!(alert_text(&now[0], NOW, OFFSET), ("Storm", "now".to_string()));
         assert!(alerts_now(&sky(), NOW).is_empty());
         let mut later = sky();
         later.quarter_codes[5].1 = 95;
-        assert_eq!(alert_text(&alerts_now(&later, NOW)[0], NOW, OFFSET).1, "~1 saat içinde");
+        assert_eq!(alert_text(&alerts_now(&later, NOW)[0], NOW, OFFSET).1, "in ~1 hour");
     }
 
     #[test]

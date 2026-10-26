@@ -2262,10 +2262,10 @@ mod tests {
     fn output_sublines() {
         use crate::platform::audio::OutputBus;
         let buds = BudsSnapshot { left: 74, right: 69, case: None, noise: None, worn: Default::default() };
-        assert_eq!(output_subline(OutputBus::Bluetooth, Some(&buds)), "Bluetooth · Sol %74 · Sağ %69");
+        assert_eq!(output_subline(OutputBus::Bluetooth, Some(&buds)), "Bluetooth · L 74% · R 69%");
         assert_eq!(output_subline(OutputBus::Bluetooth, None), "Bluetooth");
-        assert_eq!(output_subline(OutputBus::Virtual, None), "Sanal");
-        assert_eq!(output_subline(OutputBus::Internal, None), "Dahili");
+        assert_eq!(output_subline(OutputBus::Virtual, None), "Virtual");
+        assert_eq!(output_subline(OutputBus::Internal, None), "Built-in");
         assert_eq!(output_subline(OutputBus::Usb, None), "USB");
     }
 

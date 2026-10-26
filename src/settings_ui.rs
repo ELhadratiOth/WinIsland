@@ -354,14 +354,15 @@ mod tests {
 
     #[test]
     fn search_finds_rows_by_title_description_and_keywords() {
-        let hits = search("opak");
-        assert_eq!(hits[0].title, "Zemin opaklığı");
-        assert_eq!(hits[0].page, 0);
-        assert_eq!((hits[0].mark_start, hits[0].mark_len), (6, 4));
-        // A keyword only ("blur") still finds the row.
-        assert!(search("blur").iter().any(|h| h.title == "Bulanıklık"));
-        // Accent-insensitive: "kisayol" finds "Seçici kısayolu".
-        assert!(search("kisayol").iter().any(|h| h.title == "Seçici kısayolu"));
+        let hits = search("opac");
+        let h = hits.iter().find(|h| h.row == "pill-opacity").expect("the title finds the row");
+        assert_eq!((h.title, h.page), ("Background opacity", 0));
+        assert_eq!((h.mark_start, h.mark_len), (11, 4));
+        // A Turkish word, a keyword only ("blur"), still finds the row.
+        assert!(search("opak").iter().any(|h| h.row == "pill-opacity"));
+        assert!(search("blur").iter().any(|h| h.row == "card-blur" && h.title == "Blur"));
+        // Accent-insensitive: "kisayol" finds "Seçici kısayolu", shown as "Picker shortcut".
+        assert!(search("kisayol").iter().any(|h| h.title == "Picker shortcut"));
         assert!(search("").is_empty());
         assert!(search("zzzz").is_empty());
     }
@@ -389,9 +390,9 @@ mod tests {
 
     #[test]
     fn search_ranks_title_starts_first() {
-        let hits = search("kart");
-        assert!(hits[0].title.to_lowercase().starts_with("kart"), "{:?}", hits[0].title);
-        assert_eq!(hits[0].path, format!("{} › {}", PAGES[hits[0].page as usize], hits[0].section));
+        let hits = search("card");
+        assert!(hits[0].title.to_lowercase().starts_with("card"), "{:?}", hits[0].title);
+        assert_eq!(hits[0].path, format!("{} › {}", tr(PAGES[hits[0].page as usize]), hits[0].section));
     }
 
     #[test]
@@ -410,7 +411,7 @@ mod tests {
         assert!(rows("dalga", 2).contains(&"media-waveform"), "{:?}", rows("dalga", 2));
         // Every entry's page has a name (the hit's path is "Sistem › Şarj").
         assert!(INDEX.iter().all(|x| (x.page as usize) < PAGES.len()));
-        assert_eq!(search("mikrofon")[0].path, "Sistem › Mikrofon / kamera");
+        assert_eq!(search("mikrofon")[0].path, "System › Microphone / camera");
     }
 
     #[test]
@@ -420,7 +421,7 @@ mod tests {
             assert!(rows(q).contains(&"brief-morning"), "{q}: {:?}", rows(q));
         }
         assert!(rows("adın").contains(&"brief-name"), "{:?}", rows("adın"));
-        assert_eq!(search("günaydın")[0].path, "Sistem › Now Brief");
+        assert_eq!(search("günaydın")[0].path, "System › Now Brief");
     }
 
     #[test]
@@ -433,7 +434,7 @@ mod tests {
         assert!(rows("sıcaklık").contains(&"weather-city"), "{:?}", rows("sıcaklık"));
         assert!(rows("yağmur").contains(&"rain-moment"), "{:?}", rows("yağmur"));
         assert!(rows("şemsiye").contains(&"rain-moment"), "{:?}", rows("şemsiye"));
-        assert_eq!(search("şehir")[0].path, "Sistem › Saat ve hava");
+        assert_eq!(search("şehir")[0].path, "System › Clock and weather");
         assert!(rows("efekt").contains(&"weather-effects"), "{:?}", rows("efekt"));
         for q in ["fırtına", "rüzgar", "don", "hava kalitesi", "uyarı"] {
             assert!(rows(q).contains(&"weather-alerts"), "{q}: {:?}", rows(q));
@@ -448,8 +449,8 @@ mod tests {
         assert_eq!(exception_name("  mpv ", &have), Ok(Some("mpv.exe".into())));
         assert_eq!(exception_name("Game.EXE", &have), Ok(Some("Game.EXE".into())));
         assert_eq!(exception_name("   ", &have), Ok(None));
-        assert_eq!(exception_name("VLC", &have), Err("vlc.exe zaten listede".into()));
-        assert_eq!(exception_name("a/b.exe", &have), Err("Geçersiz ad".into()));
+        assert_eq!(exception_name("VLC", &have), Err("vlc.exe is already on the list".into()));
+        assert_eq!(exception_name("a/b.exe", &have), Err("Invalid name".into()));
     }
 
     #[test]

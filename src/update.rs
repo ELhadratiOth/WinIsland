@@ -163,9 +163,9 @@ mod tests {
     #[test]
     fn the_about_line_says_where_it_stands() {
         let state = |latest: &str| UpdateState { latest: latest.into(), page: String::new(), checked: 1 };
-        assert_eq!(update_line(None, "0.2.0"), ("0.2.0 · denetlenmedi".to_string(), false));
-        assert_eq!(update_line(Some(&state("0.2.0")), "0.2.0"), ("0.2.0 · güncel".to_string(), false));
-        assert_eq!(update_line(Some(&state("0.3.0")), "0.2.0"), ("0.3.0 hazır · şimdiki 0.2.0".to_string(), true));
+        assert_eq!(update_line(None, "0.2.0"), ("0.2.0 · not checked".to_string(), false));
+        assert_eq!(update_line(Some(&state("0.2.0")), "0.2.0"), ("0.2.0 · up to date".to_string(), false));
+        assert_eq!(update_line(Some(&state("0.3.0")), "0.2.0"), ("0.3.0 ready · now 0.2.0".to_string(), true));
     }
 
     #[test]

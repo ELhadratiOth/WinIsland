@@ -466,10 +466,10 @@ mod tests {
 
     #[test]
     fn rain_when_rounds_to_five_minutes() {
-        assert_eq!(rain_when(1), "~5 dk içinde");
-        assert_eq!(rain_when(22), "~20 dk içinde");
-        assert_eq!(rain_when(23), "~25 dk içinde");
-        assert_eq!(rain_when(58), "~1 saat içinde");
+        assert_eq!(rain_when(1), "in ~5 min");
+        assert_eq!(rain_when(22), "in ~20 min");
+        assert_eq!(rain_when(23), "in ~25 min");
+        assert_eq!(rain_when(58), "in ~1 hour");
     }
 
     #[test]
@@ -527,10 +527,10 @@ mod tests {
         let l = |state, city: Option<&WeatherCity>| Located { state, city: city.cloned() };
         assert_eq!(located_text(&l(LocateState::Found, Some(&kadikoy))), ("Kadıköy · Türkiye".into(), "Kadıköy".into()));
         assert_eq!(located_text(&l(LocateState::Failed, Some(&kadikoy))), ("Kadıköy · Türkiye".into(), "Kadıköy".into()), "the last place stands");
-        assert_eq!(located_text(&l(LocateState::Failed, None)), ("Konum bulunamadı".into(), String::new()));
-        assert_eq!(located_text(&l(LocateState::Denied, None)), ("Windows'ta konum kapalı".into(), String::new()));
-        assert_eq!(located_text(&l(LocateState::Finding, None)), ("Bulunuyor…".into(), String::new()));
-        assert_eq!(located_text(&l(LocateState::Off, None)), ("Bulunuyor…".into(), String::new()), "just switched on: the WinIsland hasn't looked yet");
+        assert_eq!(located_text(&l(LocateState::Failed, None)), ("Location not found".into(), String::new()));
+        assert_eq!(located_text(&l(LocateState::Denied, None)), ("Location is off in Windows".into(), String::new()));
+        assert_eq!(located_text(&l(LocateState::Finding, None)), ("Finding…".into(), String::new()));
+        assert_eq!(located_text(&l(LocateState::Off, None)), ("Finding…".into(), String::new()), "just switched on: the WinIsland hasn't looked yet");
         let unnamed = WeatherCity { name: "Konumun".into(), country: String::new(), lat: 40.99, lon: 29.03 };
         assert_eq!(located_text(&l(LocateState::Found, Some(&unnamed))).0, "Konumun", "no country, no dot");
         let file: Located = serde_json::from_str(r#"{"state": "found", "city": {"name": "Berlin", "country": "Almanya", "lat": 52.52, "lon": 13.4}}"#).expect("parses");
@@ -550,18 +550,18 @@ mod tests {
     #[test]
     fn codes_in_colour_emoji_and_words() {
         // Emoji presentation (U+FE0F) so the colour font draws them, not the text glyphs.
-        assert_eq!((symbol(0, true), describe(0)), ("☀\u{FE0F}", "Açık"));
+        assert_eq!((symbol(0, true), describe(0)), ("☀\u{FE0F}", "Clear"));
         assert_eq!(symbol(0, false), "🌙");
         assert_eq!(symbol(1, true), "🌤\u{FE0F}");
-        assert_eq!((symbol(2, true), describe(2)), ("⛅", "Parçalı bulutlu"));
+        assert_eq!((symbol(2, true), describe(2)), ("⛅", "Partly cloudy"));
         assert_eq!(symbol(2, false), "☁\u{FE0F}", "no sun at night");
-        assert_eq!((symbol(3, true), describe(3)), ("☁\u{FE0F}", "Kapalı"));
-        assert_eq!((symbol(63, true), describe(63)), ("🌧\u{FE0F}", "Yağmurlu"));
+        assert_eq!((symbol(3, true), describe(3)), ("☁\u{FE0F}", "Overcast"));
+        assert_eq!((symbol(63, true), describe(63)), ("🌧\u{FE0F}", "Rainy"));
         assert_eq!(symbol(81, true), "🌦\u{FE0F}", "showers with sun");
-        assert_eq!((symbol(73, true), describe(73)), ("❄\u{FE0F}", "Karlı"));
-        assert_eq!((symbol(95, true), describe(95)), ("⛈\u{FE0F}", "Gök gürültülü"));
+        assert_eq!((symbol(73, true), describe(73)), ("❄\u{FE0F}", "Snowy"));
+        assert_eq!((symbol(95, true), describe(95)), ("⛈\u{FE0F}", "Thunderstorm"));
         // Segoe's fog emoji is a pale square: at 20 DIP it reads as a missing glyph.
-        assert_eq!((symbol(45, true), describe(45)), ("☁\u{FE0F}", "Sisli"));
+        assert_eq!((symbol(45, true), describe(45)), ("☁\u{FE0F}", "Foggy"));
     }
 
     #[test]

@@ -721,21 +721,21 @@ mod tests {
         // 48 % to the byte (down to the whole: 100 % only once done).
         let steam = now("730", GameState::Downloading { done: 1_288_490_189, total: 2_684_354_560, speed: Some(18 << 20), paused: false }, 1_000);
         let (line, ring) = pill_line(&steam, 1_100);
-        assert_eq!(line, "%48 · 18 MB/sn");
+        assert_eq!(line, "48% · 18 MB/s");
         assert!((ring.unwrap() - 0.48).abs() < 0.01);
         let quiet = now("730", GameState::Downloading { done: 0, total: 2_684_354_560, speed: None, paused: false }, 1_000);
-        assert_eq!(pill_line(&quiet, 1_100), ("%0".to_string(), Some(0.0)));
+        assert_eq!(pill_line(&quiet, 1_100), ("0%".to_string(), Some(0.0)));
         let epic = GameNow { state: GameState::Downloading { done: 0, total: 0, speed: None, paused: false }, ..now("x", DL, 1_000) };
-        assert_eq!(pill_line(&epic, 1_252), ("Güncelleniyor · 4:12".to_string(), None), "no figures: the time it takes");
-        assert_eq!(pill_line(&epic, 1_000 + 3_725).0, "Güncelleniyor · 1:02:05");
-        assert_eq!(pill_line(&now("730", GameState::Playing, 1_000), 1_000 + 2_040), ("34 dk".to_string(), None));
+        assert_eq!(pill_line(&epic, 1_252), ("Updating · 4:12".to_string(), None), "no figures: the time it takes");
+        assert_eq!(pill_line(&epic, 1_000 + 3_725).0, "Updating · 1:02:05");
+        assert_eq!(pill_line(&now("730", GameState::Playing, 1_000), 1_000 + 2_040), ("34 min".to_string(), None));
         // Paused: how far it got, no speed.
         let paused = now("x", GameState::Downloading { done: 505_190_570, total: 2_679_101_356, speed: Some(5), paused: true }, 1_000);
         let (line, ring) = pill_line(&paused, 1_100);
-        assert_eq!(line, "Duraklatıldı · %18");
+        assert_eq!(line, "Paused · 18%");
         assert!((ring.unwrap() - 0.189).abs() < 0.001);
         let blind = now("x", GameState::Downloading { done: 0, total: 0, speed: None, paused: true }, 1_000);
-        assert_eq!(pill_line(&blind, 1_100), ("Duraklatıldı".to_string(), None));
+        assert_eq!(pill_line(&blind, 1_100), ("Paused".to_string(), None));
     }
 
     /// This PC's `libraryfolders.vdf` (an unplugged second library included).

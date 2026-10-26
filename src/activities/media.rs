@@ -483,7 +483,7 @@ mod tests {
         assert_eq!(app_name("Spotify.exe"), "Spotify");
         assert_eq!(app_name("Brave.Q2ZK4XWM7H3PNA6TBV5RCE4YDU"), "Brave");
         assert_eq!(app_name("308046B0AF4A39CB"), "Firefox");
-        assert_eq!(app_name("Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic"), "Medya Oynatıcı");
+        assert_eq!(app_name("Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic"), "Media Player");
         assert_eq!(app_name("vlc.exe"), "vlc");
         assert_eq!(app_name("com.github.th-ch.youtube-music"), "YouTube Music");
         assert_eq!(app_name("org.example.cool-player"), "Cool Player");

@@ -349,21 +349,21 @@ mod tests {
         use crate::activities::football::centre_text;
         let mut g = games().remove(1);
         apply_header(&mut g, &serde_json::from_str(LIVE).unwrap());
-        assert_eq!(centre_text(&g, 0, 3 * 3600), "Ç3 04:12");
+        assert_eq!(centre_text(&g, 0, 3 * 3600), "Q3 04:12");
         apply_header(&mut g, &serde_json::from_str(OVER).unwrap());
-        assert_eq!(centre_text(&g, 0, 3 * 3600), "MS");
+        assert_eq!(centre_text(&g, 0, 3 * 3600), "FT");
     }
 
     #[test]
     fn period_texts() {
-        assert_eq!(period_text(3, "04:12"), "Ç3 04:12");
-        assert_eq!(period_text(2, "00:00"), "DA");
-        assert_eq!(period_text(1, "00:00"), "Ç1 sonu");
-        assert_eq!(period_text(5, "02:10"), "UZ 02:10");
-        assert_eq!(period_text(6, "04:00"), "UZ2 04:00");
-        assert_eq!(period_capsule(3, "04:12"), "3. çeyrek · 04:12");
-        assert_eq!(period_capsule(2, "00:00"), "Devre arası");
-        assert_eq!(period_capsule(5, "02:10"), "Uzatma · 02:10");
+        assert_eq!(period_text(3, "04:12"), "Q3 04:12");
+        assert_eq!(period_text(2, "00:00"), "HT");
+        assert_eq!(period_text(1, "00:00"), "End of Q1");
+        assert_eq!(period_text(5, "02:10"), "OT 02:10");
+        assert_eq!(period_text(6, "04:00"), "OT2 04:00");
+        assert_eq!(period_capsule(3, "04:12"), "Q3 · 04:12");
+        assert_eq!(period_capsule(2, "00:00"), "Half-time");
+        assert_eq!(period_capsule(5, "02:10"), "Overtime · 02:10");
     }
 
     #[test]

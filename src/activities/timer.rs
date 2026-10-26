@@ -229,8 +229,8 @@ mod tests {
 
     #[test]
     fn labels() {
-        assert_eq!(format_duration_label(600_000), "10 dk");
-        assert_eq!(format_duration_label(5_400_000), "1 sa 30 dk");
-        assert_eq!(format_duration_label(45_000), "45 sn");
+        assert_eq!(format_duration_label(600_000), "10 min");
+        assert_eq!(format_duration_label(5_400_000), "1 h 30 min");
+        assert_eq!(format_duration_label(45_000), "45 s");
     }
 }

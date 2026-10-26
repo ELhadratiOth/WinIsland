@@ -584,9 +584,9 @@ mod tests {
     #[test]
     fn a_store_line_names_the_first_three() {
         let names = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert_eq!(summary(&[]), "kurulu oyun yok");
-        assert_eq!(summary(&names(&["Fortnite", "Rocket League"])), "2 oyun · Fortnite, Rocket League");
-        assert_eq!(summary(&names(&["A", "B", "C", "D"])), "4 oyun · A, B, C…");
+        assert_eq!(summary(&[]), "no games installed");
+        assert_eq!(summary(&names(&["Fortnite", "Rocket League"])), "2 games · Fortnite, Rocket League");
+        assert_eq!(summary(&names(&["A", "B", "C", "D"])), "4 games · A, B, C…");
     }
 
     #[test]
