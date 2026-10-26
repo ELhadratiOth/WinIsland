@@ -1,7 +1,8 @@
 #![windows_subsystem = "windows"]
 //! `winisland-setup.exe`: installs the WinIsland for this user (no elevation), upgrades or repairs it,
 //! and, as `--uninstall`, takes it out again. One Slint window in the settings window's style;
-//! `--quiet` does the same without it. The WinIsland's exes travel inside (payload.bin).
+//! `--quiet` does the same without it, and `--quiet --update` (the app's own updates) keeps the
+//! choices made at install. The WinIsland's exes travel inside (payload.bin).
 
 mod install;
 mod payload;
@@ -75,7 +76,11 @@ fn main() {
             uninstall::run(&places, false, |_, _| {}).is_ok()
         } else {
             // The API as it was (off on a first install): nobody was asked.
-            let opts = Options { autostart: true, claude: places.claude.is_some(), desktop: false, api: None, launch };
+            let opts = if has("--update") {
+                update_options(&places, launch)
+            } else {
+                Options { autostart: true, claude: places.claude.is_some(), desktop: false, api: None, launch }
+            };
             install::run(&places, &opts, PAYLOAD, VERSION, |_, _| {}).is_ok()
         };
         if from.is_some() {
@@ -89,6 +94,17 @@ fn main() {
     if from.is_some() {
         system::delete_self_later();
     }
+}
+
+/// An update's options: start with Windows, the desktop shortcut and Claude Code as they are now.
+fn update_options(places: &Places, launch: bool) -> Options {
+    let autostart = places.sandbox || winisland::platform::autostart::autostart_enabled();
+    let desktop = places.desktop.join("WinIsland.lnk").exists();
+    let claude = places.claude.as_ref().is_some_and(|path| {
+        let settings = winisland::claude_hooks::read_settings(path).ok().and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok());
+        settings.is_some_and(|v| winisland::claude_hooks::remove(v.clone()) != v)
+    });
+    Options { autostart, claude, desktop, api: None, launch }
 }
 
 fn message(text: &str) {

@@ -1,0 +1,27 @@
+name: Clean up old runs
+
+# After every CI, Release or Smoke test run, deletes the older runs: only the newest run of each
+# workflow stays in the Actions tab.
+on:
+  workflow_run:
+    workflows: [CI, Release, Smoke test]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete all but the newest run of each workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Newest first; the first completed run of each workflow stays.
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | select(.status == "completed") | "\(.workflow_id) \(.id)"' > runs.txt
+          awk 'seen[$1]++ { print $2 }' runs.txt | while read -r id; do
+            gh api -X DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/${id}" > /dev/null && echo "deleted run ${id}"
+          done

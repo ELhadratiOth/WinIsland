@@ -252,6 +252,4 @@ fn main() {
         log(&format!("fatal: {e:?}"));
         message_box(&trf("WinIsland açılamadı: {}\nAyrıntılar: {}", &[&e, &log_path().display()]));
     }
-    // An update quit the loop: start the new WinIsland (it waits for this one's mutex).
-    winisland::platform::updater::restart_after_update();
 }

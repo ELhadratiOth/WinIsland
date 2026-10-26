@@ -937,11 +937,6 @@ impl App {
         if std::env::args().any(|a| a == "--demo") {
             app.start_timer(60_000);
         }
-        // Dev: install the exes in a folder (the swap and the restart, without GitHub).
-        let args: Vec<String> = std::env::args().collect();
-        if let Some(dir) = args.iter().position(|a| a == "--update-from").and_then(|i| args.get(i + 1)) {
-            app.updater.apply_from(dir.into());
-        }
         app.refresh()?;
         log(&format!("started: taskbar {:?}, scale {}, fullscreen {}", app.ui.info.rect, app.ui.scale.0, app.fullscreen));
         // Signed in without a lock screen (or restarted): the start is the day's first look.
@@ -2549,7 +2544,7 @@ impl App {
             match p {
                 Progress::Found(s) => self.update_ready = newer(&s.latest, VERSION).then_some(s),
                 Progress::Installed => {
-                    // main starts the new WinIsland once this loop is over (restart_after_update).
+                    // The installer waits for this one to quit, then starts the new WinIsland.
                     unsafe { PostQuitMessage(0) };
                 }
                 Progress::Failed(why) => log(&format!("update: {why}")),

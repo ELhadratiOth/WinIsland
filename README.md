@@ -160,9 +160,8 @@ characters). The two exes (`winisland.exe` and `winisland-settings.exe`) must be
 the app looks for the settings window next to itself. Copy both into a `bin\` folder and run them from
 there. If "Start with Windows" is on, the startup entry is updated automatically to the most recently run copy.
 
-**Release files:** `tools\make-setup.ps1` produces the files that go on a GitHub release in `dist\`:
-`winisland-setup.exe` (with both exes inside), `winisland.exe`, `winisland-settings.exe` (what the
-updater downloads) and `SHA256SUMS.txt`. The C runtime is linked statically, so the exes open on
+**Installer:** `tools\make-setup.ps1` builds `winisland-setup.exe` (with both exes inside), the one
+file a GitHub release carries, into `dist\`, along with the two exes and `SHA256SUMS.txt`. The C runtime is linked statically, so the exes open on
 Windows machines without the Visual C++ Redistributable. The release build (`target\dist\`, several GB)
 is kept: the first build takes 13–14 minutes, and later ones rebuild only what changed (about 5 minutes
 after a code change). `-Clean` deletes that build at the end; `-Jobs` sets how many build jobs run at once.
@@ -188,10 +187,11 @@ The settings window includes Inter itself (`ui\fonts`, SIL Open Font License).
 
 A minute after WinIsland starts, and then once a day, it checks GitHub for the latest release
 (`api.github.com`; nothing is sent besides the request itself). If a new version exists, **Update: x.y.z**
-appears in the tray menu and on a line in Settings → About. Clicking it downloads both exes, verifies
-them against `SHA256SUMS.txt`, replaces the old exes and restarts WinIsland; your settings and the
-start-with-Windows setting stay as they are. If any step fails, the old exes stay in place. If WinIsland
-was installed to a folder it can't write to (such as Program Files), the release page opens instead.
+appears in the tray menu and on a line in Settings → About. Clicking it downloads the new
+`winisland-setup.exe`, checks it against the SHA-256 GitHub keeps for it, and runs it quietly: it closes
+WinIsland, puts the new version in place and starts it again. Your settings, start with Windows, the
+desktop shortcut and the Claude Code connection stay as they are. If a step fails, the release page opens
+so you can install it by hand.
 Update checks can be turned off in Settings → About → Check for updates.
 
 ## Privacy and network
@@ -257,10 +257,11 @@ builds a second full copy of the dependencies under `debug\` (tens of GB).
   from recorded score tables.
 - `assets\make_icon.py`: redraws the icon (the white pill in the tray).
 - **Publishing a release:** increase `version` in `Cargo.toml`, commit, then push a matching tag
-  (`git tag vX.Y.Z && git push origin vX.Y.Z`) or run the **Release** workflow by hand. It builds the EXEs
-  on Windows and publishes `winisland-setup.exe`, `winisland.exe`, `winisland-settings.exe` and
-  `SHA256SUMS.txt` as a GitHub release.
-  `winisland.exe --update-from <folder>` tests the update without GitHub, using the exes in a folder.
+  (`git tag vX.Y.Z && git push origin vX.Y.Z`) or run the **Release** workflow by hand. It builds the
+  installer on Windows and publishes `winisland-setup.exe` as a GitHub release (run again for the same
+  version, it replaces that release).
+- **Old workflow runs** are deleted automatically: the **Clean up old runs** workflow keeps only the newest
+  run of each workflow.
 
 ---
 
