@@ -173,9 +173,24 @@ if ($app) {
     # Claude Code's status line: the JSON in, the short line out (and the numbers to the app).
     Step 'claude-status' {
         $status = '{"session_id":"smoke","model":{"display_name":"Opus 5.5"},"context_window":{"used_percentage":34.4},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":4102444800},"seven_day":{"used_percentage":41.2,"resets_at":4102444800}}}'
-        $line = ($status | & (Resolve-Path $Exe).Path claude-status | Out-String).Trim()
-        Say "claude-status printed: $line"
+        # With pipes of its own, as Claude Code runs it (PowerShell's own piping doesn't wait for a
+        # windowed exe's output).
+        $psi = New-Object System.Diagnostics.ProcessStartInfo (Resolve-Path $Exe).Path, 'claude-status'
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardInput = $true
+        $psi.RedirectStandardOutput = $true
+        $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+        $p = [System.Diagnostics.Process]::Start($psi)
+        $p.StandardInput.Write($status)
+        $p.StandardInput.Close()
+        $line = $p.StandardOutput.ReadToEnd().Trim()
+        $null = $p.WaitForExit(10000)
+        Say "claude-status printed: $line (exit $($p.ExitCode))"
         if ($line -notmatch 'context 34%' -or $line -notmatch '5h 24%' -or $line -notmatch 'week 41%') { throw "unexpected status line: $line" }
+        Start-Sleep -Seconds 1
+        $log = Get-Content (Join-Path $env:LOCALAPPDATA 'WinIsland\log.txt') -Raw
+        if ($log -notmatch 'claude: usage from smoke') { throw 'the app got no usage from the status line' }
+        Say 'the app got the usage'
     }
 
     $alive = -not $app.HasExited

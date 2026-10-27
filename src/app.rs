@@ -2824,7 +2824,12 @@ impl App {
                     if u.five_hour.is_some() || u.seven_day.is_some() {
                         self.claude_limits = (u.five_hour, u.seven_day);
                     }
-                    self.claude_usage.insert(live_key(&format!("claude:{}", u.session)), *u);
+                    let key = live_key(&format!("claude:{}", u.session));
+                    // Once a session: the status line runs after every change.
+                    if !self.claude_usage.contains_key(&key) {
+                        log(&format!("claude: usage from {} ({})", u.session, crate::activities::claude::status_text(&u)));
+                    }
+                    self.claude_usage.insert(key, *u);
                 }
                 // Ours to send, never to take.
                 crate::platform::ipc::Command::Answer { .. } => {}
