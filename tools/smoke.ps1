@@ -63,8 +63,8 @@ Say "screen $($screen.Width)x$($screen.Height) at $dpi dpi"
 Say "taskbar present: $([Smoke]::FindWindow('Shell_TrayWnd', $null) -ne [IntPtr]::Zero)"
 
 $failures = New-Object System.Collections.Generic.List[string]
-function Step([string]$name, [scriptblock]$body) {
-    try { & $body } catch { $failures.Add("$name : $_"); Say "FAILED $name : $_" }
+function Step([string]$label, [scriptblock]$body) {
+    try { & $body } catch { $failures.Add("$label : $_"); Say "FAILED $label : $_" }
 }
 
 function Shot([string]$name) {
