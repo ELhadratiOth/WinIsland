@@ -90,10 +90,10 @@ use crate::render::layout::{card_rect, frame_x, pill_fit, pill_rect, top_strip, 
 use crate::render::morph::{Morph, SHADOW_BLUR_DIP, SHADOW_DY_DIP};
 use crate::render::pill::{layout_for, waveform_levels, PillButton, PillContent, PillLayout, PillVisual, PILL_H_DIP};
 
-/// Widest and tallest card (370 DIP; a full Now Brief, screen time included, is 566 tall); the
-/// card window is that plus shadow room and never resizes.
+/// Widest and tallest card (370 DIP; a full Now Brief, screen time and the timer panel included,
+/// is 634 tall); the card window is that plus shadow room and never resizes.
 const CARD_FRAME_W_DIP: f32 = 370.0;
-const CARD_FRAME_H_DIP: f32 = 570.0;
+const CARD_FRAME_H_DIP: f32 = 640.0;
 const CARD_GAP_DIP: f32 = 12.0;
 /// The picker slides up this far while it fades in.
 const PICKER_SLIDE_DIP: f32 = 16.0;
