@@ -31,7 +31,7 @@ use crate::activities::shelf::Shelf;
 use crate::activities::shelf_worker::{ShelfMailbox, ShelfWorker};
 use crate::activities::football_worker::FootballWorker;
 use crate::activities::basketball_worker::BasketballWorker;
-use crate::activities::media::{seek_position, MediaCommand, MediaSnapshot, SeekHold};
+use crate::activities::media::{is_spotify, seek_position, MediaCommand, MediaSnapshot, SeekHold};
 use crate::activities::media_worker::{filetime_now, MediaWorker};
 use crate::activities::lyrics::{line_at, Lines};
 use crate::activities::lyrics_worker::{LyricsMailbox, LyricsWorker, Track};
@@ -74,8 +74,9 @@ use crate::platform::hotkey::register_hotkey;
 use crate::platform::dragdrop::{self, DropZone};
 use crate::platform::log::log;
 use crate::platform::taskbar;
-use crate::platform::tray::{MENU_WELLBEING, 
-    create_tray, remove_tray, show_menu, MENU_AUTOSTART, MENU_BRIEF, MENU_MATCH_HIDE, MENU_MATCH_OPEN, MENU_QUIT, MENU_SETTINGS, MENU_STOPWATCH, MENU_TIMER, MENU_UPDATE,
+use crate::platform::tray::{MENU_WELLBEING,
+    create_tray, remove_tray, show_menu, show_pill_menu, MENU_AUTOSTART, MENU_BRIEF, MENU_HIDE_1, MENU_HIDE_10, MENU_HIDE_5, MENU_MATCH_HIDE, MENU_MATCH_OPEN, MENU_PILL_SETTINGS,
+    MENU_QUIT, MENU_SETTINGS, MENU_STOPWATCH, MENU_TIMER, MENU_UNSNOOZE, MENU_UPDATE,
 };
 use crate::platform::windows::{post_buds, post_effects_changed, post_matches, post_media, watch_foreground, CardEvent, CardWindow, MainWindow, PillEvent, PillWindow, UiEvent};
 use crate::render::card::{
@@ -137,6 +138,8 @@ const BRIEF_WEATHER_WAIT_MS: u64 = 15_000;
 const BRIEF_IDLE_MS: u32 = 20_000;
 /// A slideshow changes the wallpaper without a broadcast: looked at this often.
 const TIMER_WALLPAPER: usize = 16;
+/// The island comes back after the pill's menu hid it.
+const TIMER_SNOOZE: usize = 17;
 const WALLPAPER_EVERY_MS: u32 = 600_000;
 const BAR_CHECK_MS: u32 = 2000;
 const METER_MS: u32 = 50;
@@ -271,6 +274,11 @@ impl Swipe {
 }
 
 /// The lyrics request for a track: it needs a title and a length (lrclib matches on both).
+/// A song's key in the liked set.
+fn like_key(m: &MediaSnapshot) -> String {
+    format!("{}\u{1}{}", m.artist, m.title)
+}
+
 fn track_of(m: &MediaSnapshot) -> Option<Track> {
     let t = m.timeline.filter(|t| t.end > t.start)?;
     (!m.title.trim().is_empty()).then(|| Track { artist: m.artist.clone(), title: m.title.clone(), duration_s: ((t.end - t.start) / 10_000_000) as u64 })
@@ -617,6 +625,11 @@ pub struct App {
     buds_mode_moment: Option<(NoiseControl, u64)>,
     /// The media card's pin: it stays open (no closing on leave or a click outside).
     card_pinned: bool,
+    /// Songs liked from the media card's heart ("artist\u{1}title"): Spotify doesn't say which
+    /// songs are in Liked Songs, so the heart shows what was pressed here.
+    liked: std::collections::HashSet<String>,
+    /// Hidden from the pill's right-click menu until then (ms).
+    snoozed_until: Option<u64>,
     /// The mode the card last asked for, and when: its echo from the Buds isn't a moment.
     buds_mode_sent: Option<(NoiseControl, u64)>,
     /// Music a bud coming out paused (those sessions), to play again when it is back in.
@@ -852,6 +865,8 @@ impl App {
             buds_mode_sent: None,
             ear_pause: None,
             card_pinned: false,
+            liked: Default::default(),
+            snoozed_until: None,
             matches: Vec::new(),
             match_moments: Default::default(),
             fresh_goals: Default::default(),
@@ -1419,7 +1434,7 @@ impl App {
         // Last night's answer is no use: wait for a fresh one too.
         let fresh = self.weather.as_ref().is_some_and(|w| unix_now() - w.fetched_utc <= 30 * 60);
         let waiting = (crate::activities::weather_worker::place().is_some() && !fresh) || self.card_state == CardState::Closing;
-        if should_auto_open(s.brief_morning, due_now, self.fullscreen, !matches!(self.card_state, CardState::Closed | CardState::Closing))
+        if should_auto_open(s.brief_morning, due_now, self.fullscreen || self.snoozed(), !matches!(self.card_state, CardState::Closed | CardState::Closing))
             && waiting
             && now_ms().saturating_sub(since) < BRIEF_WEATHER_WAIT_MS
         {
@@ -1430,7 +1445,7 @@ impl App {
             let _ = KillTimer(Some(self.main.hwnd), TIMER_BRIEF_WAIT);
         }
         self.brief_wait = None;
-        if !should_auto_open(s.brief_morning, due_now, self.fullscreen, self.card_state != CardState::Closed) {
+        if !should_auto_open(s.brief_morning, due_now, self.fullscreen || self.snoozed(), self.card_state != CardState::Closed) {
             return Ok(());
         }
         self.open_card(OpenCard::Brief, false)?;
@@ -1583,6 +1598,7 @@ impl App {
                 card.lyrics = self.lyrics_view(&card);
                 card.show_lyrics = self.show_lyrics;
                 card.pinned = self.card_pinned;
+                card.liked = is_spotify(&card.m.app_id).then(|| self.liked.contains(&like_key(&card.m)));
                 if let Some(page) = self.output_page_content(&card.m, now) {
                     card.page = MediaPage::Output(Box::new(page));
                 }
@@ -1906,6 +1922,8 @@ impl App {
         if !s.timer_done_open_card {
             false
         } else if should_show_done_card(self.fullscreen) {
+            // A finished timer brings back an island hidden from its menu.
+            self.snoozed_until = None;
             true
         } else {
             self.done_pending = true;
@@ -1963,9 +1981,16 @@ impl App {
                 self.ui.pill_layout = self.ui.pill.show(&self.gfx, &front, &behind, &self.ui.pill_scale, fade, compact)?;
                 let glide = self.ui.pill_window.shown();
                 self.ui.pill_window.place(pill, self.ui.pill_layout.frame_w, self.ui.pill_layout.radius, glide)?;
-                self.ui.pill_window.set_visible(!self.fullscreen);
-                let why = if self.fullscreen { format!("fullscreen: {}", foreground_exe().unwrap_or_default()) } else { format!("front {:?}", self.stack.first()) };
-                self.note_pill(!self.fullscreen, &why);
+                let snoozed = self.snoozed();
+                self.ui.pill_window.set_visible(!self.fullscreen && !snoozed);
+                let why = if self.fullscreen {
+                    format!("fullscreen: {}", foreground_exe().unwrap_or_default())
+                } else if snoozed {
+                    "hidden from its menu".to_string()
+                } else {
+                    format!("front {:?}", self.stack.first())
+                };
+                self.note_pill(!self.fullscreen && !snoozed, &why);
                 // An open card shrinks back into the pill as it is now (a new track's colours).
                 if front_changed && matches!((self.open, self.card_state), (Some(OpenCard::Activity(_) | OpenCard::Brief | OpenCard::Wellbeing), CardState::Opening | CardState::Open)) {
                     self.ui.morph.set_pill(&self.ui.pill.look(&front, &self.ui.pill_layout))?;
@@ -2416,6 +2441,17 @@ impl App {
                 return self.close_card();
             }
             CardAction::Lyrics => self.show_lyrics = !self.show_lyrics,
+            CardAction::Like => {
+                let song = match self.open {
+                    Some(OpenCard::Activity(ActivityKind::Media(id))) => self.media_of(id).map(like_key),
+                    _ => None,
+                };
+                if let Some(song) = song.filter(|_| crate::platform::spotify::toggle_like()) {
+                    if !self.liked.remove(&song) {
+                        self.liked.insert(song);
+                    }
+                }
+            }
             CardAction::Pin => {
                 self.card_pinned = !self.card_pinned;
                 if self.card_pinned {
@@ -3074,7 +3110,14 @@ impl App {
             return None;
         }
         let track = track_of(&card.m)?;
-        let lines = self.lyrics.get(&track.key())?.as_ref()?;
+        // Still asking, or nothing on lrclib: the chip stays and the cover says so.
+        let note = |text: &str| Some(LyricsView { before: None, prev: None, current: Some(text.to_string()), next: None, progress: 1.0 });
+        let lines = match self.lyrics.get(&track.key()) {
+            None if self.lyrics_asked.contains_key(&track.key()) => return note(tr("Sözler aranıyor…")),
+            None => return None,
+            Some(None) => return note(tr("Bu şarkının eşzamanlı sözleri yok")),
+            Some(Some(lines)) => lines,
+        };
         let t = card.m.timeline?;
         let pos_ms = (card.position? - t.start).max(0) as u64 / 10_000;
         let i = line_at(lines, pos_ms);
@@ -3324,13 +3367,50 @@ impl App {
         !inside(self.card_screen) && !inside(self.pill_screen())
     }
 
+    /// The pill's right-click menu: hide the island for 1, 5 or 10 minutes, or the settings of
+    /// what it shows.
+    fn pill_menu(&mut self) -> Result<()> {
+        let minutes = match show_pill_menu(self.main.hwnd) {
+            MENU_HIDE_1 => 1,
+            MENU_HIDE_5 => 5,
+            MENU_HIDE_10 => 10,
+            MENU_PILL_SETTINGS => {
+                open_settings_at(self.front_kind().map(settings_page_for));
+                return Ok(());
+            }
+            _ => return Ok(()),
+        };
+        let ms = minutes * 60_000;
+        self.snoozed_until = Some(now_ms() + ms as u64);
+        self.hide_card_now()?;
+        self.ui.pill_window.set_visible(false);
+        self.note_pill(false, &format!("hidden for {minutes} min"));
+        unsafe { SetTimer(Some(self.main.hwnd), TIMER_SNOOZE, ms, None) };
+        Ok(())
+    }
+
+    /// Hidden from the pill's menu.
+    fn snoozed(&self) -> bool {
+        self.snoozed_until.is_some_and(|until| now_ms() < until)
+    }
+
+    /// The hiding is over (its time, or the tray's "show now"): the island comes back.
+    fn unsnooze(&mut self) -> Result<()> {
+        unsafe {
+            let _ = KillTimer(Some(self.main.hwnd), TIMER_SNOOZE);
+        }
+        self.snoozed_until = None;
+        self.refresh()
+    }
+
     fn menu(&mut self) -> Result<()> {
         let front_match = match self.front_kind() {
             Some(ActivityKind::Match(key)) => self.match_of(key).map(|m| (m.id.clone(), m.url.clone())),
             _ => None,
         };
         let update = self.update_ready.as_ref().map(|s| s.latest.clone());
-        match show_menu(self.main.hwnd, autostart_enabled(), front_match.is_some(), update.as_deref()) {
+        match show_menu(self.main.hwnd, autostart_enabled(), front_match.is_some(), update.as_deref(), self.snoozed()) {
+            MENU_UNSNOOZE => self.unsnooze(),
             MENU_UPDATE => {
                 self.updater.apply();
                 Ok(())
@@ -3572,11 +3652,8 @@ impl App {
                 Some(step) => self.step_front(step),
                 None => Ok(()),
             },
-            // A right-click on the pill opens the settings of what it shows; the tray keeps the menu.
-            UiEvent::Pill(PillEvent::RightClick) => {
-                open_settings_at(self.front_kind().map(settings_page_for));
-                Ok(())
-            }
+            UiEvent::Pill(PillEvent::RightClick) => self.pill_menu(),
+            UiEvent::Timer(TIMER_SNOOZE) => self.unsnooze(),
             UiEvent::Tray { right: true } => self.menu(),
             UiEvent::Tray { right: false } if settings::current().tray_left_click == TrayClick::Settings => {
                 open_settings();

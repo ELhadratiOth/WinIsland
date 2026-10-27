@@ -16,6 +16,7 @@ pub mod os;
 pub mod power;
 pub mod privacy;
 pub mod session;
+pub mod spotify;
 pub mod taskbar;
 pub mod tray;
 pub mod uninstall_entry;

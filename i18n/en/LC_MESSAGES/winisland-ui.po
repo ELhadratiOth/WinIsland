@@ -804,6 +804,14 @@ msgstr "Cover"
 msgid "Sözler"
 msgstr "Lyrics"
 
+#: src/app.rs
+msgid "Sözler aranıyor…"
+msgstr "Looking for lyrics…"
+
+#: src/app.rs
+msgid "Bu şarkının eşzamanlı sözleri yok"
+msgstr "No synced lyrics for this song"
+
 #: src/render/card.rs
 msgid "Kronometre"
 msgstr "Stopwatch"
@@ -2672,6 +2680,22 @@ msgstr "Start the stopwatch"
 #: src/platform/tray.rs
 msgid "Ayarlar…"
 msgstr "Settings…"
+
+#: src/platform/tray.rs
+msgid "1 dakika gizle"
+msgstr "Hide for 1 minute"
+
+#: src/platform/tray.rs
+msgid "5 dakika gizle"
+msgstr "Hide for 5 minutes"
+
+#: src/platform/tray.rs
+msgid "10 dakika gizle"
+msgstr "Hide for 10 minutes"
+
+#: src/platform/tray.rs
+msgid "WinIsland'i şimdi göster"
+msgstr "Show WinIsland now"
 
 #: src/platform/tray.rs
 msgid "Çıkış"

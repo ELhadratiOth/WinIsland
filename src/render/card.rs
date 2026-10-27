@@ -9,7 +9,10 @@ use super::gfx::{new_surface, paint_surface, rect, rgba, white, Face, Gfx, Ink, 
 use super::icons::{glyph, Icon};
 use super::layout::Scale;
 use super::color::media_gradient;
-use super::pill::{alert_style, lighten, paint_app_icon, paint_live_mark, store_accent, timer_accent, BUDS_ACCENT, CLAUDE_ACCENT, WELLBEING_ACCENT, WELLBEING_GLYPH};
+use super::pill::{
+    alert_style, lighten, paint_app_icon, paint_live_mark, store_accent, timer_accent, BUDS_ACCENT, CLAUDE_ACCENT, HEART_FILLED_ICON, HEART_ICON, SPOTIFY_ICON, WELLBEING_ACCENT,
+    WELLBEING_GLYPH,
+};
 use crate::activities::live::AppIcon;
 use crate::activities::games::Store;
 use crate::activities::weather_alert::AlertKind;
@@ -22,7 +25,7 @@ use crate::platform::audio::{OutputBus, OutputKind};
 use crate::i18n::{n_, tr, trf};
 use super::color::TeamPalette;
 use super::crest::Crest;
-use crate::activities::media::{format_media_time, shown_position, MediaSnapshot, SeekHold};
+use crate::activities::media::{format_media_time, is_spotify, shown_position, MediaSnapshot, SeekHold};
 pub use crate::activities::shelf::FileKind;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -93,6 +96,8 @@ pub struct MediaCard {
     pub show_lyrics: bool,
     /// Pinned: the card stays open until the pin or the pill is pressed.
     pub pinned: bool,
+    /// The heart by the title (Spotify only): whether this song was liked from the card.
+    pub liked: Option<bool>,
 }
 
 /// The lyric lines around the position: the one before (dim), the one on, the next (dim), and
@@ -185,7 +190,7 @@ fn output_icon(kind: OutputKind, earbuds: bool) -> Icon {
 impl MediaCard {
     pub fn new(m: MediaSnapshot, now_filetime: i64, output: Option<String>, seeking: Option<f32>, pages: (usize, usize), hold: Option<SeekHold>) -> Self {
         let position = m.timeline.as_ref().and_then(|t| shown_position(t, hold, now_filetime));
-        MediaCard { m, position, output, seeking, pages, page: MediaPage::Player, lyrics: None, show_lyrics: false, pinned: false }
+        MediaCard { m, position, output, seeking, pages, page: MediaPage::Player, lyrics: None, show_lyrics: false, pinned: false, liked: None }
     }
 }
 
@@ -556,6 +561,8 @@ pub enum CardAction {
     Lyrics,
     /// The media card's pin: keeps it open.
     Pin,
+    /// The media card's heart: the song into (or out of) Spotify's Liked Songs.
+    Like,
     /// A segment of the Buds card's noise control (the mode's byte).
     BudsNoise(u8),
     /// A shelf tile's close button (its index, newest first).
@@ -1888,6 +1895,10 @@ impl Painter<'_, '_> {
                 let src = D2D_RECT_F { left: 0.0, top: (ah - src_h) / 2.0, right: aw, bottom: (ah + src_h) / 2.0 };
                 self.ink.image_rounded(art, m.art_size, src, band, d(24.0))?;
             }
+            None if is_spotify(&m.app_id) => {
+                self.ink.vgradient(band, d(24.0), rgba(ar, ag, ab, 0.55), rgba(ar, ag, ab, 0.2))?;
+                self.ink.svg(SPOTIFY_ICON, rect(d(170.0 - 32.0), d(36.0), d(64.0), d(64.0)), white(1.0))?;
+            }
             None => {
                 self.ink.vgradient(band, d(24.0), rgba(ar, ag, ab, 0.55), rgba(ar, ag, ab, 0.2))?;
                 let initial: String = m.app_name.chars().take(1).collect();
@@ -1931,20 +1942,38 @@ impl Painter<'_, '_> {
             }
         }
         let title = TextStyle::new(Face::Text, Weight::SemiBold, d(18.0), white(1.0)).ellipsis();
+        // The heart, right of the title and artist: they stop before it.
+        let liked = card.liked.filter(|_| lyrics.is_none());
+        let text_w = if liked.is_some() { d(240.0) } else { d(284.0) };
         if lyrics.is_none() {
-            self.ink.text(&m.title, rect(d(28.0), d(12.0 + 176.0 - 58.0), d(284.0), d(26.0)), &title)?;
+            self.ink.text(&m.title, rect(d(28.0), d(12.0 + 176.0 - 58.0), text_w, d(26.0)), &title)?;
         }
         if !m.artist.is_empty() && lyrics.is_none() {
             let artist = TextStyle::new(Face::Text, Weight::Regular, d(14.0), white(0.75)).ellipsis();
-            self.ink.text(&m.artist, rect(d(28.0), d(12.0 + 176.0 - 33.0), d(284.0), d(20.0)), &artist)?;
+            self.ink.text(&m.artist, rect(d(28.0), d(12.0 + 176.0 - 33.0), text_w, d(20.0)), &artist)?;
+        }
+        if let Some(on) = liked {
+            let button = rect(band.right - d(12.0) - d(36.0), d(12.0 + 176.0 - 50.0), d(36.0), d(36.0));
+            self.ink.rrect(button, d(18.0), [0.0, 0.0, 0.0, 0.35])?;
+            let heart = rect(button.left + d(7.0), button.top + d(7.5), d(22.0), d(22.0));
+            if on {
+                self.ink.svg(HEART_FILLED_ICON, heart, rgba(0x1E, 0xD7, 0x60, 1.0))?;
+            } else {
+                self.ink.svg(HEART_ICON, heart, white(1.0))?;
+            }
+            self.hits.push((button, CardAction::Like));
         }
 
-        // App badge and output chip.
+        // App badge (Spotify's logo, else the app's initial on its colour) and output chip.
         let badge = rect(d(16.0), d(204.0), d(20.0), d(20.0));
-        let app = crate::activities::media::app_accent(&m.app_id);
-        self.ink.rrect(badge, d(10.0), rgba(app[0], app[1], app[2], 1.0))?;
-        let initial: String = m.app_name.chars().take(1).collect();
-        self.ink.text(&initial, badge, &TextStyle::new(Face::Text, Weight::Bold, d(11.0), white(1.0)).centered())?;
+        if is_spotify(&m.app_id) {
+            self.ink.svg(SPOTIFY_ICON, badge, white(1.0))?;
+        } else {
+            let app = crate::activities::media::app_accent(&m.app_id);
+            self.ink.rrect(badge, d(10.0), rgba(app[0], app[1], app[2], 1.0))?;
+            let initial: String = m.app_name.chars().take(1).collect();
+            self.ink.text(&initial, badge, &TextStyle::new(Face::Text, Weight::Bold, d(11.0), white(1.0)).centered())?;
+        }
         let chip_text = TextStyle::new(Face::Text, Weight::Medium, d(12.5), white(1.0));
         let chip_text_w = match &card.output {
             Some(output) => Some(self.ink.measure(output, &chip_text)?.min(d(150.0))),
@@ -2302,5 +2331,60 @@ mod tests {
         let mut p = PickerState { stopwatch_tab: true, h: 1, m: 2, s: 3 };
         p.preset(15);
         assert_eq!((p.stopwatch_tab, p.h, p.m, p.s), (false, 0, 15, 0));
+    }
+
+    /// Spotify's card without a cover, liked, and with the lyrics note, painted into PNGs in
+    /// `WINISLAND_SHOTS` (the smoke test's pictures) with the music pill:
+    /// `cargo test --profile quick spotify_pictures -- --ignored`.
+    #[test]
+    #[ignore]
+    fn spotify_pictures() {
+        use crate::activities::media::{Caps, Timeline};
+        use crate::render::offscreen::render;
+        let dir = std::env::var("WINISLAND_SHOTS").unwrap_or_else(|_| ".".into());
+        unsafe {
+            let _ = windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_MULTITHREADED);
+        }
+        let s = Scale::from_dpi(144);
+        let m = MediaSnapshot {
+            id: 1,
+            app_id: "Spotify.exe".into(),
+            app_name: "Spotify".into(),
+            title: "Midnight Train".into(),
+            artist: "The Night Owls".into(),
+            playing: true,
+            timeline: Some(Timeline { start: 0, end: 2_150_000_000, position: 640_000_000, last_updated: 1, rate: Some(1.0), playing: false }),
+            can: Caps { play_pause: true, prev: true, next: true, seek: true, shuffle: true, repeat: true },
+            shuffle: Some(false),
+            repeat: Some(false),
+            art: None,
+            art_size: (0, 0),
+            accent: [0x1D, 0xB9, 0x54],
+            changed_ms: 0,
+        };
+        let note = LyricsView { before: None, prev: None, current: Some(tr("Bu şarkının eşzamanlı sözleri yok").into()), next: None, progress: 1.0 };
+        for (name, liked, lyrics) in [("10-spotify-card", true, false), ("11-spotify-card-unliked", false, false), ("12-spotify-lyrics-note", true, true)] {
+            let mut card = MediaCard::new(m.clone(), 1, Some("Speakers".into()), None, (0, 1), None);
+            card.liked = Some(liked);
+            card.lyrics = Some(note.clone());
+            card.show_lyrics = lyrics;
+            let content = CardContent::Media(Box::new(card));
+            let (wd, hd) = card_size_dip(&content);
+            let (w, h) = (s.even_px(wd), s.px(hd));
+            let mut painted = None;
+            let px = render(w as u32, h as u32, [0.11, 0.11, 0.12, 1.0], |ink| {
+                painted = Some(paint_card(ink, &content, &s, w, h)?);
+                Ok(())
+            })
+            .expect("painted");
+            let hits = painted.map(|p| p.hits).unwrap_or_default();
+            assert_eq!(hits.iter().any(|(_, a)| *a == CardAction::Like), !lyrics, "{name}: the heart is there unless the lyrics are");
+            assert!(hits.iter().any(|(_, a)| *a == CardAction::Lyrics), "{name}: the lyrics chip is there with only a note");
+            crate::slint_shot::save_png(&format!("{dir}/{name}.png"), w as u32, h as u32, &px).expect("saved");
+        }
+        let pill = crate::render::pill::PillContent::media(m);
+        let (w, h) = (s.even_px(pill.width_dip()), s.px(32.0));
+        let px = render(w as u32, h as u32, [0.0, 0.0, 0.0, 1.0], |ink| crate::render::pill::paint_pill_content(ink, &pill, w, h, &s)).expect("painted");
+        crate::slint_shot::save_png(&format!("{dir}/13-spotify-pill.png"), w as u32, h as u32, &px).expect("saved");
     }
 }

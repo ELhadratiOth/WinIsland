@@ -44,12 +44,21 @@ score, what Claude Code is doing. Click the pill and a card opens below it.
   over the pill to switch between them. When a game, video or presentation is full screen, the pill
   is hidden; things that can't wait (Claude's permission request, a weather warning) appear as a small
   island at the top of the screen.
+- **Right-click the pill** to hide the island for 1, 5 or 10 minutes, or to open the settings of what
+  it shows. **Show WinIsland now** in the tray menu brings it back sooner.
 
 ## Cards
 
-The card grows out of the pill when it opens and shrinks back into it when the mouse leaves. On the
-music card, **Lyrics** in the corner of the cover opens the song's lyrics; they come from `lrclib.net`
-and scroll along with the song.
+The card grows out of the pill when it opens, keeping the same distance from the top of the screen,
+and shrinks back into it when the mouse leaves. On the music card, **Lyrics** in the corner of the
+cover opens the song's lyrics; they come from `lrclib.net` and scroll along with the song (the cover
+says so when a song has no synced lyrics).
+
+For Spotify, the pill and card show Spotify's logo, and a **heart** beside the song's title adds it to
+your Liked Songs, or removes it. Windows' media controls have no "like", so WinIsland brings Spotify to
+the front for a moment, presses Spotify's own Like shortcut (Alt+Shift+B) and gives the focus back.
+Spotify doesn't tell other apps which songs you've liked, so the heart shows only what you pressed
+in WinIsland.
 
 When idle, click the clock to open the day's summary: weather, matches, the last song played and screen
 time.
@@ -251,8 +260,9 @@ builds a second full copy of the dependencies under `debug\` (tens of GB).
   file changes.
 - `WINISLAND_SETTINGS_SHOTS=<folder> winisland-settings.exe`: opens the settings window off-screen,
   takes a screenshot of each page with the real renderer, and closes without saving the settings.
-- `tools\smoke.ps1`: starts the app with a demo timer, clicks the pill and takes screenshots (the
-  **Smoke test** workflow runs it on a Windows runner).
+- `tools\smoke.ps1`: starts the app with a demo timer, clicks the pill, hides it from its right-click
+  menu and takes screenshots (the **Smoke test** workflow runs it on a Windows runner, then paints
+  the Spotify card and pill with `cargo test --lib render::card::tests::spotify_pictures -- --ignored`).
 - `winisland.exe --demo`: starts with a one-minute sample timer; `--match-replay <folder>` replays a match
   from recorded score tables.
 - `assets\make_icon.py`: redraws the icon (the white pill in the tray).

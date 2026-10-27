@@ -58,6 +58,9 @@ pub struct TaskbarInfo {
 /// pill sits 8 DIP below the screen's edge at the standard size.
 pub const STRIP_H_DIP: f32 = 48.0;
 
+/// How far below the screen's edge the pill sits, and the card that grows out of it.
+pub const TOP_INSET_DIP: f32 = 8.0;
+
 /// The island's place: a band across the top of `monitor` (screen pixels), the pill centred in
 /// it and cards opening below it.
 pub fn top_strip(monitor: RectPx, s: &Scale) -> TaskbarInfo {
@@ -86,12 +89,13 @@ pub fn pill_fit(bar_h: i32, h_dip: f32, s: &Scale, factor: f32) -> f32 {
     factor.min(room / (h_dip * s.0))
 }
 
-/// A card centred on `center_x`, `gap_dip` above a bottom taskbar or below the top strip.
+/// A card centred on `center_x`: `gap_dip` above a bottom taskbar, or in the top strip as far
+/// below the screen's edge as the pill (it grows out of the pill, down).
 pub fn card_rect(bar: &TaskbarInfo, center_x: i32, w_dip: f32, h_dip: f32, gap_dip: f32, s: &Scale) -> RectPx {
     let w = s.even_px(w_dip) as i32;
     let h = s.px(h_dip) as i32;
     let gap = s.px(gap_dip) as i32;
-    let y = if bar.bottom { bar.rect.y - gap - h } else { bar.rect.bottom() + gap };
+    let y = if bar.bottom { bar.rect.y - gap - h } else { bar.rect.y + s.px(TOP_INSET_DIP) as i32 };
     // Centred on the pill, but never off the taskbar's monitor (a pill at the far left: icons
     // centred with Widgets off, or a large offset).
     let margin = s.px(8.0) as i32;
@@ -195,11 +199,14 @@ mod tests {
         assert_eq!(pill_rect(&strip, 176.0, 32.0, &s, 0.0), RectPx { x: 850, y: 10, w: 220, h: 40 });
     }
 
+    /// The card's top where the pill's is: as far from the top of the screen as the small island.
     #[test]
-    fn card_opens_12dip_below_the_strip() {
+    fn card_opens_level_with_the_pill() {
         let s = Scale::from_dpi(120);
         let strip = top_strip(RectPx { x: 0, y: 0, w: 1920, h: 1080 }, &s);
-        assert_eq!(card_rect(&strip, 960, 340.0, 350.0, 12.0, &s), RectPx { x: 747, y: 75, w: 426, h: 438 });
+        let card = card_rect(&strip, 960, 340.0, 350.0, 12.0, &s);
+        assert_eq!(card, RectPx { x: 747, y: 10, w: 426, h: 438 });
+        assert_eq!(card.y, pill_rect(&strip, 176.0, 32.0, &s, 0.0).y);
     }
 
     #[test]

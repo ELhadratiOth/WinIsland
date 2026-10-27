@@ -19,6 +19,12 @@ pub const MENU_QUIT: u32 = 4;
 pub const MENU_UPDATE: u32 = 8;
 pub const MENU_BRIEF: u32 = 9;
 pub const MENU_WELLBEING: u32 = 10;
+pub const MENU_UNSNOOZE: u32 = 11;
+/// The pill's right-click menu: hide it for 1, 5 or 10 minutes, or its settings.
+pub const MENU_HIDE_1: u32 = 21;
+pub const MENU_HIDE_5: u32 = 22;
+pub const MENU_HIDE_10: u32 = 23;
+pub const MENU_PILL_SETTINGS: u32 = 24;
 
 const TRAY_ID: u32 = 1;
 
@@ -93,11 +99,44 @@ pub fn remove_tray(owner: HWND) {
     }
 }
 
-/// Shows the menu at the cursor and returns the chosen `MENU_*` id (0 if dismissed). A newer
-/// release (`update`, its version) comes first, then a match in front of the pill's two items.
-pub fn show_menu(owner: HWND, autostart: bool, match_items: bool, update: Option<&str>) -> u32 {
+/// `menu` at the cursor (`flags` place it); the chosen `MENU_*` id, 0 if dismissed.
+fn track(owner: HWND, menu: HMENU, flags: TRACK_POPUP_MENU_FLAGS) -> u32 {
+    unsafe {
+        let mut p = POINT::default();
+        let _ = GetCursorPos(&mut p);
+        // Required so the menu closes when the user clicks elsewhere.
+        let _ = SetForegroundWindow(owner);
+        let chosen = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | flags, p.x, p.y, Some(0), owner, None).0 as u32;
+        let _ = PostMessageW(Some(owner), WM_NULL, WPARAM(0), LPARAM(0));
+        let _ = DestroyMenu(menu);
+        chosen
+    }
+}
+
+/// The pill's right-click menu, opening down from the cursor: hide the island for a while, or
+/// the settings of what it shows.
+pub fn show_pill_menu(owner: HWND) -> u32 {
     unsafe {
         let Ok(menu) = CreatePopupMenu() else { return 0 };
+        let _ = AppendMenuW(menu, MF_STRING, MENU_HIDE_1 as usize, &HSTRING::from(tr("1 dakika gizle")));
+        let _ = AppendMenuW(menu, MF_STRING, MENU_HIDE_5 as usize, &HSTRING::from(tr("5 dakika gizle")));
+        let _ = AppendMenuW(menu, MF_STRING, MENU_HIDE_10 as usize, &HSTRING::from(tr("10 dakika gizle")));
+        let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
+        let _ = AppendMenuW(menu, MF_STRING, MENU_PILL_SETTINGS as usize, &HSTRING::from(tr("Ayarlar…")));
+        track(owner, menu, TPM_TOPALIGN | TPM_CENTERALIGN)
+    }
+}
+
+/// Shows the menu at the cursor and returns the chosen `MENU_*` id (0 if dismissed). A newer
+/// release (`update`, its version) comes first, then a match in front of the pill's two items;
+/// while the island is hidden from its own menu, a way to bring it back.
+pub fn show_menu(owner: HWND, autostart: bool, match_items: bool, update: Option<&str>, snoozed: bool) -> u32 {
+    unsafe {
+        let Ok(menu) = CreatePopupMenu() else { return 0 };
+        if snoozed {
+            let _ = AppendMenuW(menu, MF_STRING, MENU_UNSNOOZE as usize, &HSTRING::from(tr("WinIsland'i şimdi göster")));
+            let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
+        }
         if let Some(version) = update {
             let _ = AppendMenuW(menu, MF_STRING, MENU_UPDATE as usize, &HSTRING::from(trf("Güncelle: {}", &[&version])));
             let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
@@ -117,15 +156,7 @@ pub fn show_menu(owner: HWND, autostart: bool, match_items: bool, update: Option
         let _ = AppendMenuW(menu, MF_STRING, MENU_SETTINGS as usize, &HSTRING::from(tr("Ayarlar…")));
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
         let _ = AppendMenuW(menu, MF_STRING, MENU_QUIT as usize, &HSTRING::from(tr("Çıkış")));
-        let mut p = POINT::default();
-        let _ = GetCursorPos(&mut p);
-        // Required so the menu closes when the user clicks elsewhere.
-        let _ = SetForegroundWindow(owner);
-        let flags = TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN | TPM_CENTERALIGN;
-        let chosen = TrackPopupMenu(menu, flags, p.x, p.y, Some(0), owner, None).0 as u32;
-        let _ = PostMessageW(Some(owner), WM_NULL, WPARAM(0), LPARAM(0));
-        let _ = DestroyMenu(menu);
-        chosen
+        track(owner, menu, TPM_BOTTOMALIGN | TPM_CENTERALIGN)
     }
 }
 

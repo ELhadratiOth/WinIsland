@@ -249,7 +249,12 @@ pub enum MediaCommand {
 
 /// Accent when there is no cover: the app's colour, or a neutral blue-grey.
 pub fn app_accent(app_id: &str) -> [u8; 3] {
-    if app_id.to_ascii_lowercase().contains("spotify") { [0x1D, 0xB9, 0x54] } else { [0x8A, 0x93, 0xB4] }
+    if is_spotify(app_id) { [0x1D, 0xB9, 0x54] } else { [0x8A, 0x93, 0xB4] }
+}
+
+/// Spotify's desktop app (its logo instead of an initial, and the like button).
+pub fn is_spotify(app_id: &str) -> bool {
+    app_id.to_ascii_lowercase().contains("spotify")
 }
 
 /// Friendly name for a GSMTC source app id.

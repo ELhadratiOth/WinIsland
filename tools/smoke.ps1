@@ -1,6 +1,7 @@
 # Starts WinIsland with a one-minute demo timer, checks that the pill's window sits at the top centre
-# of the screen, photographs it, clicks the pill to open its card and photographs again. Everything
-# it finds goes into the output folder: screenshots, windows.txt, report.txt and the app's log.
+# of the screen, photographs it, clicks the pill to open its card (its top level with the pill's),
+# then hides the pill from its right-click menu. Everything it finds goes into the output folder:
+# screenshots, windows.txt, report.txt and the app's log.
 #
 #   powershell -ExecutionPolicy Bypass -File tools\smoke.ps1 [-Exe target\quick\winisland.exe] [-Out shots]
 param([string]$Exe = 'target\quick\winisland.exe', [string]$Out = 'shots')
@@ -133,14 +134,41 @@ if ($app) {
     Start-Sleep -Seconds 2
     Shot '03-card-open'
     $open = Windows 'card open'
-    if (-not ($open | Where-Object { $_ -match '^WinIslandCardInput visible' })) {
+    $card = $open | Where-Object { $_ -match '^WinIslandCardInput visible (-?\d+) (-?\d+)' } | Select-Object -First 1
+    if (-not $card) {
         $failures.Add('no card window after clicking the pill')
         Say 'no card window after clicking the pill'
+    } elseif ($pill -and $pill -match 'visible (-?\d+) (-?\d+)') {
+        # The big island opens as far from the top of the screen as the small one.
+        $pillTop = [int]$Matches[2]
+        $null = $card -match 'visible (-?\d+) (-?\d+)'
+        Say "card window: $card (top $($Matches[2]), pill top $pillTop)"
+        if ([math]::Abs([int]$Matches[2] - $pillTop) -gt 2) { $failures.Add("the card's top ($($Matches[2])) is not the pill's ($pillTop)") }
     }
 
     [Smoke]::SetCursorPos($away.X, $away.Y) | Out-Null
     Start-Sleep -Seconds 4
     Shot '04-card-closed'
+
+    # Right-click: the pill's menu, then its first item (hide for a minute).
+    [Smoke]::SetCursorPos([int]($screen.Width / 2), $pillCenterY) | Out-Null
+    Start-Sleep -Milliseconds 300
+    [Smoke]::mouse_event(0x0008, 0, 0, 0, [UIntPtr]::Zero) # right down
+    Start-Sleep -Milliseconds 80
+    [Smoke]::mouse_event(0x0010, 0, 0, 0, [UIntPtr]::Zero) # right up
+    Start-Sleep -Seconds 1
+    Shot '05-pill-menu'
+    [System.Windows.Forms.SendKeys]::SendWait('{DOWN}{ENTER}')
+    [Smoke]::SetCursorPos($away.X, $away.Y) | Out-Null
+    Start-Sleep -Seconds 2
+    Shot '06-hidden'
+    $hidden = Windows 'hidden for a minute'
+    if ($hidden | Where-Object { $_ -match 'visible (-?\d+) (-?\d+) (\d+) (\d+)' -and [int]$Matches[2] -lt $pillCenterY -and [int]$Matches[2] + [int]$Matches[4] -gt $pillCenterY }) {
+        $failures.Add('the pill is still there after "Hide for 1 minute"')
+        Say 'the pill is still there after "Hide for 1 minute"'
+    } else {
+        Say 'pill hidden from its menu'
+    }
 
     $alive = -not $app.HasExited
     Say "app still running: $alive"
