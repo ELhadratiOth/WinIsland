@@ -1,0 +1,22 @@
+﻿== pill
+WinIslandVisual visible 0 8 1024 32 0x082800A8
+WinIslandPillInput visible 424 8 176 32 0x08080088
+WinIslandVisual hidden 303 0 418 688 0x082800A8
+WinIslandCardInput hidden 327 8 370 152 0x08080088
+WinIslandMain hidden 0 0 1 1 0x00000080
+IME hidden 0 0 0 0 0x00000008
+== card open
+WinIslandCardInput visible 327 8 370 77 0x08080088
+WinIslandVisual visible 303 0 418 688 0x082800A8
+WinIslandVisual visible 0 8 1024 32 0x082800A8
+WinIslandPillInput visible 424 8 176 32 0x08080088
+WinIslandMain hidden 0 0 1 1 0x00000080
+IME hidden 0 0 0 0 0x00000008
+== hidden for a minute
+WinIslandVisual hidden 0 8 1024 32 0x082800A8
+WinIslandPillInput hidden 424 8 176 32 0x08080088
+WinIslandVisual hidden 303 0 418 688 0x082800A8
+WinIslandCardInput hidden 327 8 370 77 0x08080088
+WinIslandMain hidden 0 0 1 1 0x00000080
+MSCTFIME UI hidden 0 0 0 0 0x00000000
+IME hidden 0 0 0 0 0x00000000

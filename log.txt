@@ -1,0 +1,15 @@
+[      0] windows build Some(26100) (Windows11)
+[      4] autostart: Error { code: HRESULT(0x80070002), message: "The system cannot find the file specified." }
+[     64] games: []
+[     77] captures: watching C:\Users\runneradmin\Pictures\Screenshots
+[     79] headsets: connected [], 0 with a level
+[    168] pill: shown (front Some(Timer))
+[    169] started: taskbar RectPx { x: 0, y: 0, w: 1024, h: 48 }, scale 1, fullscreen false
+[    170] headsets: []
+[    736] buds: no paired Galaxy Buds (Samsung's SPP service, or Buds Pro)
+[    926] wallpaper: Some(Picture("C:\\Windows\\web\\wallpaper\\Windows\\img0.jpg", Some(SystemTime { intervals: 133564284272670756 }))) → accent Some((78, 133, 203))
+[   1681] brief: shown (start)
+[  34745] pill: click at 88 (Some(Timer))
+[  34750] card: toggle Activity(Timer) while Closed
+[  42436] pill: hidden (hidden for 1 min)
+[  44540] claude: usage from smoke (Opus 5.5 · context 34% · 5h 24% · week 41%)

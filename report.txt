@@ -1,0 +1,15 @@
+﻿screen 1024x768 at 96 dpi
+taskbar present: True
+shot 01-started
+shot 02-pill
+pill window: WinIslandPillInput visible 424 8 176 32 0x08080088 (centre x 512, screen centre 512)
+shot 03-card-open
+card window: WinIslandCardInput visible 327 8 370 77 0x08080088 (top 8, pill top 8)
+shot 04-card-closed
+shot 05-pill-menu
+shot 06-hidden
+pill hidden from its menu
+claude-status printed: Opus 5.5 · context 34% · 5h 24% · week 41% (exit 0)
+the app got the usage
+app still running: True
+SMOKE TEST PASSED
