@@ -40,7 +40,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use winisland::platform::frame::{adopt, frame_from_creation, style_frame};
 use winisland_ui::*;
 
-const TITLE: PCWSTR = w!("WinIsland Ayarları");
+const TITLE: PCWSTR = w!("WinIsland Settings");
 const HOTKEYS: [Hotkey; 5] = [Hotkey::WinAltN, Hotkey::WinAltT, Hotkey::CtrlAltN, Hotkey::WinShiftN, Hotkey::Off];
 const KEEP_MIN: [u32; 5] = [1, 5, 10, 30, 0];
 const ADD_MIN: [u32; 3] = [1, 5, 10];

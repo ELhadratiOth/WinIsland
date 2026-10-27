@@ -2721,6 +2721,10 @@ msgstr "{} of {}"
 msgid "Görevler"
 msgstr "Tasks"
 
+#: src/app.rs
+msgid "Tur {} · {}"
+msgstr "Lap {} · {}"
+
 #: src/render/card.rs
 msgid "{} sonra sıfırlanır"
 msgstr "Resets in {}"

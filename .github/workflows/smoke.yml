@@ -32,13 +32,15 @@ jobs:
       - name: Run and take screenshots
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File tools\smoke.ps1 -Exe target\quick\winisland.exe -Out shots
-      - name: Paint the Spotify, Claude and brief cards
+      - name: Paint the cards and check the shelf's copy
         if: always()
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force shots | Out-Null
           $env:WINISLAND_SHOTS = (Resolve-Path shots).Path
           cargo test --profile quick --lib render::card::tests -- --ignored
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test --profile quick --lib platform::clipboard -- --ignored
       - uses: actions/upload-artifact@v4
         if: always()
         with:

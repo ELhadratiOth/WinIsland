@@ -11,7 +11,7 @@ pub struct File {
 const MAGIC: &[u8; 4] = b"NBP1";
 /// No exe of ours comes near it: a bigger size is damage, not a file to allocate for.
 const MAX_FILE: u64 = 256 << 20;
-pub const DAMAGED: &str = "Kurulum dosyası bozuk; yeniden indir.";
+pub const DAMAGED: &str = "The setup file is damaged; download it again.";
 
 /// build.rs packs; the setup only unpacks.
 #[cfg_attr(not(test), allow(dead_code))]

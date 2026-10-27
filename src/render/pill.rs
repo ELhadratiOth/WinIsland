@@ -997,7 +997,7 @@ fn paint_timer(ink: &Ink, front: &PillContent, w: f32, h: f32, s: &Scale) -> Res
     let d = |v: f32| v * s.0;
     let (icon, text, label, paused) = match front {
         PillContent::Timer { text, label, paused } => (Icon::Timer, text, *label, *paused),
-        PillContent::Stopwatch { text, paused } => (Icon::Stopwatch, text, "Kronometre", *paused),
+        PillContent::Stopwatch { text, paused } => (Icon::Stopwatch, text, crate::i18n::tr("Kronometre"), *paused),
         PillContent::Media(_)
         | PillContent::Buds(_)
         | PillContent::Match(_)

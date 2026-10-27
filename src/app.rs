@@ -90,10 +90,10 @@ use crate::render::layout::{card_rect, frame_x, pill_fit, pill_rect, top_strip, 
 use crate::render::morph::{Morph, SHADOW_BLUR_DIP, SHADOW_DY_DIP};
 use crate::render::pill::{layout_for, waveform_levels, PillButton, PillContent, PillLayout, PillVisual, PILL_H_DIP};
 
-/// Widest and tallest card (370 DIP; a full Now Brief, screen time and the timer panel included,
-/// is 634 tall); the card window is that plus shadow room and never resizes.
+/// Widest and tallest card (370 DIP; a full Now Brief, the next hours, screen time and the timer
+/// panel included, is 648 tall); the card window is that plus shadow room and never resizes.
 const CARD_FRAME_W_DIP: f32 = 370.0;
-const CARD_FRAME_H_DIP: f32 = 640.0;
+const CARD_FRAME_H_DIP: f32 = 650.0;
 const CARD_GAP_DIP: f32 = 12.0;
 /// The picker slides up this far while it fades in.
 const PICKER_SLIDE_DIP: f32 = 16.0;
@@ -636,6 +636,8 @@ pub struct App {
     claude_limits: (Option<Limit>, Option<Limit>),
     /// What is typed in the Claude card's message box.
     claude_draft: String,
+    /// The shelf tile last copied (its button shows a check while the mouse stays on it).
+    shelf_copied: Option<usize>,
     /// The message box has the keyboard: the window that had the foreground before it took it.
     claude_typing: Option<isize>,
     /// The first half of a character typed in two UTF-16 units (an emoji).
@@ -881,6 +883,7 @@ impl App {
             claude_limits: (None, None),
             claude_draft: String::new(),
             claude_typing: None,
+            shelf_copied: None,
             claude_surrogate: None,
             matches: Vec::new(),
             match_moments: Default::default(),
@@ -1604,7 +1607,7 @@ impl App {
                 let tenths = settings::current().stopwatch_tenths;
                 CardContent::Stopwatch(StopwatchCard {
                     text: if tenths { format_stopwatch(slot.w.elapsed_ms(now)) } else { format_elapsed(slot.w.elapsed_ms(now)) },
-                    last_lap: laps.last().map(|l| format!("Tur {} · {}", laps.len(), format_stopwatch(*l))),
+                    last_lap: laps.last().map(|l| trf("Tur {} · {}", &[&laps.len(), &format_stopwatch(*l)])),
                     paused: slot.w.state() == RunState::Paused,
                 })
             }),
@@ -1640,7 +1643,7 @@ impl App {
                     .iter()
                     .map(|i| ShelfTile { name: i.name.clone(), thumb: self.shelf_thumbs.get(&i.path).cloned().flatten(), kind: i.kind })
                     .collect();
-                CardContent::Shelf(ShelfCard { tiles, hover: self.shelf_hover })
+                CardContent::Shelf(ShelfCard { tiles, hover: self.shelf_hover, copied: self.shelf_copied.filter(|i| Some(*i) == self.shelf_hover) })
             }),
             OpenCard::Activity(ActivityKind::Game(key)) => self.game_card(key, now).map(|c| CardContent::Game(Box::new(c))),
             OpenCard::Activity(ActivityKind::Clock | ActivityKind::Weather) => self.weather_card().map(|c| CardContent::Weather(Box::new(c))),
@@ -2575,6 +2578,14 @@ impl App {
                     b.noise = Some(mode);
                     self.buds_mode_sent = Some((mode, now_ms()));
                     self.buds_worker.set_noise(mode);
+                }
+            }
+            CardAction::ShelfCopy(i) => {
+                if let Some(item) = self.shelf.items().get(i) {
+                    match crate::platform::clipboard::copy_file(&item.path, item.kind) {
+                        Ok(()) => self.shelf_copied = Some(i),
+                        Err(e) => log(&format!("shelf: copy failed: {e:?}")),
+                    }
                 }
             }
             CardAction::ShelfRemove(i) => {
@@ -4008,19 +4019,19 @@ mod tests {
         use crate::render::card::{BriefCard, BriefMatchRow, BriefMusic, BriefWeather, CardTeam};
         let team = || CardTeam { name: "FB".into(), code: "FB".into(), palette: crate::render::color::team_palette([0, 0, 0], [255, 255, 255]), crest: None };
         let full = BriefCard {
-            greeting: "Günaydın, Ekin".into(),
-            date: "Perşembe, 22 Ekim".into(),
+            greeting: "Good morning, Othman".into(),
+            date: "Tuesday, October 27".into(),
             weather: Some(BriefWeather {
                 symbol: "⛅".into(),
                 temp: "17°".into(),
-                summary: "Parçalı bulutlu".into(),
-                hours: vec![],
-                rain: Some("14:00 civarı yağmur".into()),
+                summary: "Partly cloudy · 11° / 21°".into(),
+                hours: vec![("12:00".into(), "⛅".into(), "17°".into()); 6],
+                rain: Some("Rain around 14:00".into()),
                 fx: WeatherFx::Clouds,
             }),
             matches: (0..3).map(|_| BriefMatchRow { home: team(), away: team(), status: "20:00".into(), live: false }).collect(),
             music: Some(BriefMusic { title: "t".into(), artist: "a".into(), art: None, art_size: (0, 0), playing: true }),
-            screen: Some(("Ekran süresi · 3 sa 40 dk".into(), "Bugün · VS Code 1 sa 50 dk".into())),
+            screen: Some(("Screen time · 3 h 40 min".into(), "Today · VS Code 1 h 50 min".into())),
         };
         let (w, h) = card_size_dip(&CardContent::Brief(Box::new(full)));
         assert!(w <= CARD_FRAME_W_DIP && h <= CARD_FRAME_H_DIP, "a full brief is {w}×{h}");

@@ -256,7 +256,7 @@ pub fn decision_json(allow: bool) -> String {
     let decision = if allow {
         serde_json::json!({"behavior": "allow"})
     } else {
-        serde_json::json!({"behavior": "deny", "message": "WinIsland'dan reddedildi"})
+        serde_json::json!({"behavior": "deny", "message": "Denied from WinIsland"})
     };
     serde_json::json!({"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": decision}}).to_string()
 }
@@ -621,7 +621,7 @@ mod tests {
         assert_eq!(allow, json!({"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": {"behavior": "allow"}}}));
         let deny: Value = serde_json::from_str(&decision_json(false)).unwrap();
         assert_eq!(deny["hookSpecificOutput"]["decision"]["behavior"], "deny");
-        assert_eq!(deny["hookSpecificOutput"]["decision"]["message"], "WinIsland'dan reddedildi");
+        assert_eq!(deny["hookSpecificOutput"]["decision"]["message"], "Denied from WinIsland");
     }
 
     #[test]

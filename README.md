@@ -40,7 +40,9 @@ score, what Claude Code is doing. Click the pill and a card opens below it.
 - **Games:** Steam and Epic Games downloads, updates, pauses and play time.
 - **Digital Wellbeing:** the day's screen time, each app's share, and the limits you set.
 - **Shelf:** files you drop on the pill wait there until you drag them where you need them; new
-  screenshots are added to the shelf automatically.
+  screenshots are added to the shelf automatically. Hover a file for its copy button: an image is
+  copied as its picture (paste it into a chat or a document), a text or code file as its text, and
+  every file as the file itself (paste it into a folder).
 - **System:** volume, charging and low-battery warnings, the app using the microphone or camera, and
   the charge of Bluetooth headphones.
 - When several activities are active, thin strips show beside the front one; scroll the mouse wheel

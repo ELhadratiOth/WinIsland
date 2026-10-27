@@ -338,6 +338,8 @@ pub struct ShelfTile {
 pub struct ShelfCard {
     pub tiles: Vec<ShelfTile>,
     pub hover: Option<usize>,
+    /// The tile just copied: its copy button shows a check.
+    pub copied: Option<usize>,
 }
 
 /// A tile's colour and glyph when it has no preview (One UI's My Files hues).
@@ -360,23 +362,26 @@ pub fn kind_style(kind: FileKind) -> ((u8, u8, u8), Icon) {
 pub struct ShelfLayout {
     pub tiles: Vec<D2D_RECT_F>,
     pub closes: Vec<D2D_RECT_F>,
+    pub copies: Vec<D2D_RECT_F>,
     pub clear: D2D_RECT_F,
 }
 
 /// Four 75 DIP tiles a row, 10 DIP apart, flush with the header's 20 DIP padding, from 54 DIP
-/// down; the close button 5 DIP inside the top-right corner. Whole pixels, so previews stay sharp.
+/// down; the close button 5 DIP inside the top-right corner, the copy button inside the
+/// top-left. Whole pixels, so previews stay sharp.
 pub fn shelf_layout(n: usize, s: &Scale) -> ShelfLayout {
     let d = |v: f32| v * s.0;
     let (side, close) = (d(75.0).round(), d(20.0).round());
-    let (mut tiles, mut closes) = (Vec::new(), Vec::new());
+    let (mut tiles, mut closes, mut copies) = (Vec::new(), Vec::new(), Vec::new());
     for i in 0..n.min(crate::activities::shelf::SHELF_MAX) {
         let (col, row) = ((i % 4) as f32, (i / 4) as f32);
         let tile = rect(d(20.0 + col * 85.0).round(), d(54.0 + row * 85.0).round(), side, side);
         closes.push(rect(tile.right - d(5.0).round() - close, tile.top + d(5.0).round(), close, close));
+        copies.push(rect(tile.left + d(5.0).round(), tile.top + d(5.0).round(), close, close));
         tiles.push(tile);
     }
     let clear = rect(d(350.0 - 78.0), d(16.0), d(78.0), d(26.0));
-    ShelfLayout { tiles, closes, clear }
+    ShelfLayout { tiles, closes, copies, clear }
 }
 
 /// A live item's card: the timer card's one-row pill with the item's title and last line.
@@ -606,6 +611,8 @@ pub enum CardAction {
     BudsNoise(u8),
     /// A shelf tile's close button (its index, newest first).
     ShelfRemove(usize),
+    /// A shelf tile's copy button (its index, newest first).
+    ShelfCopy(usize),
     /// The shelf card's "Temizle".
     ShelfClear,
     /// The live card's ×: the item goes.
@@ -677,7 +684,8 @@ pub const WEATHER_ICON_AT: (f32, f32) = (1.0 - (20.0 + 56.0 + 26.0) / 370.0, 36.
 /// Where a card's sky gathers its light (fractions of the card): on its big weather emoji.
 pub fn card_glow_at(c: &CardContent) -> (f32, f32) {
     match c {
-        CardContent::Brief(b) => ((20.0 + 14.0) / 370.0, (BRIEF_HEADER + BRIEF_GAP + BRIEF_WEATHER_ROW / 2.0) / brief_height_dip(b)),
+        // The emoji, 24 into the weather panel and centred in its row.
+        CardContent::Brief(b) => ((24.0 + 20.0) / 370.0, (BRIEF_HEADER + BRIEF_GAP + 12.0 + BRIEF_WEATHER_ROW / 2.0) / brief_height_dip(b)),
         // An alert line makes the card taller under the emoji, which stays put.
         CardContent::Weather(_) => (WEATHER_ICON_AT.0, WEATHER_ICON_AT.1 * 196.0 / card_size_dip(c).1),
         _ => WEATHER_ICON_AT,
@@ -686,7 +694,7 @@ pub fn card_glow_at(c: &CardContent) -> (f32, f32) {
 
 /// The brief's height: the greeting, then each section it has.
 fn brief_height_dip(b: &BriefCard) -> f32 {
-    let weather = b.weather.as_ref().map_or(0.0, |w| BRIEF_GAP + BRIEF_WEATHER_ROW + 4.0 + HOURS_PANEL + if w.rain.is_some() { BRIEF_RAIN } else { 0.0 });
+    let weather = b.weather.as_ref().map_or(0.0, |w| BRIEF_GAP + brief_weather_dip(w));
     let matches = if b.matches.is_empty() { 0.0 } else { BRIEF_GAP + 16.0 + b.matches.len() as f32 * BRIEF_MATCH_ROW };
     let music = if b.music.is_some() { BRIEF_GAP + BRIEF_MUSIC } else { 0.0 };
     let screen = if b.screen.is_some() { BRIEF_GAP + BRIEF_MUSIC } else { 0.0 };
@@ -698,8 +706,18 @@ fn brief_height_dip(b: &BriefCard) -> f32 {
 // the weather's now row, the rain line, a match row, the music panel.
 const BRIEF_HEADER: f32 = 72.0;
 const BRIEF_GAP: f32 = 8.0;
-const BRIEF_WEATHER_ROW: f32 = 56.0;
-const BRIEF_RAIN: f32 = 22.0;
+const BRIEF_WEATHER_ROW: f32 = 52.0;
+/// The brief's next hours, under the temperature in the weather panel.
+const BRIEF_HOURS: f32 = 80.0;
+const BRIEF_RAIN: f32 = 24.0;
+
+/// The weather panel's height: 12 in, the temperature's row, then the hours and the rain chip
+/// each 8 under what is above them when there is one, and 12 under the last.
+fn brief_weather_dip(w: &BriefWeather) -> f32 {
+    let hours = if w.hours.is_empty() { 0.0 } else { 8.0 + BRIEF_HOURS };
+    let rain = if w.rain.is_some() { 8.0 + BRIEF_RAIN } else { 0.0 };
+    12.0 + BRIEF_WEATHER_ROW + hours + rain + 12.0
+}
 const BRIEF_MATCH_ROW: f32 = 44.0;
 const BRIEF_MUSIC: f32 = 60.0;
 /// The brief's quick countdowns (minutes).
@@ -964,7 +982,7 @@ impl Painter<'_, '_> {
             let add_label = trf("+{} dk", &[&crate::settings::current().timer_add_minutes]);
             self.chip(add, &add_label, white(0.14), CardAction::TimerAddMinute)?;
             let close = rect(self.w - self.d(78.0), y, self.d(64.0), self.d(34.0));
-            self.chip(close, "Kapat", white(0.14), CardAction::TimerClose)
+            self.chip(close, tr("Kapat"), white(0.14), CardAction::TimerClose)
         } else {
             self.icon_button(Icon::Close, 77.0, CardAction::TimerClose)?;
             let (icon, action) = if t.paused { (Icon::Play, CardAction::TimerResume) } else { (Icon::Pause, CardAction::TimerPause) };
@@ -1357,7 +1375,7 @@ impl Painter<'_, '_> {
 
     fn stopwatch(&mut self, t: &StopwatchCard) -> Result<()> {
         self.accent_circle(Icon::Stopwatch)?;
-        self.big_time(&t.text, t.last_lap.as_deref().unwrap_or("Kronometre"))?;
+        self.big_time(&t.text, t.last_lap.as_deref().unwrap_or(tr("Kronometre")))?;
         self.icon_button(Icon::Flag, 119.0, CardAction::StopwatchLap)?;
         self.icon_button(Icon::Close, 77.0, CardAction::StopwatchClose)?;
         let (icon, action) = if t.paused { (Icon::Play, CardAction::StopwatchResume) } else { (Icon::Pause, CardAction::StopwatchPause) };
@@ -1649,9 +1667,9 @@ impl Painter<'_, '_> {
         let d = |v: f32| v * self.s.0;
         let l = shelf_layout(c.tiles.len(), self.s);
         let title = TextStyle::new(Face::Text, Weight::SemiBold, d(16.0), white(1.0)).top();
-        self.ink.text("Raf", rect(d(20.0), d(18.0), d(120.0), d(22.0)), &title)?;
+        self.ink.text(tr("Raf"), rect(d(20.0), d(18.0), d(120.0), d(22.0)), &title)?;
         let count = TextStyle::new(Face::Text, Weight::Regular, d(16.0), white(0.4)).top();
-        let count_x = d(20.0) + self.ink.measure("Raf", &title)? + d(6.0);
+        let count_x = d(20.0) + self.ink.measure(tr("Raf"), &title)? + d(6.0);
         self.ink.text(&c.tiles.len().to_string(), rect(count_x, d(18.0), d(40.0), d(22.0)), &count)?;
         let chip = l.clear;
         self.ink.rrect(chip, (chip.bottom - chip.top) / 2.0, white(0.09))?;
@@ -1693,6 +1711,13 @@ impl Painter<'_, '_> {
                 let x = TextStyle::new(Face::Icons, Weight::Regular, d(8.5), white(1.0)).centered();
                 self.ink.text(&glyph(Icon::Close).to_string(), close, &x)?;
                 self.hits.push((close, CardAction::ShelfRemove(i)));
+                // Copy: the file, and its picture or text (a check once done).
+                let copy = l.copies[i];
+                let done = c.copied == Some(i);
+                self.ink.rrect(copy, (copy.right - copy.left) / 2.0, if done { rgba(0x34, 0xC7, 0x59, 0.9) } else { [0.0, 0.0, 0.0, 0.6] })?;
+                let st = TextStyle::new(Face::Icons, Weight::Regular, d(9.5), white(1.0)).centered();
+                self.ink.text(if done { "\u{E73E}" } else { "\u{E8C8}" }, copy, &st)?;
+                self.hits.push((copy, CardAction::ShelfCopy(i)));
             }
         }
         Ok(())
@@ -1708,21 +1733,46 @@ impl Painter<'_, '_> {
         let sub = TextStyle::new(Face::Text, Weight::Regular, d(12.5), white(0.7)).top().ellipsis();
         self.ink.text(&c.date, rect(d(20.0), d(52.0), inner, d(18.0)), &sub)?;
         let mut y = BRIEF_HEADER;
+        // The weather, all in one panel: the sky and the temperature, the sky's name and the
+        // day's low and high on the right; the next hours under a hairline; rain as a chip.
         if let Some(w) = &c.weather {
             y += BRIEF_GAP;
-            let row = d(BRIEF_WEATHER_ROW);
-            // On the greeting's left edge.
-            self.ink.text(&w.symbol, rect(d(20.0), d(y), d(36.0), row), &TextStyle::new(Face::Text, Weight::Regular, d(28.0), white(1.0)).emoji())?;
-            self.ink.text(&w.temp, rect(d(60.0), d(y), d(100.0), row), &TextStyle::new(Face::Display, Weight::Bold, d(34.0), white(1.0)).tabular())?;
-            let summary = TextStyle::new(Face::Text, Weight::Regular, d(12.5), white(0.7)).trailing().ellipsis();
-            self.ink.text(&w.summary, rect(self.w - d(20.0) - d(190.0), d(y), d(190.0), row), &summary)?;
-            y += BRIEF_WEATHER_ROW + 4.0;
-            self.hours_panel(&w.hours, d(y))?;
-            y += HOURS_PANEL;
-            if let Some(rain) = &w.rain {
-                self.ink.text(rain, rect(d(20.0), d(y), inner, d(BRIEF_RAIN)), &TextStyle::new(Face::Text, Weight::Regular, d(12.5), white(0.85)))?;
-                y += BRIEF_RAIN;
+            let panel = rect(d(12.0), d(y), self.w - d(24.0), d(brief_weather_dip(w)));
+            self.ink.rrect(panel, d(24.0), white(0.06))?;
+            let row = rect(d(24.0), d(y + 12.0), self.w - d(48.0), d(BRIEF_WEATHER_ROW));
+            self.ink.text(&w.symbol, rect(row.left, row.top, d(40.0), d(BRIEF_WEATHER_ROW)), &TextStyle::new(Face::Text, Weight::Regular, d(30.0), white(1.0)).emoji())?;
+            self.ink.text(&w.temp, rect(row.left + d(46.0), row.top, d(110.0), d(BRIEF_WEATHER_ROW)), &TextStyle::new(Face::Display, Weight::Bold, d(34.0), white(1.0)).tabular())?;
+            let (sky, range) = w.summary.split_once(" · ").unwrap_or((w.summary.as_str(), ""));
+            let side = rect(row.right - d(170.0), row.top + d(8.0), d(170.0), d(18.0));
+            self.ink.text(sky, side, &TextStyle::new(Face::Text, Weight::SemiBold, d(13.0), white(0.95)).top().trailing().ellipsis())?;
+            if !range.is_empty() {
+                let below = rect(side.left, side.top + d(20.0), side.right - side.left, d(16.0));
+                self.ink.text(range, below, &TextStyle::new(Face::Text, Weight::Regular, d(12.0), white(0.6)).top().trailing().tabular())?;
             }
+            let mut at = y + 12.0 + BRIEF_WEATHER_ROW;
+            if !w.hours.is_empty() {
+                at += 8.0;
+                self.ink.line(d(24.0), d(at), self.w - d(24.0), d(at), d(1.0), white(0.08))?;
+                let col = (self.w - d(48.0)) / w.hours.len() as f32;
+                for (i, (hour, sym, t)) in w.hours.iter().enumerate() {
+                    let x = d(24.0) + i as f32 * col;
+                    let st = |size: f32, weight, a: f32| TextStyle::new(Face::Text, weight, d(size), white(a)).centered();
+                    self.ink.text(hour, rect(x, d(at + 8.0), col, d(16.0)), &st(11.0, Weight::Regular, 0.6))?;
+                    self.ink.text(sym, rect(x, d(at + 26.0), col, d(28.0)), &st(18.0, Weight::Regular, 1.0).emoji())?;
+                    self.ink.text(t, rect(x, d(at + 56.0), col, d(18.0)), &st(12.5, Weight::SemiBold, 1.0))?;
+                }
+                at += BRIEF_HOURS;
+            }
+            if let Some(rain) = &w.rain {
+                at += 8.0;
+                let st = TextStyle::new(Face::Text, Weight::Medium, d(12.0), white(0.95));
+                let chip_w = (self.ink.measure(rain, &st)? + d(44.0)).min(self.w - d(48.0));
+                let chip = rect(d(24.0), d(at), chip_w, d(BRIEF_RAIN));
+                self.ink.rrect(chip, d(BRIEF_RAIN / 2.0), rgba(0x3A, 0x8D, 0xFF, 0.22))?;
+                self.ink.text("🌧\u{FE0F}", rect(chip.left + d(8.0), chip.top, d(20.0), d(BRIEF_RAIN)), &TextStyle::new(Face::Text, Weight::Regular, d(12.0), white(1.0)).centered().emoji())?;
+                self.ink.text(rain, rect(chip.left + d(30.0), chip.top, chip_w - d(38.0), d(BRIEF_RAIN)), &st.ellipsis())?;
+            }
+            y += brief_weather_dip(w);
         }
         if !c.matches.is_empty() {
             y += BRIEF_GAP;
@@ -1746,6 +1796,11 @@ impl Painter<'_, '_> {
                     self.ink.rrect(rect(right - tw - d(8.0) - dot, d(top + BRIEF_MATCH_ROW / 2.0) - dot / 2.0, dot, dot), dot / 2.0, rgba(0xFF, 0x45, 0x3A, 1.0))?;
                 }
                 self.hits.push((rect(d(12.0), d(top), self.w - d(24.0), d(BRIEF_MATCH_ROW)), CardAction::BriefMatch(i)));
+                // A hairline between rows.
+                if i + 1 < c.matches.len() {
+                    let line_y = d(top + BRIEF_MATCH_ROW);
+                    self.ink.line(d(28.0), line_y, self.w - d(28.0), line_y, d(1.0), white(0.07))?;
+                }
             }
             y += 16.0 + c.matches.len() as f32 * BRIEF_MATCH_ROW;
         }
@@ -2310,19 +2365,19 @@ mod tests {
     fn brief(weather: bool, rain: bool, matches: usize, music: bool, screen: bool) -> BriefCard {
         let team = || CardTeam { name: "FB".into(), code: "FB".into(), palette: TeamPalette { tint: [0x0B, 0x1E, 0x5B], flood: [0x0B, 0x1E, 0x5B], headline: [255, 255, 255] }, crest: None };
         BriefCard {
-            greeting: "Günaydın, Ekin".into(),
-            date: "Perşembe, 22 Ekim".into(),
+            greeting: "Good morning, Othman".into(),
+            date: "Tuesday, October 27".into(),
             weather: weather.then(|| BriefWeather {
                 symbol: "☀\u{FE0F}".into(),
                 temp: "18°".into(),
-                summary: "Açık · 11° / 21°".into(),
+                summary: "Clear · 11° / 21°".into(),
                 hours: vec![],
-                rain: rain.then(|| "15:00 civarı yağmur".into()),
+                rain: rain.then(|| "Rain around 15:00".into()),
                 fx: WeatherFx::Sunny,
             }),
-            matches: (0..matches).map(|_| BriefMatchRow { home: team(), away: team(), status: "20:00 · Süper Lig".into(), live: false }).collect(),
-            music: music.then(|| BriefMusic { title: "t".into(), artist: "a".into(), art: None, art_size: (0, 0), playing: true }),
-            screen: screen.then(|| ("Ekran süresi · 3 sa 40 dk".into(), "Bugün · VS Code 1 sa 50 dk".into())),
+            matches: (0..matches).map(|_| BriefMatchRow { home: team(), away: team(), status: "20:00 · Premier League".into(), live: false }).collect(),
+            music: music.then(|| BriefMusic { title: "Midnight Train".into(), artist: "The Night Owls".into(), art: None, art_size: (0, 0), playing: true }),
+            screen: screen.then(|| ("Screen time · 3 h 40 min".into(), "Today · VS Code 1 h 50 min".into())),
         }
     }
 
@@ -2331,17 +2386,20 @@ mod tests {
         let h = |b: BriefCard| card_size_dip(&CardContent::Brief(Box::new(b))).1;
         let bare = 84.0 + 68.0;
         assert_eq!(h(brief(false, false, 0, false, false)), bare, "the greeting (20 + 52 + 12) and the timer panel (8 + 60)");
-        assert_eq!(h(brief(true, false, 0, false, false)), bare + 168.0, "weather: 8 + row 56 + 4 + hours 100");
-        assert_eq!(h(brief(true, true, 0, false, false)), bare + 190.0, "and the rain line, 22");
+        assert_eq!(h(brief(true, false, 0, false, false)), bare + 84.0, "weather: 8 + its panel (12 + row 52 + 12)");
+        assert_eq!(h(brief(true, true, 0, false, false)), bare + 116.0, "and the rain chip, 8 + 24");
+        let mut hourly = brief(true, true, 0, false, false);
+        hourly.weather.as_mut().unwrap().hours = vec![("12:00".into(), "☀".into(), "19°".into()); 6];
+        assert_eq!(h(hourly), bare + 204.0, "and the next hours, 8 + 80");
         assert_eq!(h(brief(false, false, 3, false, false)), bare + 8.0 + 16.0 + 3.0 * 44.0);
         assert_eq!(h(brief(false, false, 0, true, false)), bare + 68.0, "music: 8 + 60");
         assert_eq!(h(brief(false, false, 0, false, true)), bare + 68.0, "screen time: the music panel's shape");
-        assert_eq!(h(brief(true, true, 3, true, true)), 566.0 + 68.0);
+        assert_eq!(h(brief(true, true, 3, true, true)), 560.0);
     }
 
     fn shelf_card(n: usize) -> ShelfCard {
         let tiles = (0..n).map(|i| ShelfTile { name: format!("f{i}.txt"), thumb: None, kind: FileKind::Document }).collect();
-        ShelfCard { tiles, hover: None }
+        ShelfCard { tiles, hover: None, copied: None }
     }
 
     #[test]
@@ -2441,7 +2499,7 @@ mod tests {
             key: 1,
             title: "winisland".into(),
             state: if ask { LiveState::Wait } else { LiveState::Run },
-            status: "Çalışıyor · 3:12".into(),
+            status: "Working · 3:12".into(),
             steps: vec![],
             tasks: None,
             summary: None,
@@ -2574,9 +2632,15 @@ mod tests {
             input: Some((String::new(), false)),
             ..card.clone()
         };
-        let mut day = brief(true, false, 1, true, false);
-        day.greeting = "Good morning, Othman".into();
-        day.date = "Tuesday, October 27".into();
+        let mut day = brief(true, true, 2, true, true);
+        if let Some(w) = day.weather.as_mut() {
+            w.hours = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00"]
+                .iter()
+                .zip(["☀\u{FE0F}", "☀\u{FE0F}", "⛅", "⛅", "🌧\u{FE0F}", "🌧\u{FE0F}"])
+                .zip(["16°", "17°", "18°", "18°", "16°", "15°"])
+                .map(|((h, s), t)| (h.to_string(), s.to_string(), t.to_string()))
+                .collect();
+        }
         let claude_hits = vec![CardAction::ClaudeCompact, CardAction::ClaudeInput, CardAction::ClaudeSend, CardAction::ClaudeFocus];
         let timer_hits = vec![CardAction::BriefTimerPreset(5), CardAction::BriefTimerPreset(25), CardAction::BriefTimer, CardAction::BriefStopwatch];
         let shots = [
@@ -2586,6 +2650,8 @@ mod tests {
             ("17-claude-done", CardContent::Claude(Box::new(done)), claude_hits),
             ("18-brief-timer", CardContent::Brief(Box::new(brief(false, false, 0, false, false))), timer_hits.clone()),
             ("19-brief-full", CardContent::Brief(Box::new(day)), timer_hits),
+            ("20-shelf-copy", CardContent::Shelf(ShelfCard { hover: Some(0), ..shelf_card(3) }), vec![CardAction::ShelfCopy(0), CardAction::ShelfRemove(0), CardAction::ShelfClear]),
+            ("21-shelf-copied", CardContent::Shelf(ShelfCard { hover: Some(1), copied: Some(1), ..shelf_card(3) }), vec![CardAction::ShelfCopy(1)]),
         ];
         for (name, content, wanted) in shots {
             let (wd, hd) = card_size_dip(&content);
