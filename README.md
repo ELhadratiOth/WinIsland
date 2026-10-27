@@ -25,15 +25,18 @@ score, what Claude Code is doing. Click the pill and a card opens below it.
 - **Music:** any app that opens a Windows media session (Spotify, YouTube Music, browsers).
   The pill takes the colour of the album cover; the card has the cover, a wavy progress bar, lyrics
   and the choice of audio output.
-- **Timer and stopwatch:** started from the picker (Win+Alt+N) or the tray menu; when the time is up
-  an alarm sounds and the card opens.
+- **Timer and stopwatch:** started from the island (right-click the pill, or the timer and stopwatch
+  buttons on the day's summary), the picker (Win+Alt+N) or the tray menu; when the time is up an alarm
+  sounds and the card opens.
 - **Live match:** the score, minute and goal moments of the football and basketball teams you follow.
 - **Weather:** the clock and weather when idle; warnings for rain, snow, storms, strong wind, extreme
   heat, frost and poor air quality. If no city is chosen, the location comes from Windows.
 - **Galaxy Buds:** the charge of both earbuds and the case, and noise control. If more than one Buds
   is paired, the one shown is chosen in the settings.
-- **Claude Code:** what Claude is doing at the moment and its task list. When it asks for permission,
-  the card shows **Allow / Deny** buttons ([see below](#live-activities)).
+- **Claude Code:** what Claude is doing at the moment and its task list, how full its context is and how
+  much of your plan's 5-hour and weekly limits is used. Type a message on the card to send it to the
+  session, or press **Compact**. When it asks for permission, the card shows **Allow / Deny** buttons
+  ([see below](#live-activities)).
 - **Games:** Steam and Epic Games downloads, updates, pauses and play time.
 - **Digital Wellbeing:** the day's screen time, each app's share, and the limits you set.
 - **Shelf:** files you drop on the pill wait there until you drag them where you need them; new
@@ -44,8 +47,8 @@ score, what Claude Code is doing. Click the pill and a card opens below it.
   over the pill to switch between them. When a game, video or presentation is full screen, the pill
   is hidden; things that can't wait (Claude's permission request, a weather warning) appear as a small
   island at the top of the screen.
-- **Right-click the pill** to hide the island for 1, 5 or 10 minutes, or to open the settings of what
-  it shows. **Show WinIsland now** in the tray menu brings it back sooner.
+- **Right-click the pill** to start a timer or the stopwatch, hide the island for 1, 5 or 10 minutes,
+  or open the settings of what it shows. **Show WinIsland now** in the tray menu brings it back sooner.
 
 ## Cards
 
@@ -131,7 +134,8 @@ curl -H "Content-Type: application/json" -d "{\"app\":\"Backup tool\",\"title\":
 **Claude Code:** the **Connect to Claude Code** option in setup installs the hooks. To install or remove
 them by hand, use the commands below. The command writes the path of the exe itself. The first time, it
 saves a backup as `settings.json.before-winisland`; after that, every write saves `settings.json.winisland-last`.
-It doesn't touch other hooks:
+It doesn't touch other hooks. It also sets WinIsland as Claude Code's status line, unless you already have
+one of your own (yours stays, and the card then has no usage bars):
 
 ```
 winisland.exe claude-hooks install
@@ -148,6 +152,17 @@ answered there. Claude's own window stays open at the same time, and whichever a
 counts. The card waits 60 seconds for an answer (Settings → System → Live activities). If WinIsland is
 moved to another folder, the hooks are updated to the new path the next time it starts. It works in the
 Code tab of the desktop app, in the CLI and in VS Code.
+
+The status line (`winisland.exe claude-status`) shows the model, the context and the limits under Claude's
+prompt ("Opus 5.5 · context 34% · 5h 23% · week 41%") and passes the same numbers to the card. The card
+draws them as bars: **Context**, **5 hours** and **Week**, each limit with the time until it resets. The
+limits are only there with a Pro or Max plan, after Claude's first answer in the session. The bars turn
+amber at 70% and red at 90%.
+
+The card's message box sends what you type to the session's window: WinIsland brings that window to the
+front, types the message and Enter there, and puts the window you were in back in front. **Compact** does
+the same with `/compact`. The window is the one the session's last prompt was typed in; in a terminal
+with tabs, the message goes to the tab that is open.
 
 ## Building
 

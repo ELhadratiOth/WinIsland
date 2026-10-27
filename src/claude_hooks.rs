@@ -23,8 +23,36 @@ fn our_hook(event: &str, exe: &str) -> Value {
     }
 }
 
-/// `settings` without our hooks; events left with no hooks go.
+/// Our status line's command: `<exe> claude-status`, the path with forward slashes (Claude Code
+/// runs it in Git Bash, which eats backslashes, or in PowerShell) and without spaces, so it needs
+/// no quotes (a quoted path followed by an argument isn't a command in PowerShell).
+pub fn status_command(exe: &str) -> String {
+    format!("{} claude-status", short_path(exe).replace('\\', "/"))
+}
+
+/// `exe` as an 8.3 path when it has spaces (that form has none).
+fn short_path(exe: &str) -> String {
+    if !exe.contains(' ') {
+        return exe.to_string();
+    }
+    let wide: Vec<u16> = exe.encode_utf16().chain([0]).collect();
+    let mut buf = [0u16; 1024];
+    let len = unsafe { windows::Win32::Storage::FileSystem::GetShortPathNameW(windows::core::PCWSTR(wide.as_ptr()), Some(&mut buf)) } as usize;
+    if len == 0 || len > buf.len() { exe.to_string() } else { String::from_utf16_lossy(&buf[..len]) }
+}
+
+/// The status line is ours (`… claude-status`).
+pub fn is_our_status(settings: &Value) -> bool {
+    settings["statusLine"]["command"].as_str().is_some_and(|c| c.trim_end().ends_with(" claude-status"))
+}
+
+/// `settings` without our hooks and status line; events left with no hooks go.
 pub fn remove(mut settings: Value) -> Value {
+    if is_our_status(&settings) {
+        if let Some(s) = settings.as_object_mut() {
+            s.remove("statusLine");
+        }
+    }
     let Some(hooks) = settings.get_mut("hooks").and_then(Value::as_object_mut) else { return settings };
     for entries in hooks.values_mut() {
         let Some(list) = entries.as_array_mut() else { continue };
@@ -40,14 +68,19 @@ pub fn remove(mut settings: Value) -> Value {
     settings
 }
 
-/// `settings` with our hooks for every event, pointing at `exe` (any old ones replaced); `None`
-/// when its `hooks` isn't an object (nothing we could add to).
+/// `settings` with our hooks for every event, pointing at `exe` (any old ones replaced), and our
+/// status line (the Claude card's context and limits) unless the user has one of their own;
+/// `None` when its `hooks` isn't an object (nothing we could add to).
 pub fn install(settings: Value, exe: &str) -> Option<Value> {
     let mut settings = remove(settings);
     if !settings.is_object() {
         settings = Value::Object(Map::new());
     }
-    let hooks = settings.as_object_mut()?.entry("hooks").or_insert_with(|| json!({})).as_object_mut()?;
+    let obj = settings.as_object_mut()?;
+    if !obj.contains_key("statusLine") {
+        obj.insert("statusLine".into(), json!({"type": "command", "command": status_command(exe)}));
+    }
+    let hooks = obj.entry("hooks").or_insert_with(|| json!({})).as_object_mut()?;
     for event in EVENTS {
         let entries = hooks.entry(event).or_insert_with(|| json!([]));
         if let Some(list) = entries.as_array_mut() {
@@ -58,28 +91,43 @@ pub fn install(settings: Value, exe: &str) -> Option<Value> {
 }
 
 /// Our hooks repointed at `exe` when the exe they point at is gone (the WinIsland was moved): the
-/// events, matchers and timeouts stay as the user left them. `None` when there are none, they
-/// point here, or their exe still exists (a dev build running from elsewhere must not take them
-/// over).
+/// events, matchers and timeouts stay as the user left them. Hooks that point here bring our
+/// status line along (hooks installed before it had none; the user's own stays). `None` when
+/// nothing changes: there are no hooks of ours, or their exe still exists elsewhere (a dev build
+/// running from elsewhere must not take them over).
 pub fn follow(mut settings: Value, exe: &str, exists: impl Fn(&str) -> bool) -> Option<Value> {
-    let ours: Vec<&mut Value> = settings
-        .get_mut("hooks")
-        .and_then(Value::as_object_mut)?
-        .values_mut()
-        .filter_map(Value::as_array_mut)
-        .flatten()
-        .filter_map(|entry| entry.get_mut("hooks").and_then(Value::as_array_mut))
-        .flatten()
-        .filter(|h| is_ours(h))
-        .collect();
-    let commands: Vec<&str> = ours.iter().filter_map(|h| h["command"].as_str()).collect();
-    if commands.is_empty() || commands.iter().all(|c| *c == exe) || commands.iter().any(|c| *c != exe && exists(c)) {
-        return None;
+    let mut changed = false;
+    {
+        let ours: Vec<&mut Value> = settings
+            .get_mut("hooks")
+            .and_then(Value::as_object_mut)?
+            .values_mut()
+            .filter_map(Value::as_array_mut)
+            .flatten()
+            .filter_map(|entry| entry.get_mut("hooks").and_then(Value::as_array_mut))
+            .flatten()
+            .filter(|h| is_ours(h))
+            .collect();
+        let commands: Vec<&str> = ours.iter().filter_map(|h| h["command"].as_str()).collect();
+        if commands.is_empty() || commands.iter().any(|c| *c != exe && exists(c)) {
+            return None;
+        }
+        if commands.iter().any(|c| *c != exe) {
+            for h in ours {
+                h["command"] = json!(exe);
+            }
+            changed = true;
+        }
     }
-    for h in ours {
-        h["command"] = json!(exe);
+    let want = status_command(exe);
+    if settings.get("statusLine").is_none() {
+        settings["statusLine"] = json!({"type": "command", "command": want});
+        changed = true;
+    } else if is_our_status(&settings) && settings["statusLine"]["command"].as_str() != Some(want.as_str()) {
+        settings["statusLine"]["command"] = json!(want);
+        changed = true;
     }
-    Some(settings)
+    changed.then_some(settings)
 }
 
 /// The settings file's text: `{}` when it doesn't exist yet. Any other failure (locked by Claude
@@ -207,6 +255,30 @@ mod tests {
         let _ = std::fs::create_dir_all(&dir);
         assert_eq!(read_settings(&dir.join("absent.json")).unwrap(), "{}");
         assert!(read_settings(&dir).is_err(), "unreadable (locked, a folder) is an error, not an empty file to overwrite");
+    }
+
+    #[test]
+    fn the_status_line_comes_and_goes_with_the_hooks() {
+        let v = install(json!({}), EXE).unwrap();
+        assert_eq!(v["statusLine"], json!({"type": "command", "command": "C:/Apps/WinIsland/winisland.exe claude-status"}));
+        assert!(is_our_status(&v));
+        let gone = remove(v);
+        assert!(gone.get("statusLine").is_none(), "ours goes with the hooks");
+        let theirs = json!({"statusLine": {"type": "command", "command": "~/.claude/statusline.sh"}});
+        let v = install(theirs.clone(), EXE).unwrap();
+        assert_eq!(v["statusLine"], theirs["statusLine"], "the user's own status line stays");
+        assert_eq!(remove(v)["statusLine"], theirs["statusLine"]);
+    }
+
+    #[test]
+    fn hooks_from_before_the_status_line_get_it() {
+        let mut v = install(json!({}), EXE).unwrap();
+        v.as_object_mut().unwrap().remove("statusLine");
+        let with = follow(v, EXE, |_| false).expect("the status line is added");
+        assert!(is_our_status(&with));
+        assert_eq!(follow(with.clone(), EXE, |_| false), None, "then nothing to do");
+        let moved = follow(install(json!({}), r"C:\old\winisland.exe").unwrap(), EXE, |_| false).unwrap();
+        assert_eq!(moved["statusLine"]["command"], "C:/Apps/WinIsland/winisland.exe claude-status", "it moves with the hooks");
     }
 
     #[test]

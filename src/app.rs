@@ -24,7 +24,7 @@ use crate::activities::football_worker::crest_path;
 use crate::render::color::{accent_from_rgba, team_palette, TeamPalette};
 use crate::render::crest::{load_crest, Crest};
 use crate::render::pill::{MatchPill, MomentKind, PillMoment, PillTeam, PillThumb};
-use crate::render::card::{BriefCard, BriefMatchRow, BriefMusic, BriefWeather, CardTeam, ClaudeAsk, ClaudeCard, GameCard, LiveCard, MatchCard, ShelfCard, ShelfTile, WeatherCard, WellbeingApp, WellbeingCard, GAME_COVER_DIP, LYRIC_MOVE_MS};
+use crate::render::card::{BriefCard, BriefMatchRow, BriefMusic, BriefWeather, CardTeam, ClaudeAsk, ClaudeCard, ClaudeUsageView, GameCard, LiveCard, MatchCard, ShelfCard, ShelfTile, WeatherCard, WellbeingApp, WellbeingCard, GAME_COVER_DIP, LYRIC_MOVE_MS};
 use crate::activities::brief::{date_line, day_key, due, first_name, greeting, pick_matches, rain_later, should_auto_open};
 use crate::platform::session::{brief_day, set_brief_day, windows_full_name};
 use crate::activities::shelf::Shelf;
@@ -50,7 +50,7 @@ use crate::activities::wellbeing_worker::{WellbeingBox, WellbeingMailbox};
 use crate::activities::island::{island_wants, on_island, ISLAND_MS};
 use crate::render::island::Island;
 use crate::activities::capture::{size_text, CAPTURE_MOMENT_MS};
-use crate::activities::claude::{done_status, step_label, task_progress};
+use crate::activities::claude::{done_status, resets_in, step_label, task_progress, ClaudeUsage, Limit};
 use crate::platform::captures::{Capture, CaptureMailbox};
 use crate::activities::live::{live_key, pill_status, push_id_ok, AppIcon, AppMeta, LiveItem, LiveSet, LiveState};
 use crate::activities::api::ApiMailbox;
@@ -630,6 +630,16 @@ pub struct App {
     liked: std::collections::HashSet<String>,
     /// Hidden from the pill's right-click menu until then (ms).
     snoozed_until: Option<u64>,
+    /// Claude Code's status line per session (its live key): the context and the plan's limits.
+    claude_usage: std::collections::HashMap<u32, ClaudeUsage>,
+    /// The plan's latest 5-hour and weekly limits (the same for every session).
+    claude_limits: (Option<Limit>, Option<Limit>),
+    /// What is typed in the Claude card's message box.
+    claude_draft: String,
+    /// The message box has the keyboard: the window that had the foreground before it took it.
+    claude_typing: Option<isize>,
+    /// The first half of a character typed in two UTF-16 units (an emoji).
+    claude_surrogate: Option<u16>,
     /// The mode the card last asked for, and when: its echo from the Buds isn't a moment.
     buds_mode_sent: Option<(NoiseControl, u64)>,
     /// Music a bud coming out paused (those sessions), to play again when it is back in.
@@ -867,6 +877,11 @@ impl App {
             card_pinned: false,
             liked: Default::default(),
             snoozed_until: None,
+            claude_usage: Default::default(),
+            claude_limits: (None, None),
+            claude_draft: String::new(),
+            claude_typing: None,
+            claude_surrogate: None,
             matches: Vec::new(),
             match_moments: Default::default(),
             fresh_goals: Default::default(),
@@ -1007,6 +1022,7 @@ impl App {
         if self.open == Some(OpenCard::Picker) {
             self.ui.card_window.set_focusable(false);
         }
+        self.stop_typing();
         self.leave_output_page();
         self.ui.card_window.hide();
         self.ui.pill.set_opacity(1.0)?;
@@ -1779,6 +1795,12 @@ impl App {
             _ => i.text.clone(),
         };
         let asks_on = settings::current().claude_ask;
+        let can_focus = i.info.window.is_some_and(|w| unsafe { windows::Win32::UI::WindowsAndMessaging::IsWindow(Some(HWND(w as *mut _))) }.as_bool());
+        // A limit past its reset is used up no more: Claude Code drops it, so do the bars.
+        let now_s = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
+        let limit = |l: Option<Limit>| l.filter(|l| l.resets_at > now_s).map(|l| (l.used as f32, resets_in(l.resets_at, now_s)));
+        let context = self.claude_usage.get(&i.key).and_then(|u| u.context).map(f32::from);
+        let (five_hour, seven_day) = (limit(self.claude_limits.0), limit(self.claude_limits.1));
         ClaudeCard {
             key: i.key,
             title: i.title.clone(),
@@ -1788,7 +1810,9 @@ impl App {
             tasks: task_progress(&i.info.tasks),
             summary: i.info.summary.clone(),
             ask: i.info.ask.as_ref().map(|a| ClaudeAsk { key: live_key(&a.id), tool: a.tool.clone(), detail: a.detail.clone(), answerable: asks_on && !a.id.is_empty() }),
-            can_focus: i.info.window.is_some_and(|w| unsafe { windows::Win32::UI::WindowsAndMessaging::IsWindow(Some(HWND(w as *mut _))) }.as_bool()),
+            can_focus,
+            usage: (context.is_some() || five_hour.is_some() || seven_day.is_some()).then_some(ClaudeUsageView { context, five_hour, seven_day }),
+            input: can_focus.then(|| (self.claude_draft.clone(), self.claude_typing.is_some())),
         }
     }
 
@@ -1812,6 +1836,65 @@ impl App {
         } else {
             self.live.drop_ask(&id);
         }
+    }
+
+    /// The message box's text (or `command`, the Compact button's "/compact") typed into the
+    /// window the session's prompts come from, with Enter; then the foreground goes back to the
+    /// window that had it before the box took the keyboard.
+    fn send_to_claude(&mut self, command: Option<&str>) {
+        let Some(OpenCard::Activity(ActivityKind::Live(key))) = self.open else { return };
+        let Some(window) = self.live.get(key).and_then(|i| i.info.window) else { return };
+        let text = command.map_or_else(|| self.claude_draft.trim().to_string(), str::to_string);
+        if text.is_empty() {
+            return;
+        }
+        let back = self.stop_typing().unwrap_or_else(|| unsafe { windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow() });
+        if crate::platform::keys::type_into(HWND(window as *mut _), &text, Some(back)) {
+            log(&format!("claude: {} sent to its window", if command.is_some() { "a command" } else { "a message" }));
+            if command.is_none() {
+                self.claude_draft.clear();
+            }
+        }
+    }
+
+    /// The message box gives the keyboard back; the window that had the foreground before it.
+    fn stop_typing(&mut self) -> Option<HWND> {
+        let before = self.claude_typing.take()?;
+        self.claude_surrogate = None;
+        self.ui.card_window.set_focusable(false);
+        Some(HWND(before as *mut _))
+    }
+
+    /// A character for the message box: Enter sends, Esc gives the keyboard back, Backspace and
+    /// Ctrl+V (one line of the clipboard) edit; other control keys do nothing.
+    fn type_char(&mut self, unit: u16) -> Result<()> {
+        match unit {
+            0x0D => self.send_to_claude(None),
+            0x1B => {
+                if let Some(before) = self.stop_typing() {
+                    unsafe {
+                        let _ = windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow(before);
+                    }
+                }
+            }
+            0x08 => {
+                self.claude_draft.pop();
+            }
+            0x16 => {
+                // Enter would send it: the lines go in as one.
+                let pasted = crate::platform::keys::clipboard_text().unwrap_or_default();
+                self.claude_draft.push_str(&pasted.split(['\r', '\n']).map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join(" "));
+            }
+            u if u < 0x20 => {}
+            0xD800..=0xDBFF => self.claude_surrogate = Some(unit),
+            0xDC00..=0xDFFF => {
+                if let Some(high) = self.claude_surrogate.take() {
+                    self.claude_draft.extend(char::decode_utf16([high, unit]).flatten());
+                }
+            }
+            u => self.claude_draft.extend(char::from_u32(u as u32)),
+        }
+        self.refresh()
     }
 
     /// "Pencereye git": the window the prompt was typed in comes to the front (the click was
@@ -2360,6 +2443,16 @@ impl App {
                 self.stop_brief_idle();
                 self.open = Some(OpenCard::Wellbeing);
             }
+            CardAction::BriefTimer => {
+                self.stop_brief_idle();
+                self.hide_card_now()?;
+                return self.open_picker();
+            }
+            CardAction::BriefStopwatch => {
+                self.stop_brief_idle();
+                self.start_stopwatch();
+                self.close_card()?;
+            }
             CardAction::BriefPlay => {
                 if let Some(id) = self.brief_media().map(|m| m.id) {
                     self.media_worker.send(id, MediaCommand::PlayPause);
@@ -2372,6 +2465,16 @@ impl App {
                 self.focus_claude();
                 return self.close_card();
             }
+            CardAction::ClaudeInput => {
+                if self.claude_typing.is_none() {
+                    let before = unsafe { windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
+                    self.claude_typing = Some(before.0 as isize);
+                    self.ui.card_window.set_focusable(true);
+                    self.disarm_leave();
+                }
+            }
+            CardAction::ClaudeSend => self.send_to_claude(None),
+            CardAction::ClaudeCompact => self.send_to_claude(Some("/compact")),
             CardAction::LiveClose => {
                 if let Some(OpenCard::Activity(ActivityKind::Live(key))) = self.open {
                     // An app hears it was dismissed; its prompt's × is a "not now".
@@ -2717,6 +2820,12 @@ impl App {
                 crate::platform::ipc::Command::Live(_) => {}
                 crate::platform::ipc::Command::Update => self.updater.apply(),
                 crate::platform::ipc::Command::AskGone { id } => self.live.drop_ask(&id),
+                crate::platform::ipc::Command::Usage(u) => {
+                    if u.five_hour.is_some() || u.seven_day.is_some() {
+                        self.claude_limits = (u.five_hour, u.seven_day);
+                    }
+                    self.claude_usage.insert(live_key(&format!("claude:{}", u.session)), *u);
+                }
                 // Ours to send, never to take.
                 crate::platform::ipc::Command::Answer { .. } => {}
             }
@@ -3250,7 +3359,7 @@ impl App {
     /// Closes the card 600 ms from now unless the mouse is over the card or the pill.
     fn arm_leave(&self) {
         let s = settings::current();
-        if s.card_close_on_leave && !self.card_pinned && matches!(self.card_state, CardState::Open | CardState::Opening) && !self.pill_hover && !self.card_hover {
+        if s.card_close_on_leave && !self.card_pinned && self.claude_typing.is_none() && matches!(self.card_state, CardState::Open | CardState::Opening) && !self.pill_hover && !self.card_hover {
             unsafe { SetTimer(Some(self.ui.card_window.timer_owner()), TIMER_LEAVE, s.card_leave_close_ms, None) };
         }
     }
@@ -3326,6 +3435,7 @@ impl App {
         if self.open == Some(OpenCard::Picker) {
             self.ui.card_window.set_focusable(false);
         }
+        self.stop_typing();
         self.card_hover = false;
         self.leave_output_page();
         self.ui.card_window.hide_hit();
@@ -3367,10 +3477,24 @@ impl App {
         !inside(self.card_screen) && !inside(self.pill_screen())
     }
 
-    /// The pill's right-click menu: hide the island for 1, 5 or 10 minutes, or the settings of
-    /// what it shows.
+    /// The timer's picker (its timer tab).
+    fn open_picker(&mut self) -> Result<()> {
+        self.picker.stopwatch_tab = false;
+        self.open_card(OpenCard::Picker, false)
+    }
+
+    /// The pill's right-click menu: start a timer or the stopwatch, hide the island for 1, 5 or
+    /// 10 minutes, or the settings of what it shows.
     fn pill_menu(&mut self) -> Result<()> {
         let minutes = match show_pill_menu(self.main.hwnd) {
+            MENU_TIMER => {
+                self.hide_card_now()?;
+                return self.open_picker();
+            }
+            MENU_STOPWATCH => {
+                self.start_stopwatch();
+                return self.refresh();
+            }
             MENU_HIDE_1 => 1,
             MENU_HIDE_5 => 5,
             MENU_HIDE_10 => 10,
@@ -3429,10 +3553,7 @@ impl App {
             }
             MENU_BRIEF => self.open_card(OpenCard::Brief, false),
             MENU_WELLBEING => self.open_card(OpenCard::Wellbeing, false),
-            MENU_TIMER => {
-                self.picker.stopwatch_tab = false;
-                self.open_card(OpenCard::Picker, false)
-            }
+            MENU_TIMER => self.open_picker(),
             MENU_STOPWATCH => {
                 self.start_stopwatch();
                 self.refresh()
@@ -3837,6 +3958,7 @@ impl App {
                     _ => Ok(()),
                 }
             }
+            UiEvent::Char(unit) if self.claude_typing.is_some() => self.type_char(unit),
             UiEvent::Key(vk) if self.open == Some(OpenCard::Picker) => {
                 if vk == VK_RETURN.0 {
                     self.start_from_picker()

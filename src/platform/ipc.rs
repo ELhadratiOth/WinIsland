@@ -26,6 +26,8 @@ pub enum Command {
     Answer { id: String, nonce: String, allow: bool },
     /// The hook stopped waiting (Claude's own dialog took over): the card drops its buttons.
     AskGone { id: String },
+    /// Claude Code's status line: a session's context and the plan's limits.
+    Usage(Box<crate::activities::claude::ClaudeUsage>),
 }
 
 impl Command {
@@ -135,7 +137,8 @@ mod tests {
 
     #[test]
     fn answers_and_gone_asks_round_trip() {
-        for c in [Command::Answer { id: "12-34".into(), nonce: "n".into(), allow: true }, Command::AskGone { id: "12-34".into() }] {
+        let usage = crate::activities::claude::ClaudeUsage { session: "s".into(), context: Some(34), ..Default::default() };
+        for c in [Command::Answer { id: "12-34".into(), nonce: "n".into(), allow: true }, Command::AskGone { id: "12-34".into() }, Command::Usage(Box::new(usage))] {
             assert_eq!(Command::from_json(&c.to_json()), Some(c));
         }
     }

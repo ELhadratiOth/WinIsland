@@ -113,11 +113,14 @@ fn track(owner: HWND, menu: HMENU, flags: TRACK_POPUP_MENU_FLAGS) -> u32 {
     }
 }
 
-/// The pill's right-click menu, opening down from the cursor: hide the island for a while, or
-/// the settings of what it shows.
+/// The pill's right-click menu, opening down from the cursor: start a timer or the stopwatch,
+/// hide the island for a while, or the settings of what it shows.
 pub fn show_pill_menu(owner: HWND) -> u32 {
     unsafe {
         let Ok(menu) = CreatePopupMenu() else { return 0 };
+        let _ = AppendMenuW(menu, MF_STRING, MENU_TIMER as usize, &HSTRING::from(tr("Zamanlayıcı başlat")));
+        let _ = AppendMenuW(menu, MF_STRING, MENU_STOPWATCH as usize, &HSTRING::from(tr("Kronometre başlat")));
+        let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
         let _ = AppendMenuW(menu, MF_STRING, MENU_HIDE_1 as usize, &HSTRING::from(tr("1 dakika gizle")));
         let _ = AppendMenuW(menu, MF_STRING, MENU_HIDE_5 as usize, &HSTRING::from(tr("5 dakika gizle")));
         let _ = AppendMenuW(menu, MF_STRING, MENU_HIDE_10 as usize, &HSTRING::from(tr("10 dakika gizle")));

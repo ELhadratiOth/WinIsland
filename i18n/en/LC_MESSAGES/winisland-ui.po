@@ -2697,6 +2697,34 @@ msgstr "Hide for 10 minutes"
 msgid "WinIsland'i şimdi göster"
 msgstr "Show WinIsland now"
 
+#: src/render/card.rs
+msgid "Bağlam"
+msgstr "Context"
+
+#: src/render/card.rs
+msgid "5 saat"
+msgstr "5 hours"
+
+#: src/render/card.rs
+msgid "Hafta"
+msgstr "Week"
+
+#: src/render/card.rs
+msgid "{} sonra sıfırlanır"
+msgstr "Resets in {}"
+
+#: src/render/card.rs
+msgid "Sıkıştır"
+msgstr "Compact"
+
+#: src/render/card.rs
+msgid "Claude'a yaz…"
+msgstr "Message Claude…"
+
+#: src/activities/claude.rs
+msgid "{} g {} sa"
+msgstr "{} d {} h"
+
 #: src/platform/tray.rs
 msgid "Çıkış"
 msgstr "Quit"

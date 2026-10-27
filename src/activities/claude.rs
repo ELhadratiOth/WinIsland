@@ -355,6 +355,71 @@ pub struct ClaudeNote {
     pub new_prompt: bool,
 }
 
+/// One window of a Pro or Max plan's usage limit: how much of it is used (whole percent) and
+/// when it starts over (Unix seconds).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Limit {
+    pub used: u16,
+    pub resets_at: i64,
+}
+
+/// What Claude Code's status line knows about a session: its model, how full its context is,
+/// and the plan's 5-hour and weekly limits (each `None` until Claude Code has them).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClaudeUsage {
+    pub session: String,
+    #[serde(default)]
+    pub model: String,
+    #[serde(default)]
+    pub context: Option<u16>,
+    #[serde(default)]
+    pub five_hour: Option<Limit>,
+    #[serde(default)]
+    pub seven_day: Option<Limit>,
+}
+
+/// The usage in the status line's JSON (`winisland.exe claude-status` reads it on stdin).
+pub fn usage_of(status: &Value) -> Option<ClaudeUsage> {
+    let session = status["session_id"].as_str().filter(|s| !s.is_empty())?.to_string();
+    let pct = |v: &Value| v.as_f64().map(|p| p.round().clamp(0.0, 999.0) as u16);
+    let limit = |w: &Value| Some(Limit { used: pct(&w["used_percentage"])?, resets_at: w["resets_at"].as_i64().unwrap_or(0) });
+    Some(ClaudeUsage {
+        session,
+        model: status["model"]["display_name"].as_str().unwrap_or("").to_string(),
+        context: pct(&status["context_window"]["used_percentage"]),
+        five_hour: limit(&status["rate_limits"]["five_hour"]),
+        seven_day: limit(&status["rate_limits"]["seven_day"]),
+    })
+}
+
+/// The status line Claude Code shows for us: "Opus 5.5 · context 34% · 5h 23% · week 41%".
+pub fn status_text(u: &ClaudeUsage) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if !u.model.is_empty() {
+        parts.push(u.model.clone());
+    }
+    if let Some(c) = u.context {
+        parts.push(format!("context {c}%"));
+    }
+    if let Some(l) = u.five_hour {
+        parts.push(format!("5h {}%", l.used));
+    }
+    if let Some(l) = u.seven_day {
+        parts.push(format!("week {}%", l.used));
+    }
+    parts.join(" · ")
+}
+
+/// "2 h 14 min", "38 min", "3 d 4 h" until `resets_at` (Unix seconds) from `now_s`.
+pub fn resets_in(resets_at: i64, now_s: i64) -> String {
+    let m = (resets_at - now_s).max(0) / 60;
+    match (m / 1440, m % 1440 / 60, m % 60) {
+        (0, 0, m) => trf("{} dk", &[&m]),
+        (0, h, m) => trf("{} sa {} dk", &[&h, &m]),
+        (d, h, _) => trf("{} g {} sa", &[&d, &h]),
+    }
+}
+
 /// A session's state on the WinIsland side.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ClaudeInfo {
@@ -416,6 +481,32 @@ impl ClaudeInfo {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn the_status_lines_usage() {
+        let status = json!({
+            "session_id": "s1",
+            "model": {"id": "claude-opus-5-5", "display_name": "Opus 5.5"},
+            "context_window": {"used_percentage": 34.4, "context_window_size": 200000},
+            "rate_limits": {"five_hour": {"used_percentage": 23.5, "resets_at": 1738425600}, "seven_day": {"used_percentage": 41.2, "resets_at": 1738857600}}
+        });
+        let u = usage_of(&status).unwrap();
+        assert_eq!(u.context, Some(34));
+        assert_eq!(u.five_hour, Some(Limit { used: 24, resets_at: 1738425600 }));
+        assert_eq!(status_text(&u), "Opus 5.5 · context 34% · 5h 24% · week 41%");
+        let early = usage_of(&json!({"session_id": "s1", "model": {"display_name": "Sonnet 5.5"}, "context_window": {"used_percentage": null}})).unwrap();
+        assert_eq!((early.context, early.five_hour, early.seven_day), (None, None, None), "not known yet (or an API key: no limits)");
+        assert_eq!(status_text(&early), "Sonnet 5.5");
+        assert_eq!(usage_of(&json!({"model": {}})), None, "no session");
+    }
+
+    #[test]
+    fn resets_in_reads_short() {
+        assert_eq!(resets_in(1_000 + 38 * 60, 1_000), "38 min");
+        assert_eq!(resets_in(1_000 + (2 * 60 + 14) * 60, 1_000), "2 h 14 min");
+        assert_eq!(resets_in(1_000 + (3 * 1440 + 4 * 60) * 60, 1_000), "3 d 4 h");
+        assert_eq!(resets_in(0, 1_000), "0 min");
+    }
 
     fn step(tool: &str, input: serde_json::Value) -> String {
         step_label(&step_of(tool, &input))

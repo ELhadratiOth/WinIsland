@@ -410,6 +410,44 @@ pub struct ClaudeCard {
     pub ask: Option<ClaudeAsk>,
     /// The window the prompt came from is known: "Pencereye git".
     pub can_focus: bool,
+    /// The context and the plan's limits, from Claude Code's status line (none before it runs).
+    pub usage: Option<ClaudeUsageView>,
+    /// The message box (the window is known): what is typed so far, and whether it has the keyboard.
+    pub input: Option<(String, bool)>,
+}
+
+/// The Claude card's bars: the context, and the 5-hour and weekly limits with when each resets.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClaudeUsageView {
+    pub context: Option<f32>,
+    pub five_hour: Option<(f32, String)>,
+    pub seven_day: Option<(f32, String)>,
+}
+
+/// Where the Claude card's rows start (DIP from its top), and its height: the panel, then the
+/// usage bars, the buttons and the message box, each when it has something to show.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ClaudeLayout {
+    pub usage: Option<f32>,
+    pub footer: Option<f32>,
+    pub input: Option<f32>,
+    pub height: f32,
+}
+
+pub fn claude_layout(c: &ClaudeCard) -> ClaudeLayout {
+    let mut y = 176.0;
+    let mut row = |on: bool, gap: f32, h: f32| {
+        on.then(|| {
+            let at = y + gap;
+            y = at + h;
+            at
+        })
+    };
+    let usage = row(c.usage.is_some(), 12.0, 50.0);
+    let footer = row(c.can_focus || c.ask.as_ref().is_some_and(|a| a.answerable), 14.0, 34.0);
+    let input = row(c.input.is_some(), 12.0, 40.0);
+    let pad = if usage.is_none() && footer.is_none() && input.is_none() { 16.0 } else { 12.0 };
+    ClaudeLayout { usage, footer, input, height: y + pad }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -588,6 +626,13 @@ pub enum CardAction {
     BriefPlay,
     /// The brief's screen time row: the Dijital Denge card.
     BriefScreen,
+    /// The Claude card's message box (it takes the keyboard), its send button and Compact.
+    ClaudeInput,
+    ClaudeSend,
+    ClaudeCompact,
+    /// The brief's timer button: the picker; its stopwatch button: the stopwatch starts.
+    BriefTimer,
+    BriefStopwatch,
 }
 
 /// Card size in DIP.
@@ -595,8 +640,7 @@ pub fn card_size_dip(c: &CardContent) -> (f32, f32) {
     match c {
         CardContent::Timer(_) | CardContent::Stopwatch(_) | CardContent::Live(_) => (370.0, 77.0),
         // The footer only with a button in it.
-        CardContent::Claude(c) if c.can_focus || c.ask.as_ref().is_some_and(|a| a.answerable) => (370.0, 236.0),
-        CardContent::Claude(_) => (370.0, 192.0),
+        CardContent::Claude(c) => (370.0, claude_layout(c).height),
         CardContent::App(a) if a.prompt => (370.0, 236.0),
         // The header, the text, the bar, the footer.
         CardContent::App(a) => {
@@ -1008,16 +1052,88 @@ impl Painter<'_, '_> {
             }
         }
 
-        // The footer: "Pencereye git" on the left, the ask's answers on the right.
-        let fy = panel.bottom + d(14.0);
-        if c.can_focus {
-            self.chip(rect(d(16.0), fy, d(124.0), d(34.0)), tr("Pencereye git"), white(0.12), CardAction::ClaudeFocus)?;
+        let layout = claude_layout(c);
+        // The bars: the context, the 5-hour and the weekly limit side by side.
+        if let (Some(uy), Some(u)) = (layout.usage, &c.usage) {
+            let bars: Vec<(&str, f32, Option<&String>)> = [
+                u.context.map(|p| (tr("Bağlam"), p, None)),
+                u.five_hour.as_ref().map(|(p, at)| (tr("5 saat"), *p, Some(at))),
+                u.seven_day.as_ref().map(|(p, at)| (tr("Hafta"), *p, Some(at))),
+            ]
+            .into_iter()
+            .flatten()
+            .collect();
+            let n = bars.len().max(1) as f32;
+            let gap = d(14.0);
+            let col_w = (self.w - d(40.0) - gap * (n - 1.0)) / n;
+            for (i, (label, pct, resets)) in bars.iter().enumerate() {
+                let x = d(20.0) + i as f32 * (col_w + gap);
+                let top = d(uy);
+                let pct_text = format!("{}%", pct.round() as i64);
+                let pct_st = TextStyle::new(Face::Text, Weight::SemiBold, d(12.0), white(1.0)).top().trailing().tabular();
+                let pct_w = self.ink.measure(&pct_text, &pct_st)? + d(2.0);
+                self.ink.text(label, rect(x, top + d(2.0), col_w - pct_w - d(4.0), d(16.0)), &line(11.5, Weight::Regular, 0.7))?;
+                self.ink.text(&pct_text, rect(x + col_w - pct_w, top + d(2.0), pct_w, d(16.0)), &pct_st)?;
+                if let Some(at) = resets {
+                    self.ink.text(&trf("{} sonra sıfırlanır", &[at]), rect(x, top + d(32.0), col_w, d(16.0)), &line(11.0, Weight::Regular, 0.5))?;
+                }
+                let bar = d(5.0).round();
+                let track = rect(x, top + d(22.0), col_w, bar);
+                self.ink.rrect(track, bar / 2.0, white(0.16))?;
+                // Amber past 70 %, red past 90 %: time to compact, or the limit is close.
+                let fill = match *pct {
+                    p if p >= 90.0 => rgba(0xFF, 0x5A, 0x4F, 1.0),
+                    p if p >= 70.0 => rgba(0xFF, 0xB0, 0x2E, 1.0),
+                    _ => rgba(r, g, b, 1.0),
+                };
+                self.ink.rrect(rect(x, top + d(22.0), (col_w * pct.clamp(0.0, 100.0) / 100.0).max(bar), bar), bar / 2.0, fill)?;
+            }
         }
-        if let Some(ClaudeAsk { key, .. }) = c.ask.as_ref().filter(|_| answerable) {
-            let allow = rect(self.w - d(16.0) - d(96.0), fy, d(96.0), d(34.0));
-            let deny = rect(allow.left - d(8.0) - d(84.0), fy, d(84.0), d(34.0));
-            self.chip(deny, tr("Reddet"), white(0.12), CardAction::ClaudeDeny(*key))?;
-            self.chip(allow, tr("İzin ver"), rgba(r, g, b, 1.0), CardAction::ClaudeAllow(*key))?;
+
+        // The footer: "Pencereye git" and "Sıkıştır" on the left, the ask's answers on the right.
+        if let Some(fy) = layout.footer.map(d) {
+            if c.can_focus {
+                self.chip(rect(d(16.0), fy, d(124.0), d(34.0)), tr("Pencereye git"), white(0.12), CardAction::ClaudeFocus)?;
+                // Compacting waits for no permission: not beside the ask's buttons.
+                if !answerable {
+                    self.chip(rect(d(148.0), fy, d(104.0), d(34.0)), tr("Sıkıştır"), white(0.12), CardAction::ClaudeCompact)?;
+                }
+            }
+            if let Some(ClaudeAsk { key, .. }) = c.ask.as_ref().filter(|_| answerable) {
+                let allow = rect(self.w - d(16.0) - d(96.0), fy, d(96.0), d(34.0));
+                let deny = rect(allow.left - d(8.0) - d(84.0), fy, d(84.0), d(34.0));
+                self.chip(deny, tr("Reddet"), white(0.12), CardAction::ClaudeDeny(*key))?;
+                self.chip(allow, tr("İzin ver"), rgba(r, g, b, 1.0), CardAction::ClaudeAllow(*key))?;
+            }
+        }
+
+        // The message box and its send button: typed into Claude's window with Enter.
+        if let (Some(iy), Some((text, focused))) = (layout.input.map(d), &c.input) {
+            let send = rect(self.w - d(16.0) - d(40.0), iy, d(40.0), d(40.0));
+            let field = rect(d(16.0), iy, send.left - d(8.0) - d(16.0), d(40.0));
+            self.ink.rrect(field, d(20.0), white(if *focused { 0.16 } else { 0.10 }))?;
+            if *focused {
+                self.ink.rrect_outline(field, d(20.0), d(1.5), rgba(r, g, b, 0.9))?;
+            }
+            let inner = rect(field.left + d(16.0), field.top, field.right - field.left - d(32.0), d(40.0));
+            let st = TextStyle::new(Face::Text, Weight::Regular, d(13.0), white(1.0));
+            if text.is_empty() && !focused {
+                self.ink.text(tr("Claude'a yaz…"), inner, &TextStyle::new(Face::Text, Weight::Regular, d(13.0), white(0.5)).ellipsis())?;
+            } else {
+                // The end of what is typed, and the caret after it.
+                let shown = format!("{text}{}", if *focused { "|" } else { "" });
+                let mut start = 0;
+                while start < shown.len() && self.ink.measure(&shown[start..], &st)? > inner.right - inner.left {
+                    start += shown[start..].chars().next().map_or(1, char::len_utf8);
+                }
+                self.ink.text(&shown[start..], inner, &st)?;
+            }
+            self.hits.push((field, CardAction::ClaudeInput));
+            let ready = !text.trim().is_empty();
+            self.ink.rrect(send, d(20.0), if ready { rgba(r, g, b, 1.0) } else { white(0.10) })?;
+            // An arrow up (Segoe's "Send" points right; Claude's own box sends with ↑).
+            self.ink.text("\u{E74A}", send, &TextStyle::new(Face::Icons, Weight::Regular, d(15.0), white(if ready { 1.0 } else { 0.4 })).centered())?;
+            self.hits.push((send, CardAction::ClaudeSend));
         }
         Ok(())
     }
@@ -1545,10 +1661,18 @@ impl Painter<'_, '_> {
     fn brief(&mut self, c: &BriefCard) -> Result<()> {
         let d = |v: f32| v * self.s.0;
         let inner = self.w - d(40.0);
+        // Start a timer or the stopwatch, top right; the greeting and date stop before them.
+        let head_w = inner - d(2.0 * 44.0);
+        for (i, (icon, action)) in [(Icon::Timer, CardAction::BriefTimer), (Icon::Stopwatch, CardAction::BriefStopwatch)].into_iter().enumerate() {
+            let button = rect(self.w - d(20.0) - d(36.0) - i as f32 * d(44.0), d(20.0), d(36.0), d(36.0));
+            self.ink.rrect(button, d(18.0), white(0.14))?;
+            self.ink.text(&glyph(icon).to_string(), button, &TextStyle::new(Face::Icons, Weight::Regular, d(16.0), white(1.0)).centered())?;
+            self.hits.push((button, action));
+        }
         let title = TextStyle::new(Face::Display, Weight::Bold, d(22.0), white(1.0)).top().ellipsis();
-        self.ink.text(&c.greeting, rect(d(20.0), d(20.0), inner, d(30.0)), &title)?;
+        self.ink.text(&c.greeting, rect(d(20.0), d(20.0), head_w, d(30.0)), &title)?;
         let sub = TextStyle::new(Face::Text, Weight::Regular, d(12.5), white(0.7)).top().ellipsis();
-        self.ink.text(&c.date, rect(d(20.0), d(52.0), inner, d(18.0)), &sub)?;
+        self.ink.text(&c.date, rect(d(20.0), d(52.0), head_w, d(18.0)), &sub)?;
         let mut y = BRIEF_HEADER;
         if let Some(w) = &c.weather {
             y += BRIEF_GAP;
@@ -2260,6 +2384,8 @@ mod tests {
             summary: None,
             ask: ask.then(|| ClaudeAsk { key: 7, tool: "Bash".into(), detail: "cargo build".into(), answerable: true }),
             can_focus: focus,
+            usage: None,
+            input: None,
         }
     }
 
@@ -2269,6 +2395,17 @@ mod tests {
         assert_eq!(card_size_dip(&CardContent::Claude(Box::new(claude(true, false)))), (370.0, 236.0), "İzin ver / Reddet");
         assert_eq!(card_size_dip(&CardContent::Claude(Box::new(claude(false, true)))), (370.0, 236.0), "Pencereye git");
         assert_eq!(card_radius_dip(&CardContent::Claude(Box::new(claude(false, false)))), 36.0);
+    }
+
+    /// The bars under the panel, then the buttons, then the message box, 12–14 DIP apart.
+    #[test]
+    fn claude_card_rows_stack() {
+        let usage = ClaudeUsageView { context: Some(34.0), five_hour: Some((23.0, "2 h 14 min".into())), seven_day: None };
+        let full = ClaudeCard { usage: Some(usage), input: Some((String::new(), false)), ..claude(false, true) };
+        let l = claude_layout(&full);
+        assert_eq!((l.usage, l.footer, l.input), (Some(188.0), Some(252.0), Some(298.0)));
+        assert_eq!(l.height, 350.0);
+        assert_eq!(card_size_dip(&CardContent::Claude(Box::new(full))), (370.0, 350.0));
     }
 
     #[test]
@@ -2331,6 +2468,47 @@ mod tests {
         let mut p = PickerState { stopwatch_tab: true, h: 1, m: 2, s: 3 };
         p.preset(15);
         assert_eq!((p.stopwatch_tab, p.h, p.m, p.s), (false, 0, 15, 0));
+    }
+
+    /// The Claude card with its bars, Compact and the message box being typed in, and the
+    /// brief's timer buttons, painted into PNGs in `WINISLAND_SHOTS` (as `spotify_pictures`).
+    #[test]
+    #[ignore]
+    fn claude_pictures() {
+        use crate::render::offscreen::render;
+        let dir = std::env::var("WINISLAND_SHOTS").unwrap_or_else(|_| ".".into());
+        unsafe {
+            let _ = windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_MULTITHREADED);
+        }
+        let s = Scale::from_dpi(144);
+        let usage = ClaudeUsageView { context: Some(34.0), five_hour: Some((23.0, "2 h 14 min".into())), seven_day: Some((81.0, "3 d 4 h".into())) };
+        let card = ClaudeCard {
+            status: "Working · 3:12".into(),
+            steps: vec![(StepKind::Edit, "Editing: app.rs".into())],
+            tasks: Some((3, 7, Some("Pill and card".into()))),
+            usage: Some(usage),
+            input: Some(("Add a timer button to the brief".into(), true)),
+            ..claude(false, true)
+        };
+        let empty = ClaudeCard { input: Some((String::new(), false)), ..card.clone() };
+        let shots = [("14-claude-card", CardContent::Claude(Box::new(card))), ("15-claude-card-idle", CardContent::Claude(Box::new(empty))), ("16-brief-timer-buttons", CardContent::Brief(Box::new(brief(false, false, 0, false, false))))];
+        for (name, content) in shots {
+            let (wd, hd) = card_size_dip(&content);
+            let (w, h) = (s.even_px(wd), s.px(hd));
+            let mut painted = None;
+            let px = render(w as u32, h as u32, [0.11, 0.11, 0.12, 1.0], |ink| {
+                painted = Some(paint_card(ink, &content, &s, w, h)?);
+                Ok(())
+            })
+            .expect("painted");
+            let hits: Vec<CardAction> = painted.map(|p| p.hits.into_iter().map(|(_, a)| a).collect()).unwrap_or_default();
+            let wanted: &[CardAction] = match content {
+                CardContent::Claude(_) => &[CardAction::ClaudeCompact, CardAction::ClaudeInput, CardAction::ClaudeSend, CardAction::ClaudeFocus],
+                _ => &[CardAction::BriefTimer, CardAction::BriefStopwatch],
+            };
+            assert!(wanted.iter().all(|a| hits.contains(a)), "{name}: {hits:?}");
+            crate::slint_shot::save_png(&format!("{dir}/{name}.png"), w as u32, h as u32, &px).expect("saved");
+        }
     }
 
     /// Spotify's card without a cover, liked, and with the lyrics note, painted into PNGs in

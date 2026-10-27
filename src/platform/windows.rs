@@ -55,6 +55,8 @@ pub enum UiEvent {
     MorphDone { opened: bool },
     /// A key pressed while the picker has focus (virtual-key code).
     Key(u16),
+    /// A character typed while the Claude card's message box has the keyboard (a UTF-16 unit).
+    Char(u16),
     /// The tray icon was clicked.
     Tray { right: bool },
     /// Win+Alt+N.
@@ -391,6 +393,10 @@ extern "system" fn card_input_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         }
         WM_KEYDOWN => {
             push_event(UiEvent::Key(wp.0 as u16));
+            LRESULT(0)
+        }
+        WM_CHAR => {
+            push_event(UiEvent::Char(wp.0 as u16));
             LRESULT(0)
         }
         _ => unsafe { DefWindowProcW(hwnd, msg, wp, lp) },

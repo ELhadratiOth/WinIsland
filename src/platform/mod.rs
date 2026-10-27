@@ -10,6 +10,7 @@ pub mod fullscreen;
 pub mod hotkey;
 pub mod http;
 pub mod ipc;
+pub mod keys;
 pub mod updater;
 pub mod log;
 pub mod os;

@@ -150,7 +150,7 @@ if ($app) {
     Start-Sleep -Seconds 4
     Shot '04-card-closed'
 
-    # Right-click: the pill's menu, then its first item (hide for a minute).
+    # Right-click: the pill's menu, then "Hide for 1 minute" (after the timer and the stopwatch).
     [Smoke]::SetCursorPos([int]($screen.Width / 2), $pillCenterY) | Out-Null
     Start-Sleep -Milliseconds 300
     [Smoke]::mouse_event(0x0008, 0, 0, 0, [UIntPtr]::Zero) # right down
@@ -158,7 +158,7 @@ if ($app) {
     [Smoke]::mouse_event(0x0010, 0, 0, 0, [UIntPtr]::Zero) # right up
     Start-Sleep -Seconds 1
     Shot '05-pill-menu'
-    [System.Windows.Forms.SendKeys]::SendWait('{DOWN}{ENTER}')
+    [System.Windows.Forms.SendKeys]::SendWait('{DOWN 3}{ENTER}')
     [Smoke]::SetCursorPos($away.X, $away.Y) | Out-Null
     Start-Sleep -Seconds 2
     Shot '06-hidden'
@@ -168,6 +168,14 @@ if ($app) {
         Say 'the pill is still there after "Hide for 1 minute"'
     } else {
         Say 'pill hidden from its menu'
+    }
+
+    # Claude Code's status line: the JSON in, the short line out (and the numbers to the app).
+    Step 'claude-status' {
+        $status = '{"session_id":"smoke","model":{"display_name":"Opus 5.5"},"context_window":{"used_percentage":34.4},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":4102444800},"seven_day":{"used_percentage":41.2,"resets_at":4102444800}}}'
+        $line = ($status | & (Resolve-Path $Exe).Path claude-status | Out-String).Trim()
+        Say "claude-status printed: $line"
+        if ($line -notmatch 'context 34%' -or $line -notmatch '5h 24%' -or $line -notmatch 'week 41%') { throw "unexpected status line: $line" }
     }
 
     $alive = -not $app.HasExited

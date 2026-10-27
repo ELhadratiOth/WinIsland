@@ -1,7 +1,7 @@
 name: Smoke test
 
 # Builds WinIsland, starts it on a Windows desktop with a demo timer, clicks the pill, hides it
-# from its right-click menu and takes screenshots; then paints the Spotify card and pill (uploaded
+# from its right-click menu and takes screenshots; then paints the Spotify, Claude and brief cards (uploaded
 # as the smoke-shots artifact, together with the app's log). Run it from the Actions tab.
 on:
   workflow_dispatch:
@@ -32,13 +32,13 @@ jobs:
       - name: Run and take screenshots
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File tools\smoke.ps1 -Exe target\quick\winisland.exe -Out shots
-      - name: Paint the Spotify card and pill
+      - name: Paint the Spotify, Claude and brief cards
         if: always()
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force shots | Out-Null
           $env:WINISLAND_SHOTS = (Resolve-Path shots).Path
-          cargo test --profile quick --lib render::card::tests::spotify_pictures -- --ignored --exact
+          cargo test --profile quick --lib render::card::tests -- --ignored
       - uses: actions/upload-artifact@v4
         if: always()
         with:

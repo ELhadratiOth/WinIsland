@@ -108,6 +108,10 @@ fn forward(args: &[String]) -> bool {
             claude_hook(args.iter().any(|a| a == "--ask"));
             return true;
         }
+        Some("claude-status") => {
+            claude_status();
+            return true;
+        }
         Some("update") => Some(Command::Update),
         Some("claude-hooks") => {
             claude_hooks_command(args.get(2).map(String::as_str));
@@ -187,6 +191,21 @@ fn claude_hook(asks: bool) {
             }
         }
     }
+}
+
+/// Claude Code's status line (`statusLine` in its settings): the session's JSON on stdin. The
+/// context and the plan's limits go to the WinIsland's Claude card, and a short line of them is
+/// printed for Claude Code to show.
+fn claude_status() {
+    use std::io::{Read, Write};
+    let mut text = String::new();
+    let _ = std::io::stdin().take(1 << 20).read_to_string(&mut text);
+    let Some(usage) = serde_json::from_str::<serde_json::Value>(&text).ok().as_ref().and_then(winisland::activities::claude::usage_of) else { return };
+    let line = winisland::activities::claude::status_text(&usage);
+    ipc::send(&Command::Usage(Box::new(usage)));
+    let mut out = std::io::stdout();
+    let _ = out.write_all(line.as_bytes());
+    let _ = out.flush();
 }
 
 /// 128 random bits as hex (the std hasher's keys come from the OS's random source).
