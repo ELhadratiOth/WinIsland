@@ -2443,6 +2443,12 @@ impl App {
                 self.stop_brief_idle();
                 self.open = Some(OpenCard::Wellbeing);
             }
+            CardAction::BriefTimerPreset(minutes) => {
+                self.stop_brief_idle();
+                self.start_timer(minutes as u64 * 60_000);
+                self.user_front = None;
+                self.close_card()?;
+            }
             CardAction::BriefTimer => {
                 self.stop_brief_idle();
                 self.hide_card_now()?;
@@ -3488,18 +3494,10 @@ impl App {
         self.open_card(OpenCard::Picker, false)
     }
 
-    /// The pill's right-click menu: start a timer or the stopwatch, hide the island for 1, 5 or
-    /// 10 minutes, or the settings of what it shows.
+    /// The pill's right-click menu: hide the island for 1, 5 or 10 minutes, or the settings of
+    /// what it shows.
     fn pill_menu(&mut self) -> Result<()> {
         let minutes = match show_pill_menu(self.main.hwnd) {
-            MENU_TIMER => {
-                self.hide_card_now()?;
-                return self.open_picker();
-            }
-            MENU_STOPWATCH => {
-                self.start_stopwatch();
-                return self.refresh();
-            }
             MENU_HIDE_1 => 1,
             MENU_HIDE_5 => 5,
             MENU_HIDE_10 => 10,

@@ -150,7 +150,7 @@ if ($app) {
     Start-Sleep -Seconds 4
     Shot '04-card-closed'
 
-    # Right-click: the pill's menu, then "Hide for 1 minute" (after the timer and the stopwatch).
+    # Right-click: the pill's menu, then its first item (hide for a minute).
     [Smoke]::SetCursorPos([int]($screen.Width / 2), $pillCenterY) | Out-Null
     Start-Sleep -Milliseconds 300
     [Smoke]::mouse_event(0x0008, 0, 0, 0, [UIntPtr]::Zero) # right down
@@ -158,7 +158,7 @@ if ($app) {
     [Smoke]::mouse_event(0x0010, 0, 0, 0, [UIntPtr]::Zero) # right up
     Start-Sleep -Seconds 1
     Shot '05-pill-menu'
-    [System.Windows.Forms.SendKeys]::SendWait('{DOWN 3}{ENTER}')
+    [System.Windows.Forms.SendKeys]::SendWait('{DOWN}{ENTER}')
     [Smoke]::SetCursorPos($away.X, $away.Y) | Out-Null
     Start-Sleep -Seconds 2
     Shot '06-hidden'

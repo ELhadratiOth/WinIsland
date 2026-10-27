@@ -159,7 +159,7 @@ fn claude_hook(asks: bool) {
     // A hook's JSON is small; a runaway one is cut, not waited on.
     let mut text = String::new();
     let _ = std::io::stdin().take(1 << 20).read_to_string(&mut text);
-    let Ok(mut hook) = serde_json::from_str::<serde_json::Value>(&text) else { return };
+    let Ok(mut hook) = serde_json::from_str::<serde_json::Value>(text.trim_start_matches('\u{feff}')) else { return };
     let event = hook["hook_event_name"].as_str().unwrap_or("").to_string();
     if event == "UserPromptSubmit" {
         let window = unsafe { windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
@@ -200,7 +200,11 @@ fn claude_status() {
     use std::io::{Read, Write};
     let mut text = String::new();
     let _ = std::io::stdin().take(1 << 20).read_to_string(&mut text);
-    let Some(usage) = serde_json::from_str::<serde_json::Value>(&text).ok().as_ref().and_then(winisland::activities::claude::usage_of) else { return };
+    // A writer may start its text with a byte order mark (.NET does, in a UTF-8 console).
+    let Some(usage) = serde_json::from_str::<serde_json::Value>(text.trim_start_matches('\u{feff}')).ok().as_ref().and_then(winisland::activities::claude::usage_of) else {
+        log(&format!("claude-status: no session in {} bytes of status JSON", text.len()));
+        return;
+    };
     let line = winisland::activities::claude::status_text(&usage);
     ipc::send(&Command::Usage(Box::new(usage)));
     let mut out = std::io::stdout();

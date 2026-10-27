@@ -2702,12 +2702,24 @@ msgid "Bağlam"
 msgstr "Context"
 
 #: src/render/card.rs
-msgid "5 saat"
-msgstr "5 hours"
+msgid "5 saatlik sınır"
+msgstr "5-hour limit"
 
 #: src/render/card.rs
-msgid "Hafta"
-msgstr "Week"
+msgid "Haftalık sınır"
+msgstr "Weekly limit"
+
+#: src/render/card.rs
+msgid "Son yanıt"
+msgstr "Latest answer"
+
+#: src/render/card.rs
+msgid "{} / {}"
+msgstr "{} of {}"
+
+#: src/render/card.rs
+msgid "Görevler"
+msgstr "Tasks"
 
 #: src/render/card.rs
 msgid "{} sonra sıfırlanır"
