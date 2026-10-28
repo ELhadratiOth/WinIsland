@@ -1,13 +1,14 @@
 // A stand-in for the Anthropic API, so the real Claude Code CLI can run a turn on a CI runner
 // without a key: a request that offers tools gets one Bash call (`mkdir`, which asks for
 // permission), one that already holds its result gets a short answer, anything else gets "ok".
-// Every request goes into the log.
+// Every request goes into the log. A delay holds each answer that long, so a turn lasts long
+// enough to be seen working.
 //
-//   node tools/fake-anthropic.js <port> <log file>
+//   node tools/fake-anthropic.js <port> <log file> [delay ms]
 const http = require('http');
 const fs = require('fs');
 
-const [port, logFile] = [Number(process.argv[2] || 8765), process.argv[3] || 'fake-anthropic.log'];
+const [port, logFile, delay] = [Number(process.argv[2] || 8765), process.argv[3] || 'fake-anthropic.log', Number(process.argv[4] || 0)];
 const say = (line) => fs.appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`);
 
 function reply(body) {
@@ -71,9 +72,11 @@ http.createServer((req, res) => {
         if (req.method === 'POST' && path.endsWith('/messages')) {
             const msg = message(body, reply(body));
             say(`${req.method} ${path} stream=${!!body.stream} tools=${(body.tools || []).length} -> ${msg.content.map((b) => b.type === 'tool_use' ? `tool_use ${b.name}` : 'text').join(', ')}`);
-            if (body.stream) return stream(res, msg);
-            res.writeHead(200, { 'content-type': 'application/json' });
-            return res.end(JSON.stringify(msg));
+            return setTimeout(() => {
+                if (body.stream) return stream(res, msg);
+                res.writeHead(200, { 'content-type': 'application/json' });
+                res.end(JSON.stringify(msg));
+            }, delay);
         }
         say(`${req.method} ${path} (not handled)`);
         res.writeHead(404, { 'content-type': 'application/json' });

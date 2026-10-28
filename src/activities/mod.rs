@@ -9,6 +9,8 @@ pub mod buds;
 pub mod buds_worker;
 pub mod capture;
 pub mod claude;
+pub mod claude_sessions;
+pub mod claude_worker;
 pub mod media;
 pub mod media_worker;
 pub mod football;
@@ -67,6 +69,8 @@ pub enum ActivityKind {
     Game(u32),
     /// An app went past its daily limit (Dijital Denge): for a moment.
     Usage,
+    /// Claude Code's sessions and the plan's limits, at the very back of the stack.
+    ClaudeTab,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -114,7 +118,8 @@ pub fn settings_page_for(kind: ActivityKind) -> u8 {
         | ActivityKind::Rain
         | ActivityKind::WeatherAlert
         | ActivityKind::Capture
-        | ActivityKind::Live(_) => 8,
+        | ActivityKind::Live(_)
+        | ActivityKind::ClaudeTab => 8,
         ActivityKind::Game(_) => 9,
         ActivityKind::Usage => 10,
     }
@@ -204,6 +209,8 @@ fn rank(p: &Presence, now_ms: u64, keep_ms: u64, buds_front: u64) -> Option<u8> 
         (ActivityKind::Game(_), _) => Some(6),
         (ActivityKind::Usage, _) if age < USAGE_MOMENT_MS => Some(1),
         (ActivityKind::Usage, _) => None,
+        // Behind the weather: always there to look at, never in the way.
+        (ActivityKind::ClaudeTab, _) => Some(11),
     }
 }
 
@@ -224,6 +231,15 @@ pub fn add_idle(p: &mut Vec<Presence>, now_ms: u64, idle_clock: bool, weather_be
         p.push(running(ActivityKind::Clock));
     } else if on && weather_behind {
         p.push(running(ActivityKind::Weather));
+    }
+}
+
+/// Adds the Claude tab at the back while something else shows (the clock included): it never
+/// keeps the pill up by itself.
+pub fn add_claude_tab(p: &mut Vec<Presence>, now_ms: u64) {
+    let (keep, buds_front) = (media_paused_keep_ms(), buds_front_ms());
+    if p.iter().any(|x| rank(x, now_ms, keep, buds_front).is_some()) {
+        p.push(Presence { kind: ActivityKind::ClaudeTab, state: PresenceState::Running, changed_ms: 0 });
     }
 }
 
@@ -442,6 +458,25 @@ mod tests {
         let mut busy = vec![p(Volume, Moment, 99_500)];
         add_idle(&mut busy, 100_000, true, true);
         assert_eq!(order(&busy), vec![Volume, Weather], "while the moment plays");
+    }
+
+    #[test]
+    fn the_claude_tab_waits_behind_the_weather_and_never_alone() {
+        let kinds = |p: &[Presence]| stack_order(p, 100_000, None);
+        let mut idle = vec![];
+        add_idle(&mut idle, 100_000, true, true);
+        add_claude_tab(&mut idle, 100_000);
+        assert_eq!(kinds(&idle), vec![Clock, ClaudeTab]);
+        let mut busy = vec![p(Media(1), Playing, 0)];
+        add_idle(&mut busy, 100_000, false, true);
+        add_claude_tab(&mut busy, 100_000);
+        assert_eq!(kinds(&busy), vec![Media(1), Weather, ClaudeTab]);
+        let mut nothing = vec![];
+        add_idle(&mut nothing, 100_000, false, true);
+        add_claude_tab(&mut nothing, 100_000);
+        assert_eq!(kinds(&nothing), vec![], "the clock off: the pill still hides");
+        assert!(has_card(ClaudeTab));
+        assert_eq!(settings_page_for(ClaudeTab), 8);
     }
 
     #[test]

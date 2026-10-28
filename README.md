@@ -36,7 +36,9 @@ score, what Claude Code is doing. Click the pill and a card opens below it.
 - **Claude Code:** what Claude is doing at the moment and its task list, how full its context is and how
   much of your plan's 5-hour and weekly limits is used. Type a message on the card to send it to the
   session, or press **Compact**. When it asks for permission, the card shows **Allow / Deny** buttons
-  ([see below](#live-activities)).
+  ([see below](#live-activities)). The **Claude tab** waits at the back of the stack, behind the
+  weather: your latest sessions with their context, a message box and **Compact** each, and the plan's
+  5-hour and weekly limits.
 - **Games:** Steam and Epic Games downloads, updates, pauses and play time.
 - **Digital Wellbeing:** the day's screen time, each app's share, and the limits you set.
 - **Shelf:** files you drop on the pill wait there until you drag them where you need them; new
@@ -166,6 +168,27 @@ The card's message box sends what you type to the session's window: WinIsland br
 front, types the message and Enter there, and puts the window you were in back in front. **Compact** does
 the same with `/compact`. The window is the one the session's last prompt was typed in; in a terminal
 with tabs, the message goes to the tab that is open.
+
+**The Claude tab** is always in the stack (scroll the pill to it, behind the weather): "Claude Code",
+how many sessions are working, and the 5-hour limit. Its card shows the plan's 5-hour and weekly limits
+as bars, then the four latest sessions of the last two weeks: the project, where it ran (Terminal,
+Desktop, IDE) and when, its name or first prompt, a context bar, **Message** and **Compact**. A message
+to a session whose terminal is open is typed there; any other (the desktop app's, a closed one) goes
+through `claude -p --resume <session>` in the session's folder, so Claude Code's `claude` command must
+be installed. Its progress shows on the pill like any session's. A working session's row opens its
+card. Turn the tab off in Settings → System → Live activities.
+
+The tab reads the sessions from Claude Code's transcripts (`~\.claude\projects`), which the terminal and
+the desktop app both write. So a session shows on the pill even when its hooks don't reach WinIsland
+(the desktop app's sessions, for one), and a turn ended with Esc stops showing as working. The context
+comes from the transcript too, where there is no status line.
+
+The plan's limits come from the status line, and also from Claude's usage endpoint with Claude Code's
+own sign-in (`~\.claude\.credentials.json`), every five minutes and when the tab's card opens. The token
+is sent to `api.anthropic.com` only and never logged. The endpoint isn't documented, so if it changes,
+the bars stay empty until a terminal session's status line fills them. WinIsland doesn't renew the
+sign-in: when it has expired, the bars wait for Claude Code to renew it. Turn this off with **Plan
+limits** in the same settings section.
 
 ## Building
 

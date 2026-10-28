@@ -256,6 +256,7 @@ pub fn app_text_lines(text: &str) -> u8 {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CardContent {
     Claude(Box<ClaudeCard>),
+    ClaudeTab(Box<ClaudeTabCard>),
     App(Box<AppCard>),
     Live(LiveCard),
     Timer(TimerCard),
@@ -466,6 +467,62 @@ pub struct ClaudeAsk {
     pub answerable: bool,
 }
 
+/// The Claude tab: the plan's limits and the latest sessions, each with its context, Compact and
+/// a message box.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClaudeTabCard {
+    /// "2 running", "Nothing running".
+    pub status: String,
+    /// The 5-hour and weekly limits (used %, when each resets); none until known.
+    pub five_hour: Option<(f32, String)>,
+    pub seven_day: Option<(f32, String)>,
+    /// Why the limits are missing, under their bars.
+    pub limits_note: Option<String>,
+    /// At most four, newest first.
+    pub rows: Vec<ClaudeTabRow>,
+    /// The row whose message box is open (its key), what is typed, and whether it has the keyboard.
+    pub input: Option<(u32, String, bool)>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClaudeTabRow {
+    /// The session's key (its id hashed): the buttons act on this session, wherever it moved.
+    pub key: u32,
+    pub project: String,
+    /// Its name or first prompt, or what it does now.
+    pub title: String,
+    /// "Working", "Desktop · 12 min ago".
+    pub when: String,
+    pub running: bool,
+    /// How full its context is (%).
+    pub context: Option<f32>,
+    /// A message or a Compact is on its way: the buttons wait.
+    pub busy: bool,
+    /// Messages can go to it (Claude Code's command is installed, or its window is open).
+    pub can_send: bool,
+}
+
+pub const CLAUDE_TAB_ROWS: usize = 4;
+const TAB_LIMITS_TOP: f32 = 74.0;
+const TAB_LIMITS_H: f32 = 86.0;
+const TAB_ROW_H: f32 = 94.0;
+const TAB_INPUT_H: f32 = 52.0;
+const TAB_GAP: f32 = 8.0;
+
+/// Where each row starts (DIP from the card's top) and the card's height.
+pub fn claude_tab_layout(c: &ClaudeTabCard) -> (Vec<f32>, f32) {
+    let mut y = TAB_LIMITS_TOP + TAB_LIMITS_H + 10.0;
+    let mut tops = Vec::new();
+    for r in c.rows.iter().take(CLAUDE_TAB_ROWS) {
+        tops.push(y);
+        y += TAB_ROW_H + if c.input.as_ref().is_some_and(|(k, _, _)| *k == r.key) { TAB_INPUT_H } else { 0.0 } + TAB_GAP;
+    }
+    if c.rows.is_empty() {
+        y += 44.0;
+    }
+    (tops, y - TAB_GAP + 14.0)
+}
+
 /// The glyph a step's line starts with.
 pub fn step_icon(kind: StepKind) -> Icon {
     match kind {
@@ -638,6 +695,12 @@ pub enum CardAction {
     ClaudeInput,
     ClaudeSend,
     ClaudeCompact,
+    /// The Claude tab, by session key: a row (its live card, while it works), its Compact, its
+    /// message box opening, and the box's send button.
+    ClaudeTabRow(u32),
+    ClaudeTabCompact(u32),
+    ClaudeTabMessage(u32),
+    ClaudeTabSend,
     /// The brief's timer panel: a quick countdown (minutes), the picker for another length, and
     /// the stopwatch.
     BriefTimerPreset(u32),
@@ -651,6 +714,7 @@ pub fn card_size_dip(c: &CardContent) -> (f32, f32) {
         CardContent::Timer(_) | CardContent::Stopwatch(_) | CardContent::Live(_) => (370.0, 77.0),
         // The footer only with a button in it.
         CardContent::Claude(c) => (370.0, claude_layout(c).height),
+        CardContent::ClaudeTab(c) => (370.0, claude_tab_layout(c).1),
         CardContent::App(a) if a.prompt => (370.0, 236.0),
         // The header, the text, the bar, the footer.
         CardContent::App(a) => {
@@ -735,7 +799,7 @@ const APP_LINE: f32 = 18.0;
 pub fn card_radius_dip(c: &CardContent) -> f32 {
     match c {
         CardContent::Timer(_) | CardContent::Stopwatch(_) | CardContent::Live(_) => card_size_dip(c).1 / 2.0,
-        CardContent::Claude(_) | CardContent::App(_) => 36.0,
+        CardContent::Claude(_) | CardContent::ClaudeTab(_) | CardContent::App(_) => 36.0,
         CardContent::Picker(_) | CardContent::Buds(_) | CardContent::Weather(_) | CardContent::Shelf(_) | CardContent::Brief(_) | CardContent::Game(_) | CardContent::Wellbeing(_) => 36.0,
         CardContent::Media(_) | CardContent::Match(_) => 32.0,
     }
@@ -772,7 +836,7 @@ pub fn card_accent(c: &CardContent) -> (u8, u8, u8) {
     match c {
         CardContent::Timer(_) | CardContent::Stopwatch(_) | CardContent::Picker(_) | CardContent::Shelf(_) => timer_accent(),
         CardContent::Live(l) if l.claude => CLAUDE_ACCENT,
-        CardContent::Claude(_) => CLAUDE_ACCENT,
+        CardContent::Claude(_) | CardContent::ClaudeTab(_) => CLAUDE_ACCENT,
         CardContent::App(a) => a.accent,
         CardContent::Live(_) => timer_accent(),
         CardContent::Media(card) => (card.m.accent[0], card.m.accent[1], card.m.accent[2]),
@@ -880,6 +944,7 @@ pub fn paint_card(ink: &Ink, c: &CardContent, s: &Scale, w: f32, h: f32) -> Resu
         CardContent::Brief(b) => p.brief(b),
         CardContent::Live(l) => p.live(l),
         CardContent::Claude(c) => p.claude(c),
+        CardContent::ClaudeTab(c) => p.claude_tab(c),
         CardContent::App(a) => p.app(a),
         CardContent::Match(m) => p.match_card(m),
         CardContent::Shelf(c) => {
@@ -1147,7 +1212,7 @@ impl Painter<'_, '_> {
                 let col = |y: f32, h: f32| rect(cx - col_w / 2.0 + d(6.0), y, col_w - d(12.0), h);
                 let label_st = TextStyle::new(Face::Text, Weight::Medium, d(11.5), white(0.85)).centered().ellipsis();
                 self.ink.text(label, col(uy + d(58.0), d(16.0)), &label_st)?;
-                if let Some(at) = resets {
+                if let Some(at) = resets.filter(|at| !at.is_empty()) {
                     let st = TextStyle::new(Face::Text, Weight::Regular, d(10.5), white(0.5)).centered().ellipsis();
                     self.ink.text(&trf("{} sonra sıfırlanır", &[at]), col(uy + d(78.0), d(16.0)), &st)?;
                 } else if context && c.input.is_some() {
@@ -1194,6 +1259,136 @@ impl Painter<'_, '_> {
             // The button is inside the field: its hit goes first (the first that matches wins).
             self.hits.push((send, CardAction::ClaudeSend));
             self.hits.push((field, CardAction::ClaudeInput));
+        }
+        Ok(())
+    }
+
+    /// The Claude tab: the header (Claude's mark, "Claude Code" and how many sessions work); the
+    /// plan's 5-hour and weekly limits as bars with when each resets; then a panel per session
+    /// (its project, when, its name, its context bar, Message and Compact), the message box
+    /// under the row it was opened on.
+    fn claude_tab(&mut self, c: &ClaudeTabCard) -> Result<()> {
+        let d = |v: f32| v * self.s.0;
+        let (r, g, b) = CLAUDE_ACCENT;
+        let accent = rgba(r, g, b, 1.0);
+        let soft = lighten(CLAUDE_ACCENT);
+        let line = |size: f32, weight, a: f32| TextStyle::new(Face::Text, weight, d(size), white(a)).top().ellipsis();
+        let level = |p: f32| match p {
+            p if p >= 90.0 => rgba(0xFF, 0x5A, 0x4F, 1.0),
+            p if p >= 70.0 => rgba(0xFF, 0xB0, 0x2E, 1.0),
+            _ => accent,
+        };
+
+        // Header.
+        let circle = d(40.0).round();
+        let dot = rect(d(20.0).round(), d(18.0).round(), circle, circle);
+        self.ink.rrect(dot, circle / 2.0, accent)?;
+        paint_live_mark(self.ink, dot, true, LiveState::Run, d(20.0))?;
+        let text_x = d(72.0);
+        let text_w = self.w - text_x - d(24.0);
+        self.ink.text("Claude Code", rect(text_x, d(17.0), text_w, d(22.0)), &line(16.0, Weight::SemiBold, 1.0))?;
+        self.ink.text(&c.status, rect(text_x, d(40.0), text_w, d(18.0)), &line(12.5, Weight::Regular, 0.7))?;
+
+        // The plan's limits: a bar each.
+        let panel = rect(d(16.0), d(TAB_LIMITS_TOP), self.w - d(32.0), d(TAB_LIMITS_H));
+        self.ink.rrect(panel, d(22.0), white(0.06))?;
+        let (px, pw) = (panel.left + d(16.0), panel.right - panel.left - d(32.0));
+        let bars = [(tr("5 saatlik sınır"), &c.five_hour), (tr("Haftalık sınır"), &c.seven_day)];
+        for (i, (label, value)) in bars.into_iter().enumerate() {
+            let y = panel.top + d(12.0 + i as f32 * 36.0);
+            let right = match value {
+                Some((p, at)) if at.is_empty() => format!("{}%", p.round() as i64),
+                Some((p, at)) => trf("{}% · {} sonra sıfırlanır", &[&(p.round() as i64), at]),
+                None => "–".to_string(),
+            };
+            let right_st = TextStyle::new(Face::Text, Weight::Regular, d(11.5), white(0.6)).top().trailing().tabular();
+            let right_w = self.ink.measure(&right, &right_st)? + d(2.0);
+            self.ink.text(&right, rect(px + pw - right_w, y, right_w, d(16.0)), &right_st)?;
+            self.ink.text(label, rect(px, y, pw - right_w - d(8.0), d(16.0)), &line(12.5, Weight::Medium, 0.9))?;
+            let (bar, by) = (d(6.0).round(), y + d(20.0));
+            self.ink.rrect(rect(px, by, pw, bar), bar / 2.0, white(0.12))?;
+            if let Some((p, _)) = value {
+                self.ink.rrect(rect(px, by, (pw * (p / 100.0).clamp(0.0, 1.0)).max(bar), bar), bar / 2.0, level(*p))?;
+            }
+        }
+        if let (Some(note), None, None) = (&c.limits_note, &c.five_hour, &c.seven_day) {
+            let st = TextStyle::new(Face::Text, Weight::Regular, d(10.5), white(0.45)).top().ellipsis();
+            self.ink.text(note, rect(px, panel.bottom - d(14.0), pw, d(14.0)), &st)?;
+        }
+
+        // The sessions.
+        let (tops, _) = claude_tab_layout(c);
+        if c.rows.is_empty() {
+            let y = d(TAB_LIMITS_TOP + TAB_LIMITS_H + 10.0);
+            self.ink.text(tr("Henüz oturum yok"), rect(d(32.0), y + d(12.0), self.w - d(64.0), d(18.0)), &line(13.0, Weight::Regular, 0.6))?;
+        }
+        for (row, top) in c.rows.iter().zip(tops) {
+            let open = c.input.as_ref().filter(|(k, _, _)| *k == row.key);
+            let h = TAB_ROW_H + if open.is_some() { TAB_INPUT_H } else { 0.0 };
+            let area = rect(d(16.0), d(top), self.w - d(32.0), d(h));
+            self.ink.rrect(area, d(22.0), white(if row.running { 0.09 } else { 0.06 }))?;
+            let y = area.top;
+            let when_st = match row.running {
+                true => TextStyle::new(Face::Text, Weight::SemiBold, d(11.5), soft),
+                false => TextStyle::new(Face::Text, Weight::Regular, d(11.5), white(0.5)),
+            }
+            .top()
+            .trailing();
+            let when_w = self.ink.measure(&row.when, &when_st)? + d(2.0);
+            self.ink.text(&row.when, rect(px + pw - when_w, y + d(13.0), when_w, d(16.0)), &when_st)?;
+            self.ink.text(&row.project, rect(px, y + d(11.0), pw - when_w - d(8.0), d(18.0)), &line(13.5, Weight::SemiBold, 1.0))?;
+            self.ink.text(&row.title, rect(px, y + d(32.0), pw, d(16.0)), &line(12.0, Weight::Regular, 0.7))?;
+            // The context bar on the left, the buttons on the right.
+            let by = y + d(58.0);
+            let (chip_h, chip_w) = (d(26.0), d(78.0));
+            let compact = rect(px + pw - chip_w, by, chip_w, chip_h);
+            let message = rect(compact.left - d(6.0) - chip_w, by, chip_w, chip_h);
+            let bar_w = message.left - d(12.0) - px;
+            let ctx = row.context.map_or_else(|| tr("Bağlam").to_string(), |p| trf("Bağlam {}%", &[&(p.round() as i64)]));
+            self.ink.text(&ctx, rect(px, by - d(1.0), bar_w, d(14.0)), &line(11.0, Weight::Regular, 0.6))?;
+            let bar = d(5.0).round();
+            self.ink.rrect(rect(px, by + d(17.0), bar_w, bar), bar / 2.0, white(0.12))?;
+            if let Some(p) = row.context {
+                self.ink.rrect(rect(px, by + d(17.0), (bar_w * (p / 100.0).clamp(0.0, 1.0)).max(bar), bar), bar / 2.0, level(p))?;
+            }
+            let chip_st = |on: bool| TextStyle::new(Face::Text, Weight::SemiBold, d(11.5), if on { soft } else { white(0.35) }).centered();
+            let ready = row.can_send && !row.busy;
+            self.ink.rrect(message, chip_h / 2.0, if ready { white(0.10) } else { white(0.05) })?;
+            self.ink.text(tr("Mesaj"), message, &chip_st(ready))?;
+            self.ink.rrect(compact, chip_h / 2.0, if ready { rgba(r, g, b, 0.22) } else { white(0.05) })?;
+            self.ink.text(if row.busy { tr("Gönderiliyor") } else { tr("Sıkıştır") }, compact, &chip_st(ready))?;
+            if ready {
+                self.hits.push((message, CardAction::ClaudeTabMessage(row.key)));
+                self.hits.push((compact, CardAction::ClaudeTabCompact(row.key)));
+            }
+            // The message box, under its row.
+            if let Some((_, text, focused)) = open {
+                let field = rect(px - d(4.0), y + d(TAB_ROW_H), pw + d(8.0), d(42.0));
+                self.ink.rrect(field, d(21.0), white(if *focused { 0.12 } else { 0.08 }))?;
+                if *focused {
+                    self.ink.rrect_outline(field, d(21.0), d(1.5), rgba(r, g, b, 0.85))?;
+                }
+                let send = rect(field.right - d(5.0) - d(32.0), field.top + d(5.0), d(32.0), d(32.0));
+                let inner = rect(field.left + d(16.0), field.top, send.left - d(8.0) - field.left - d(16.0), d(42.0));
+                let st = TextStyle::new(Face::Text, Weight::Regular, d(13.0), white(1.0));
+                if text.is_empty() && !focused {
+                    self.ink.text(tr("Claude'a yaz…"), inner, &TextStyle::new(Face::Text, Weight::Regular, d(13.0), white(0.45)).ellipsis())?;
+                } else {
+                    let shown = format!("{text}{}", if *focused { "|" } else { "" });
+                    let mut start = 0;
+                    while start < shown.len() && self.ink.measure(&shown[start..], &st)? > inner.right - inner.left {
+                        start += shown[start..].chars().next().map_or(1, char::len_utf8);
+                    }
+                    self.ink.text(&shown[start..], inner, &st)?;
+                }
+                let can = !text.trim().is_empty();
+                self.ink.rrect(send, d(16.0), if can { accent } else { white(0.10) })?;
+                self.ink.text("\u{E74A}", send, &TextStyle::new(Face::Icons, Weight::Regular, d(13.0), white(if can { 1.0 } else { 0.4 })).centered())?;
+                self.hits.push((send, CardAction::ClaudeTabSend));
+                self.hits.push((field, CardAction::ClaudeInput));
+            }
+            // The rest of the row opens its live card (while it works).
+            self.hits.push((area, CardAction::ClaudeTabRow(row.key)));
         }
         Ok(())
     }
@@ -2642,6 +2837,31 @@ mod tests {
                 .collect();
         }
         let claude_hits = vec![CardAction::ClaudeCompact, CardAction::ClaudeInput, CardAction::ClaudeSend, CardAction::ClaudeFocus];
+        let row = |key: u32, project: &str, title: &str, when: &str, running: bool, context: f32| ClaudeTabRow {
+            key,
+            project: project.into(),
+            title: title.into(),
+            when: when.into(),
+            running,
+            context: Some(context),
+            busy: false,
+            can_send: !running,
+        };
+        let tab = ClaudeTabCard {
+            status: "1 session working".into(),
+            five_hour: Some((23.0, "2 h 14 min".into())),
+            seven_day: Some((81.0, "3 d 4 h".into())),
+            limits_note: None,
+            rows: vec![
+                row(1, "winisland", "Editing: app.rs", "Working", true, 34.0),
+                row(2, "oncf-intern", "Add the occupation chart to the gov view", "Desktop · 12 min ago", false, 72.0),
+                row(3, "portfolio", "Redesign the portfolio with animations", "Terminal · 3 h ago", false, 93.0),
+                row(4, "dotfiles", "Caveman status line badge", "2 d ago", false, 8.0),
+            ],
+            input: Some((2, "Run the tests again".into(), true)),
+        };
+        let tab_empty = ClaudeTabCard { status: "Nothing running".into(), five_hour: None, seven_day: None, limits_note: Some("Shows once Claude Code is signed in".into()), rows: vec![], input: None };
+        let tab_hits = vec![CardAction::ClaudeTabMessage(3), CardAction::ClaudeTabCompact(3), CardAction::ClaudeTabSend, CardAction::ClaudeInput, CardAction::ClaudeTabRow(1)];
         let timer_hits = vec![CardAction::BriefTimerPreset(5), CardAction::BriefTimerPreset(25), CardAction::BriefTimer, CardAction::BriefStopwatch];
         let shots = [
             ("14-claude-card", CardContent::Claude(Box::new(card)), claude_hits.clone()),
@@ -2652,6 +2872,8 @@ mod tests {
             ("19-brief-full", CardContent::Brief(Box::new(day)), timer_hits),
             ("20-shelf-copy", CardContent::Shelf(ShelfCard { hover: Some(0), ..shelf_card(3) }), vec![CardAction::ShelfCopy(0), CardAction::ShelfRemove(0), CardAction::ShelfClear]),
             ("21-shelf-copied", CardContent::Shelf(ShelfCard { hover: Some(1), copied: Some(1), ..shelf_card(3) }), vec![CardAction::ShelfCopy(1)]),
+            ("22-claude-tab", CardContent::ClaudeTab(Box::new(tab)), tab_hits),
+            ("23-claude-tab-empty", CardContent::ClaudeTab(Box::new(tab_empty)), vec![]),
         ];
         for (name, content, wanted) in shots {
             let (wd, hd) = card_size_dip(&content);

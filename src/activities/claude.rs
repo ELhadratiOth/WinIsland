@@ -353,6 +353,10 @@ pub struct ClaudeNote {
     pub agent: String,
     #[serde(default)]
     pub new_prompt: bool,
+    /// When its hook process started (Unix ms; 0: not said). Claude Code runs the hooks in
+    /// parallel, so one may arrive after a later one: a step from before the turn ended is late.
+    #[serde(default)]
+    pub at: u64,
 }
 
 /// One window of a Pro or Max plan's usage limit: how much of it is used (whole percent) and

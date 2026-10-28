@@ -10,6 +10,8 @@ on:
     paths:
       - src/claude_hooks.rs
       - src/activities/claude.rs
+      - src/activities/claude_sessions.rs
+      - src/activities/claude_worker.rs
       - src/activities/live.rs
       - src/platform/ask.rs
       - tools/claude-check.ps1

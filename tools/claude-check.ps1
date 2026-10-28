@@ -150,6 +150,10 @@ Step 'claude-hooks install' {
 }
 
 # 2. The WinIsland and the stand-in API.
+# Claude Code talks to the stand-in, the WinIsland's own `claude -p --resume` included.
+$env:ANTHROPIC_BASE_URL = 'http://127.0.0.1:8765'
+$env:ANTHROPIC_API_KEY = 'sk-ant-winisland-check'
+$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'
 $away = @{ X = $screen.Width - 10; Y = [int]($screen.Height / 2) }
 [Check]::SetCursorPos($away.X, $away.Y) | Out-Null
 $app = Start-Process -FilePath $Exe -PassThru
@@ -161,9 +165,6 @@ Shot '01-idle'
 $project = Join-Path $env:RUNNER_TEMP 'winisland-claude-check'
 Remove-Item $project -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $project | Out-Null
-$env:ANTHROPIC_BASE_URL = 'http://127.0.0.1:8765'
-$env:ANTHROPIC_API_KEY = 'sk-ant-winisland-check'
-$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'
 $claudeOut = Join-Path $Out 'claude-output.json'
 $claudeErr = Join-Path $Out 'claude-stderr.txt'
 $claude = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', "claude -p `"make the folder`" --output-format json --debug < nul > `"$claudeOut`" 2> `"$claudeErr`"" -WorkingDirectory $project -PassThru -WindowStyle Hidden
@@ -242,11 +243,6 @@ Step 'app log' {
     Say "log has 'claude: Clear': $($log -match 'claude: Clear')"
 }
 
-$alive = -not $app.HasExited
-Say "app still running: $alive"
-if (-not $alive) { Fail "the app exited (code $($app.ExitCode))" } else { Stop-Process -Id $app.Id -Force }
-Stop-Process -Id $api.Id -Force -ErrorAction SilentlyContinue
-
 # 7. `claude-hooks remove`: ours go, the user's setting stays.
 Step 'claude-hooks remove' {
     HooksCommand 'remove'
@@ -255,6 +251,71 @@ Step 'claude-hooks remove' {
     if ($s.hooks -and ($s.hooks | ConvertTo-Json -Depth 10) -match 'claude-hook') { Fail 'hooks of ours are left after remove' }
     Say 'hooks removed'
 }
+
+# 8. A session whose hooks never reach the WinIsland (the desktop app's case): it is followed from
+# its transcript. A slow stand-in API keeps its turn going long enough to be seen.
+$slow = Start-Process -FilePath 'node' -ArgumentList (Join-Path $PSScriptRoot 'fake-anthropic.js'), '8766', (Join-Path $Out 'fake-anthropic-slow.log'), '8000' -PassThru -WindowStyle Hidden
+$quiet = Join-Path $env:RUNNER_TEMP 'winisland-no-hooks'
+Remove-Item $quiet -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $quiet | Out-Null
+Start-Sleep -Seconds 2
+$second = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', "set ANTHROPIC_BASE_URL=http://127.0.0.1:8766&& claude -p `"make the folder`" --allowedTools `"Bash(mkdir:*)`" --output-format json < nul > `"$(Join-Path $Out 'claude-no-hooks.json')`" 2>&1" -WorkingDirectory $quiet -PassThru -WindowStyle Hidden
+if (Until 30 { (Get-Content $appLog -Raw) -match 'followed from its transcript' }) {
+    Say 'a session without hooks shows from its transcript'
+    Shot '05-no-hooks'
+} else {
+    Fail 'a session without hooks never showed'
+}
+if (-not $second.WaitForExit(90000)) { Fail 'the second claude did not finish'; Stop-Process -Id $second.Id -Force -ErrorAction SilentlyContinue }
+if (Until 20 { (Get-Content $appLog -Raw) -match 'Done from its transcript' }) { Say 'its end came from the transcript too' }
+else { Fail 'the session without hooks never ended on the pill' }
+Stop-Process -Id $slow.Id -Force -ErrorAction SilentlyContinue
+
+# 9. The Claude tab: at the back of the stack, the wheel brings it to the front; its card shows
+# the sessions, and Compact on the first goes through `claude -p --resume`.
+Start-Sleep -Seconds 6
+$pillAt = @{ X = [int]($screen.Width / 2); Y = [int](24 * $scale) }
+$opened = $false
+foreach ($notch in -120, -120, 120, 120, 120) {
+    [Check]::SetCursorPos($pillAt.X, $pillAt.Y) | Out-Null
+    Start-Sleep -Milliseconds 400
+    # MOUSEEVENTF_WHEEL; the delta's bits as the unsigned argument.
+    [Check]::mouse_event(0x0800, 0, 0, [BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$notch), 0), [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 900
+    Click $pillAt.X $pillAt.Y
+    Start-Sleep -Seconds 2
+    if ((Get-Content $appLog -Raw) -match 'toggle Activity\(ClaudeTab\)') { $opened = $true; break }
+    [Check]::SetCursorPos($away.X, $away.Y) | Out-Null
+    Start-Sleep -Seconds 2
+}
+if ($opened) {
+    Shot '06-claude-tab'
+    $card = [Check]::Visible('WinIslandCardInput') | Select-Object -First 1
+    Say "Claude tab card: $card"
+    if ($card -match '^(-?\d+) (-?\d+) (\d+) (\d+)$') {
+        $cx, $cy, $cw = [int]$Matches[1], [int]$Matches[2], [int]$Matches[3]
+        # The first row's Compact: 78 DIP wide at the row's right, 58 DIP down it (render::card).
+        Click ($cx + $cw - [int](71 * $scale)) ($cy + [int]((170 + 71) * $scale))
+        if (Until 60 { (Get-Content $appLog -Raw) -match 'claude: /compact to \S+ done' }) { Say 'Compact from the tab went through claude -p --resume' }
+        else { Fail 'Compact from the tab never finished' }
+        Shot '07-after-compact'
+    } else {
+        Fail 'no card window for the Claude tab'
+    }
+    [Check]::SetCursorPos($away.X, $away.Y) | Out-Null
+} else {
+    Fail 'the wheel never brought the Claude tab to the front'
+}
+Step 'tab log' {
+    $log = Get-Content $appLog -Raw
+    Say "plan limits: $([regex]::Match($log, 'claude: plan limits: [^\r\n]*').Value)"
+}
+
+Copy-Item $appLog (Join-Path $Out 'winisland-log.txt') -Force
+$alive = -not $app.HasExited
+Say "app still running: $alive"
+if (-not $alive) { Fail "the app exited (code $($app.ExitCode))" } else { Stop-Process -Id $app.Id -Force }
+Stop-Process -Id $api.Id -Force -ErrorAction SilentlyContinue
 
 if ($failures.Count) {
     Say "$($failures.Count) failure(s)"
