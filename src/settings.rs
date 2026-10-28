@@ -227,6 +227,10 @@ pub struct Settings {
     pub capture_to_shelf: bool,
     /// Claude's permission requests get "İzin ver" / "Reddet" on its card.
     pub claude_ask: bool,
+    /// The Claude tab waits at the back of the stack: the sessions and the plan's limits.
+    pub claude_tab: bool,
+    /// The plan's 5-hour and weekly limits are asked of Claude with Claude Code's own login.
+    pub claude_plan_limits: bool,
     /// Other apps may ask to show notifications over loopback HTTP (DOCS.md); off until the
     /// user turns it on, in the setup or here: nothing listens before.
     pub api_enabled: bool,
@@ -342,6 +346,8 @@ impl Default for Settings {
             capture_moment: true,
             capture_to_shelf: true,
             claude_ask: true,
+            claude_tab: true,
+            claude_plan_limits: true,
             api_enabled: false,
             api_apps: Vec::new(),
             claude_ask_wait_s: 60,

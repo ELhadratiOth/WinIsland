@@ -143,6 +143,8 @@ pub struct LiveItem {
     pub app: Option<Box<AppMeta>>,
     /// A notification's or a prompt's end (GetTickCount64 ms).
     pub until_ms: Option<u64>,
+    /// When the hook that ended the last turn started (Unix ms, `ClaudeNote::at`).
+    pub done_at: u64,
 }
 
 const ASK_SETTLE_MS: u64 = 500;
@@ -173,6 +175,15 @@ impl LiveSet {
                     i.asked_ms = now_ms;
                 }
                 (i.app, i.until_ms) = (m.app.clone(), until_ms);
+            }
+            // A hook from before the turn ended, arriving after the hook that ended it: Claude
+            // has moved on (or stopped), so it would only start the item over.
+            let at = m.claude.as_ref().map_or(0, |n| n.at);
+            if m.state != LiveState::Done && at != 0 && at < i.done_at {
+                return;
+            }
+            if m.state == LiveState::Done {
+                i.done_at = i.done_at.max(at);
             }
             let old_ask = i.info.ask.as_ref().map(|a| a.id.clone());
             if let Some(n) = &m.claude {
@@ -231,6 +242,7 @@ impl LiveSet {
             seen_ms: now_ms,
             info,
             asked_ms: now_ms,
+            done_at: if m.state == LiveState::Done { m.claude.as_ref().map_or(0, |n| n.at) } else { 0 },
             app: m.app,
             until_ms,
         });
@@ -426,6 +438,28 @@ mod tests {
 
     fn msg(id: &str, state: LiveState) -> LiveMsg {
         LiveMsg { id: id.into(), title: "winisland".into(), text: String::new(), progress: None, state, claude: None, app: None }
+    }
+
+    #[test]
+    fn a_hook_from_before_the_end_of_the_turn_is_late() {
+        use crate::activities::claude::{ClaudeNote, Step, StepKind};
+        let hook = |state, at: u64, new_prompt: bool| {
+            let step = (state == LiveState::Run && !new_prompt).then(|| Step { kind: StepKind::Read, target: "app.rs".into() });
+            LiveMsg { claude: Some(ClaudeNote { at, new_prompt, step, ..Default::default() }), ..msg("claude:s", state) }
+        };
+        let mut set = LiveSet::default();
+        set.apply(hook(LiveState::Run, 1_000, true), 0);
+        set.apply(hook(LiveState::Done, 3_000, false), 10);
+        // PostToolUse's process started before Stop's but got through after it.
+        set.apply(hook(LiveState::Run, 2_000, false), 20);
+        let i = set.get(live_key("claude:s")).unwrap();
+        assert_eq!(i.state, LiveState::Done, "the late step doesn't start it over");
+        set.apply(hook(LiveState::Run, 4_000, true), 30);
+        assert_eq!(set.get(live_key("claude:s")).unwrap().state, LiveState::Run, "the next prompt does");
+        // Hooks that don't say when (an older WinIsland's) still count.
+        set.apply(hook(LiveState::Done, 0, false), 40);
+        set.apply(hook(LiveState::Run, 0, false), 50);
+        assert_eq!(set.get(live_key("claude:s")).unwrap().state, LiveState::Run);
     }
 
     /// An app's item (`owner` stands for its caller's key) living `life` ms, if a notification.

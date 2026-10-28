@@ -3169,3 +3169,83 @@ msgstr "Turn on app notifications"
 #: setup/ui/setup.slint
 msgid "İzin verdiğin uygulamalar ve gösterdikleri senin sorumluluğunda"
 msgstr "The apps you allow, and what they show, are your responsibility"
+
+#: src/app.rs
+msgid "Durduruldu"
+msgstr "Stopped"
+
+#: src/app.rs
+msgid "{} çalışıyor"
+msgstr "{} working"
+
+#: src/app.rs
+msgid "Claude Code'da oturum açınca görünür"
+msgstr "Shows once Claude Code is signed in on this PC"
+
+#: src/app.rs
+msgid "Plan sınırları kapalı"
+msgstr "Plan limits are off in the settings"
+
+#: src/app.rs
+msgid "şimdi"
+msgstr "just now"
+
+#: src/app.rs
+msgid "{} dk önce"
+msgstr "{} min ago"
+
+#: src/app.rs
+msgid "{} sa önce"
+msgstr "{} h ago"
+
+#: src/app.rs
+msgid "{} g önce"
+msgstr "{} d ago"
+
+#: src/app.rs
+msgid "Çalışıyor"
+msgstr "Working"
+
+#: src/app.rs
+msgid "{} oturum çalışıyor"
+msgstr "Working now: {}"
+
+#: src/app.rs
+msgid "Çalışan oturum yok"
+msgstr "Nothing running"
+
+#: src/render/card.rs
+msgid "{}% · {} sonra sıfırlanır"
+msgstr "{}% · resets in {}"
+
+#: src/render/card.rs
+msgid "Henüz oturum yok"
+msgstr "No sessions yet"
+
+#: src/render/card.rs
+msgid "Bağlam {}%"
+msgstr "Context {}%"
+
+#: src/render/card.rs
+msgid "Mesaj"
+msgstr "Message"
+
+#: src/render/card.rs
+msgid "Gönderiliyor"
+msgstr "Sending"
+
+#: ui/pages.slint
+msgid "Claude sekmesi"
+msgstr "Claude tab"
+
+#: ui/pages.slint
+msgid "Oturumlar ve sınırlar hep yığında"
+msgstr "Sessions and limits always in the stack"
+
+#: ui/pages.slint
+msgid "Plan sınırları"
+msgstr "Plan limits"
+
+#: ui/pages.slint
+msgid "5 saatlik ve haftalık, Claude Code'un oturumuyla"
+msgstr "5-hour and weekly, with Claude Code's sign-in"

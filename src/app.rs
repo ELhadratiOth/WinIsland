@@ -24,7 +24,7 @@ use crate::activities::football_worker::crest_path;
 use crate::render::color::{accent_from_rgba, team_palette, TeamPalette};
 use crate::render::crest::{load_crest, Crest};
 use crate::render::pill::{MatchPill, MomentKind, PillMoment, PillTeam, PillThumb};
-use crate::render::card::{BriefCard, BriefMatchRow, BriefMusic, BriefWeather, CardTeam, ClaudeAsk, ClaudeCard, ClaudeUsageView, GameCard, LiveCard, MatchCard, ShelfCard, ShelfTile, WeatherCard, WellbeingApp, WellbeingCard, GAME_COVER_DIP, LYRIC_MOVE_MS};
+use crate::render::card::{BriefCard, BriefMatchRow, BriefMusic, BriefWeather, CardTeam, ClaudeAsk, ClaudeCard, ClaudeTabCard, ClaudeTabRow, ClaudeUsageView, GameCard, LiveCard, MatchCard, ShelfCard, ShelfTile, WeatherCard, WellbeingApp, WellbeingCard, GAME_COVER_DIP, LYRIC_MOVE_MS};
 use crate::activities::brief::{date_line, day_key, due, first_name, greeting, pick_matches, rain_later, should_auto_open};
 use crate::platform::session::{brief_day, set_brief_day, windows_full_name};
 use crate::activities::shelf::Shelf;
@@ -36,7 +36,7 @@ use crate::activities::media_worker::{filetime_now, MediaWorker};
 use crate::activities::lyrics::{line_at, Lines};
 use crate::activities::lyrics_worker::{LyricsMailbox, LyricsWorker, Track};
 use crate::activities::power::{power_moment, PowerMoment, POWER_MOMENT_MS};
-use crate::activities::{add_idle, buds_front_ms, has_card, media_paused_keep_ms, settings_page_for, stack_order, BUDS_MODE_MOMENT_MS, ActivityKind, Presence, PresenceState, ALERT_MOMENT_MS, GAME_MOMENT_MS, RAIN_MOMENT_MS, USAGE_MOMENT_MS, VOLUME_MOMENT_MS};
+use crate::activities::{add_claude_tab, add_idle, buds_front_ms, has_card, media_paused_keep_ms, settings_page_for, stack_order, BUDS_MODE_MOMENT_MS, ActivityKind, Presence, PresenceState, ALERT_MOMENT_MS, GAME_MOMENT_MS, RAIN_MOMENT_MS, USAGE_MOMENT_MS, VOLUME_MOMENT_MS};
 use crate::platform::os;
 use crate::platform::power::{self, Power};
 use crate::platform::privacy::{self, InUse, PrivacyMailbox};
@@ -50,9 +50,11 @@ use crate::activities::wellbeing_worker::{WellbeingBox, WellbeingMailbox};
 use crate::activities::island::{island_wants, on_island, ISLAND_MS};
 use crate::render::island::Island;
 use crate::activities::capture::{size_text, CAPTURE_MOMENT_MS};
-use crate::activities::claude::{done_status, resets_in, step_label, task_progress, ClaudeUsage, Limit};
+use crate::activities::claude::{done_status, resets_in, step_label, task_progress, ClaudeNote, ClaudeUsage, Limit, Step};
+use crate::activities::claude_sessions::{entry_label, Session, Turn};
+use crate::activities::claude_worker::{ClaudeBox, ClaudeMailbox};
 use crate::platform::captures::{Capture, CaptureMailbox};
-use crate::activities::live::{live_key, pill_status, push_id_ok, AppIcon, AppMeta, LiveItem, LiveSet, LiveState};
+use crate::activities::live::{live_key, pill_status, push_id_ok, AppIcon, AppMeta, LiveItem, LiveMsg, LiveSet, LiveState};
 use crate::activities::api::ApiMailbox;
 use crate::activities::api_desk::Desk;
 use crate::platform::api_server::ApiServer;
@@ -302,6 +304,23 @@ fn match_key(m: &MatchSnapshot) -> u32 {
 
 fn match_id_key(id: &str) -> u32 {
     id.parse::<u64>().map(|v| v as u32).unwrap_or_else(|_| live_key(id))
+}
+
+/// A limit as the cards show it: used %, and in how long it resets.
+type LimitView = Option<(f32, String)>;
+
+/// A session's hooks quiet this long: its transcript may end its turn.
+const CLAUDE_HOOKS_QUIET_MS: u64 = 10_000;
+/// A transcript written this recently, mid-turn, is a session at work.
+const CLAUDE_TRANSCRIPT_LIVE_S: i64 = 60;
+
+/// What the WinIsland last learned of a Claude session: from its transcript (the turn and the
+/// step) and when its hooks last spoke.
+#[derive(Default)]
+struct ClaudeSeen {
+    turn: Turn,
+    step: Option<Step>,
+    hooks_ms: Option<u64>,
 }
 
 fn unix_now() -> i64 {
@@ -642,6 +661,17 @@ pub struct App {
     claude_typing: Option<isize>,
     /// The first half of a character typed in two UTF-16 units (an emoji).
     claude_surrogate: Option<u16>,
+    /// Claude Code's sessions from their transcripts, and the plan's limits (the claude worker's).
+    claude_box: ClaudeMailbox,
+    claude_tab: ClaudeBox,
+    /// The Claude tab's row whose message box is open (its session's key).
+    claude_tab_input: Option<u32>,
+    /// Claude Code's `claude` command is installed (the tab's messages and Compact go through it).
+    claude_cli: bool,
+    /// What each session's transcript last said, and when its hooks last spoke (by live key):
+    /// a session whose hooks are silent (the desktop app's, for one) is followed from its
+    /// transcript instead, and one whose turn ended without a hook saying so stops working.
+    claude_seen: std::collections::HashMap<u32, ClaudeSeen>,
     /// The mode the card last asked for, and when: its echo from the Buds isn't a moment.
     buds_mode_sent: Option<(NoiseControl, u64)>,
     /// Music a bud coming out paused (those sessions), to play again when it is back in.
@@ -799,6 +829,8 @@ impl App {
         privacy::watch(privacy_mailbox.clone());
         let headset_mailbox: HeadsetMailbox = Default::default();
         bt_battery::watch(headset_mailbox.clone());
+        let claude_box: ClaudeMailbox = Default::default();
+        crate::activities::claude_worker::start(claude_box.clone(), crate::platform::windows::post_claude);
         let wellbeing_box: WellbeingMailbox = Default::default();
         crate::activities::wellbeing_worker::start(wellbeing_box.clone(), crate::platform::windows::post_wellbeing);
         let game_box: GamesMailbox = Default::default();
@@ -885,6 +917,11 @@ impl App {
             claude_typing: None,
             shelf_copied: None,
             claude_surrogate: None,
+            claude_box,
+            claude_tab: ClaudeBox::default(),
+            claude_tab_input: None,
+            claude_cli: false,
+            claude_seen: Default::default(),
             matches: Vec::new(),
             match_moments: Default::default(),
             fresh_goals: Default::default(),
@@ -1237,6 +1274,9 @@ impl App {
         // things on, the weather waits at the back of the stack.
         let weather = self.weather.is_some() && crate::activities::weather_worker::place().is_some();
         add_idle(&mut p, now, s.idle_clock, weather && s.weather_in_stack);
+        if s.claude_tab && !self.claude_tab.sessions.is_empty() {
+            add_claude_tab(&mut p, now);
+        }
         p
     }
 
@@ -1554,6 +1594,7 @@ impl App {
                 PillContent::WeatherAlert { kind: a.kind, head: head.to_string(), detail }
             }),
             ActivityKind::Capture => self.capture.as_ref().map(|(c, _)| PillContent::Capture { thumb: c.thumb.clone(), size: size_text(c.size) }),
+            ActivityKind::ClaudeTab => Some(self.claude_tab_pill()),
             ActivityKind::Live(key) => self.live.get(key).map(|i| match &i.app {
                 Some(app) => self.app_pill(i, app, now),
                 None => Self::live_pill(i, now),
@@ -1647,6 +1688,10 @@ impl App {
             }),
             OpenCard::Activity(ActivityKind::Game(key)) => self.game_card(key, now).map(|c| CardContent::Game(Box::new(c))),
             OpenCard::Activity(ActivityKind::Clock | ActivityKind::Weather) => self.weather_card().map(|c| CardContent::Weather(Box::new(c))),
+            OpenCard::Activity(ActivityKind::ClaudeTab) => {
+                crate::activities::claude_worker::want_limits();
+                Some(CardContent::ClaudeTab(Box::new(self.claude_tab_card())))
+            }
             OpenCard::Activity(ActivityKind::Live(key)) => self.live.get(key).map(|i| {
                 if i.claude {
                     return CardContent::Claude(Box::new(self.claude_card(i, now)));
@@ -1799,11 +1844,10 @@ impl App {
         };
         let asks_on = settings::current().claude_ask;
         let can_focus = i.info.window.is_some_and(|w| unsafe { windows::Win32::UI::WindowsAndMessaging::IsWindow(Some(HWND(w as *mut _))) }.as_bool());
-        // A limit past its reset is used up no more: Claude Code drops it, so do the bars.
-        let now_s = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
-        let limit = |l: Option<Limit>| l.filter(|l| l.resets_at > now_s).map(|l| (l.used as f32, resets_in(l.resets_at, now_s)));
-        let context = self.claude_usage.get(&i.key).and_then(|u| u.context).map(f32::from);
-        let (five_hour, seven_day) = (limit(self.claude_limits.0), limit(self.claude_limits.1));
+        // The status line's context, else the transcript's (the desktop app has no status line).
+        let transcript = || self.claude_tab.sessions.iter().find(|s| i.id.strip_prefix("claude:") == Some(s.id.as_str())).and_then(Session::context_pct);
+        let context = self.claude_usage.get(&i.key).and_then(|u| u.context).map(f32::from).or_else(transcript);
+        let (five_hour, seven_day) = self.plan_limits_now();
         ClaudeCard {
             key: i.key,
             title: i.title.clone(),
@@ -1872,7 +1916,7 @@ impl App {
     /// Ctrl+V (one line of the clipboard) edit; other control keys do nothing.
     fn type_char(&mut self, unit: u16) -> Result<()> {
         match unit {
-            0x0D => self.send_to_claude(None),
+            0x0D => self.send_typed(),
             0x1B => {
                 if let Some(before) = self.stop_typing() {
                     unsafe {
@@ -1912,6 +1956,200 @@ impl App {
                 let _ = ShowWindow(hwnd, SW_RESTORE);
             }
             let _ = SetForegroundWindow(hwnd);
+        }
+    }
+
+    /// The claude worker's news: the tab's sessions and the plan's limits; each session's
+    /// transcript is followed where its hooks are silent.
+    fn take_claude(&mut self) -> Result<()> {
+        let Ok(b) = self.claude_box.lock().map(|b| b.clone()) else { return Ok(()) };
+        self.claude_cli = crate::activities::claude_worker::claude_exe().is_some();
+        if settings::current().live_enabled {
+            let now = now_ms();
+            for s in &b.sessions {
+                self.follow_transcript(s, now);
+            }
+        }
+        if self.claude_tab_input.is_some_and(|k| !b.sessions.iter().any(|s| live_key(&s.id) == k)) {
+            self.claude_tab_input = None;
+        }
+        self.claude_tab = b;
+        self.refresh()
+    }
+
+    /// A session's live item from its transcript: while its hooks have never spoken (the desktop
+    /// app's sessions, hooks not installed), what it does now; and for any session, the end of
+    /// a turn no hook reported (Esc, a hook lost) ends its item.
+    fn follow_transcript(&mut self, s: &Session, now: u64) {
+        let id = format!("claude:{}", s.id);
+        let key = live_key(&id);
+        let age_s = unix_now() - s.modified;
+        let seen = self.claude_seen.entry(key).or_default();
+        let before = std::mem::replace(&mut seen.turn, s.turn);
+        let hooks_quiet = seen.hooks_ms.is_none_or(|t| now.saturating_sub(t) > CLAUDE_HOOKS_QUIET_MS);
+        let item_state = self.live.get(key).map(|i| i.state);
+        let msg = |state, text: String, claude: ClaudeNote| LiveMsg { id: id.clone(), title: s.project().to_string(), text, progress: None, state, claude: Some(claude), app: None };
+        match s.turn {
+            Turn::Working if seen.hooks_ms.is_none() && age_s <= CLAUDE_TRANSCRIPT_LIVE_S => {
+                let new_prompt = matches!(item_state, None | Some(LiveState::Done));
+                if new_prompt || s.step != seen.step {
+                    let text = s.step.as_ref().map_or_else(|| tr("Düşünüyor").to_string(), step_label);
+                    if new_prompt {
+                        log(&format!("claude: {} followed from its transcript", s.id));
+                    }
+                    self.live.apply(msg(LiveState::Run, text, ClaudeNote { step: s.step.clone(), new_prompt, ..Default::default() }), now);
+                }
+            }
+            Turn::Done | Turn::Interrupted if before == Turn::Working && hooks_quiet && item_state == Some(LiveState::Run) => {
+                let text = if s.turn == Turn::Done { tr("Bitti") } else { tr("Durduruldu") };
+                log(&format!("claude: {} {:?} from its transcript", s.id, s.turn));
+                self.live.apply(msg(LiveState::Done, text.to_string(), ClaudeNote { summary: s.answer.clone(), ..Default::default() }), now);
+            }
+            _ => {}
+        }
+        if let Some(seen) = self.claude_seen.get_mut(&key) {
+            seen.step = s.step.clone();
+        }
+    }
+
+    /// The plan's 5-hour and weekly limits now: Claude's usage answer, else the status line's
+    /// (one past its reset is used up no more).
+    fn plan_limits_now(&self) -> (LimitView, LimitView) {
+        let now_s = unix_now();
+        let fresh = |l: Option<Limit>| l.filter(|l| l.resets_at == 0 || l.resets_at > now_s);
+        let shown = |a: Option<Limit>, b: Option<Limit>| {
+            fresh(a).or(fresh(b)).map(|l| (l.used as f32, if l.resets_at == 0 { String::new() } else { resets_in(l.resets_at, now_s) }))
+        };
+        (shown(self.claude_tab.limits.0, self.claude_limits.0), shown(self.claude_tab.limits.1, self.claude_limits.1))
+    }
+
+    fn claude_running(&self) -> usize {
+        let now_s = unix_now();
+        self.claude_tab.sessions.iter().filter(|s| s.turn == Turn::Working && now_s - s.modified <= CLAUDE_TRANSCRIPT_LIVE_S).count()
+    }
+
+    /// The Claude tab's pill: Claude's mark, "Claude Code", how many work and the 5-hour limit.
+    fn claude_tab_pill(&self) -> PillContent {
+        let running = self.claude_running();
+        PillContent::Live {
+            key: live_key("claude-tab"),
+            title: "Claude Code".into(),
+            status: self.plan_limits_now().0.map_or_else(String::new, |(p, _)| format!("5h {}%", p.round() as i64)),
+            claude: true,
+            state: LiveState::Run,
+            action: if running > 0 { trf("{} çalışıyor", &[&running]) } else { String::new() },
+        }
+    }
+
+    fn claude_tab_card(&self) -> ClaudeTabCard {
+        let now_s = unix_now();
+        let running = self.claude_running();
+        let (five_hour, seven_day) = self.plan_limits_now();
+        let limits_note = (five_hour.is_none() && seven_day.is_none()).then(|| {
+            if settings::current().claude_plan_limits { tr("Claude Code'da oturum açınca görünür") } else { tr("Plan sınırları kapalı") }.to_string()
+        });
+        let ago = |s: i64| match s {
+            s if s < 60 => tr("şimdi").to_string(),
+            s if s < 3600 => trf("{} dk önce", &[&(s / 60)]),
+            s if s < 86_400 => trf("{} sa önce", &[&(s / 3600)]),
+            s => trf("{} g önce", &[&(s / 86_400)]),
+        };
+        let rows = self
+            .claude_tab
+            .sessions
+            .iter()
+            .take(crate::render::card::CLAUDE_TAB_ROWS)
+            .map(|s| {
+                let age = now_s - s.modified;
+                let working = s.turn == Turn::Working && age <= CLAUDE_TRANSCRIPT_LIVE_S;
+                let when = match (working, entry_label(&s.entry)) {
+                    (true, _) => tr("Çalışıyor").to_string(),
+                    (false, "") => ago(age),
+                    (false, place) => format!("{place} · {}", ago(age)),
+                };
+                let title = match (&s.step, working) {
+                    (Some(step), true) => step_label(step),
+                    _ if s.title.is_empty() => s.answer.clone().unwrap_or_default(),
+                    _ => s.title.clone(),
+                };
+                ClaudeTabRow {
+                    key: live_key(&s.id),
+                    project: s.project().to_string(),
+                    title,
+                    when,
+                    running: working,
+                    context: s.context_pct(),
+                    busy: crate::activities::claude_worker::sending(&s.id),
+                    can_send: !working && (self.claude_cli || self.session_window(s).is_some()),
+                }
+            })
+            .collect();
+        ClaudeTabCard {
+            status: if running > 0 { trf("{} oturum çalışıyor", &[&running]) } else { tr("Çalışan oturum yok").to_string() },
+            five_hour,
+            seven_day,
+            limits_note,
+            rows,
+            input: self.claude_tab_input.map(|k| (k, self.claude_draft.clone(), self.claude_typing.is_some())),
+        }
+    }
+
+    /// The terminal window a session's prompts were typed in, while it is open.
+    fn session_window(&self, s: &Session) -> Option<HWND> {
+        if entry_label(&s.entry) != "Terminal" {
+            return None;
+        }
+        let w = self.live.get(live_key(&format!("claude:{}", s.id))).and_then(|i| i.info.window)?;
+        let hwnd = HWND(w as *mut _);
+        unsafe { windows::Win32::UI::WindowsAndMessaging::IsWindow(Some(hwnd)) }.as_bool().then_some(hwnd)
+    }
+
+    /// The message box (or Compact) to a session in the Claude tab: typed into its terminal while
+    /// that is open, else through `claude -p --resume` in its folder.
+    fn send_to_session(&mut self, key: u32, text: &str) {
+        let text = text.trim();
+        let Some(s) = self.claude_tab.sessions.iter().find(|s| live_key(&s.id) == key).cloned() else { return };
+        if text.is_empty() {
+            return;
+        }
+        let back = self.stop_typing();
+        let sent = match self.session_window(&s) {
+            Some(window) => {
+                let back = back.unwrap_or_else(|| unsafe { windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow() });
+                crate::platform::keys::type_into(window, text, Some(back))
+            }
+            None => match crate::activities::claude_worker::send(&s, text, crate::platform::windows::post_claude) {
+                Ok(()) => true,
+                Err(e) => {
+                    log(&format!("claude: not sent to {}: {e}", s.id));
+                    false
+                }
+            },
+        };
+        if sent && !text.starts_with('/') {
+            self.claude_draft.clear();
+            self.claude_tab_input = None;
+        }
+    }
+
+    /// The message box takes the keyboard (the card window becomes focusable).
+    fn start_typing(&mut self) {
+        if self.claude_typing.is_none() {
+            let before = unsafe { windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
+            self.claude_typing = Some(before.0 as isize);
+            self.ui.card_window.set_focusable(true);
+            self.disarm_leave();
+        }
+    }
+
+    /// Enter in a message box: the Claude tab's row's, or the open session card's.
+    fn send_typed(&mut self) {
+        match (self.open, self.claude_tab_input) {
+            (Some(OpenCard::Activity(ActivityKind::ClaudeTab)), Some(key)) => {
+                let text = self.claude_draft.clone();
+                self.send_to_session(key, &text);
+            }
+            _ => self.send_to_claude(None),
         }
     }
 
@@ -2474,14 +2712,30 @@ impl App {
                 self.focus_claude();
                 return self.close_card();
             }
-            CardAction::ClaudeInput => {
-                if self.claude_typing.is_none() {
-                    let before = unsafe { windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
-                    self.claude_typing = Some(before.0 as isize);
-                    self.ui.card_window.set_focusable(true);
-                    self.disarm_leave();
+            CardAction::ClaudeInput => self.start_typing(),
+            // A working session's row opens its own card.
+            CardAction::ClaudeTabRow(key) => {
+                if let Some(s) = self.claude_tab.sessions.iter().find(|s| live_key(&s.id) == key) {
+                    let live = live_key(&format!("claude:{}", s.id));
+                    if self.live.get(live).is_some() {
+                        self.claude_tab_input = None;
+                        self.stop_typing();
+                        self.open = Some(OpenCard::Activity(ActivityKind::Live(live)));
+                    }
                 }
             }
+            CardAction::ClaudeTabMessage(key) => {
+                self.claude_draft.clear();
+                if self.claude_tab_input == Some(key) {
+                    self.claude_tab_input = None;
+                    self.stop_typing();
+                } else {
+                    self.claude_tab_input = Some(key);
+                    self.start_typing();
+                }
+            }
+            CardAction::ClaudeTabCompact(key) => self.send_to_session(key, "/compact"),
+            CardAction::ClaudeTabSend => self.send_typed(),
             CardAction::ClaudeSend => self.send_to_claude(None),
             CardAction::ClaudeCompact => self.send_to_claude(Some("/compact")),
             CardAction::LiveClose => {
@@ -2833,7 +3087,17 @@ impl App {
         for c in crate::platform::ipc::take() {
             match c {
                 // The API's ids are the apps' own.
-                crate::platform::ipc::Command::Live(m) if settings::current().live_enabled && push_id_ok(&m.id) => self.live.apply(*m, now),
+                crate::platform::ipc::Command::Live(m) if settings::current().live_enabled && push_id_ok(&m.id) => {
+                    // Claude Code's turns in the log (a prompt, an ask, the end), not each step.
+                    if m.id.starts_with("claude:") && (m.state != LiveState::Run || m.claude.as_ref().is_some_and(|c| c.new_prompt)) {
+                        log(&format!("claude: {:?}", m.state));
+                    }
+                    // Its hooks speak: its transcript needn't stand in for them.
+                    if m.claude.is_some() {
+                        self.claude_seen.entry(live_key(&m.id)).or_default().hooks_ms = Some(now);
+                    }
+                    self.live.apply(*m, now)
+                }
                 crate::platform::ipc::Command::Live(_) => {}
                 crate::platform::ipc::Command::Update => self.updater.apply(),
                 crate::platform::ipc::Command::AskGone { id } => self.live.drop_ask(&id),
@@ -3847,6 +4111,7 @@ impl App {
             UiEvent::Games => self.take_games(),
             UiEvent::Wellbeing => self.take_wellbeing(),
             UiEvent::Api => self.take_api(),
+            UiEvent::Claude => self.take_claude(),
             UiEvent::EffectsChanged => self.ui.morph.set_blur(effects_enabled()),
             UiEvent::Timer(TIMER_OUTSIDE) if !self.card_pinned && self.clicked_outside() => self.close_card(),
             UiEvent::Pill(PillEvent::Hover(over)) | UiEvent::Card(CardEvent::Hover(over)) => {
@@ -4035,6 +4300,10 @@ mod tests {
         };
         let (w, h) = card_size_dip(&CardContent::Brief(Box::new(full)));
         assert!(w <= CARD_FRAME_W_DIP && h <= CARD_FRAME_H_DIP, "a full brief is {w}×{h}");
+        let row = |key| ClaudeTabRow { key, project: "p".into(), title: "t".into(), when: "now".into(), running: false, context: Some(50.0), busy: false, can_send: true };
+        let tab = ClaudeTabCard { status: "s".into(), five_hour: None, seven_day: None, limits_note: None, rows: (1..=6).map(row).collect(), input: Some((4, "hi".into(), true)) };
+        let (w, h) = card_size_dip(&CardContent::ClaudeTab(Box::new(tab)));
+        assert!(w <= CARD_FRAME_W_DIP && h <= CARD_FRAME_H_DIP, "a full Claude tab is {w}×{h}");
     }
 
     use std::path::{Path, PathBuf};

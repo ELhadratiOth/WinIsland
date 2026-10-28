@@ -156,6 +156,8 @@ fn message_box(text: &str) {
 /// WinIsland says, prints Claude Code's decision, or lets Claude's own dialog take over.
 fn claude_hook(asks: bool) {
     use std::io::{Read, Write};
+    // Before stdin: the hooks start in Claude's order, but may get through in any.
+    let started = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
     // A hook's JSON is small; a runaway one is cut, not waited on.
     let mut text = String::new();
     let _ = std::io::stdin().take(1 << 20).read_to_string(&mut text);
@@ -176,9 +178,10 @@ fn claude_hook(asks: bool) {
         hook["winisland_ask_id"] = serde_json::json!(id);
         hook["winisland_ask_nonce"] = serde_json::json!(nonce);
     }
-    let Some(msg) = claude_msg(&hook) else { return };
+    let Some(mut msg) = claude_msg(&hook) else { return };
+    msg.claude.get_or_insert_with(Default::default).at = started;
     let command = ipc::fitted(Command::Live(Box::new(msg)));
-    let answer = ipc::send_answering(w!("WinIslandMain"), windows::core::PCWSTR::null(), &command);
+    let answer = send_hook(&command, &event);
     if let (Some((id, _)), Some(window), Some(secs)) = (ask, window, answer.filter(|a| *a >= 2)) {
         match window.wait(secs as u32) {
             Some(allow) => {
@@ -210,6 +213,27 @@ fn claude_status() {
     let mut out = std::io::stdout();
     let _ = out.write_all(line.as_bytes());
     let _ = out.flush();
+}
+
+/// A hook's news to the WinIsland, again after 0.3 and 1 s when it is there but didn't take it
+/// (busy past the second a send waits): lost news is a session the pill gets wrong. What is
+/// lost goes into the log, and a prompt with no WinIsland running.
+fn send_hook(command: &Command, event: &str) -> Option<usize> {
+    use windows::Win32::UI::WindowsAndMessaging::FindWindowW;
+    for wait in [0u64, 300, 1000] {
+        std::thread::sleep(std::time::Duration::from_millis(wait));
+        if let Some(answer) = ipc::send_answering(w!("WinIslandMain"), windows::core::PCWSTR::null(), command) {
+            return Some(answer);
+        }
+        if unsafe { FindWindowW(w!("WinIslandMain"), windows::core::PCWSTR::null()) }.is_err() {
+            if event == "UserPromptSubmit" {
+                log("claude-hook: a prompt, but the WinIsland isn't running");
+            }
+            return None;
+        }
+    }
+    log(&format!("claude-hook: {event} not taken (the WinIsland was busy)"));
+    None
 }
 
 /// 128 random bits as hex (the std hasher's keys come from the OS's random source).

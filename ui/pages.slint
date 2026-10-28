@@ -1753,6 +1753,22 @@ export component SystemInspector inherits VerticalLayout {
             }
         }
         IRow {
+            label: @tr("Claude sekmesi");
+            note: @tr("Oturumlar ve sınırlar hep yığında");
+            Toggle {
+                checked <=> Store.claude-tab;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Plan sınırları");
+            note: @tr("5 saatlik ve haftalık, Claude Code'un oturumuyla");
+            Toggle {
+                checked <=> Store.claude-plan-limits;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
             label: @tr("Claude izinleri");
             note: @tr("Kartta İzin ver / Reddet");
             Toggle {

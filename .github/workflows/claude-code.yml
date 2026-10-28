@@ -1,0 +1,44 @@
+name: Claude Code check
+
+# Runs the real Claude Code CLI on Windows against the WinIsland: installs the hooks, runs one turn
+# whose permission is given from the card, and checks both sides (tools\claude-check.ps1). Claude
+# talks to a stand-in API (tools\fake-anthropic.js): no key, nothing sent to Anthropic. The
+# screenshots, Claude's output and both logs are uploaded as the claude-check artifact. It runs
+# when the Claude Code side changes, or from the Actions tab.
+on:
+  push:
+    paths:
+      - src/claude_hooks.rs
+      - src/activities/claude.rs
+      - src/activities/claude_sessions.rs
+      - src/activities/claude_worker.rs
+      - src/activities/live.rs
+      - src/platform/ask.rs
+      - tools/claude-check.ps1
+      - tools/fake-anthropic.js
+      - .github/workflows/claude-code.yml
+  workflow_dispatch:
+
+jobs:
+  claude:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+      - name: Build
+        run: cargo build --profile quick --bin winisland
+      - name: Run Claude Code against the WinIsland
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File tools\claude-check.ps1 -Exe target\quick\winisland.exe -Out claude-check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-check
+          path: claude-check/
