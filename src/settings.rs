@@ -145,6 +145,9 @@ pub struct Settings {
     pub accent_from_wallpaper: bool,
     pub use_cover_color: bool,
     pub animation_speed: AnimationSpeed,
+    /// Windows' "Animation effects" off means reduced motion here too: instant transitions, no
+    /// moving weather or waveform.
+    pub motion_follow_windows: bool,
     pub marquee: Marquee,
     pub marquee_speed_dip_s: u8,
     pub settings_theme: Theme,
@@ -225,6 +228,8 @@ pub struct Settings {
     pub capture_moment: bool,
     /// ...and goes onto the shelf.
     pub capture_to_shelf: bool,
+    /// The shelf's list (paths only) outlives a restart or an update.
+    pub shelf_keep: bool,
     /// Claude's permission requests get "İzin ver" / "Reddet" on its card.
     pub claude_ask: bool,
     /// The Claude tab waits at the back of the stack: the sessions and the plan's limits.
@@ -294,6 +299,7 @@ impl Default for Settings {
             accent_from_wallpaper: true,
             use_cover_color: true,
             animation_speed: AnimationSpeed::Normal,
+            motion_follow_windows: true,
             marquee: Marquee::ChangeHover,
             marquee_speed_dip_s: 30,
             settings_theme: Theme::System,
@@ -345,6 +351,7 @@ impl Default for Settings {
             live_enabled: true,
             capture_moment: true,
             capture_to_shelf: true,
+            shelf_keep: true,
             claude_ask: true,
             claude_tab: true,
             claude_plan_limits: true,

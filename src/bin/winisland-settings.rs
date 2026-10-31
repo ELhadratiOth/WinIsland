@@ -485,6 +485,8 @@ fn fill(ui: &SettingsWindow, s: &Settings, live_apps: &[String]) {
     st.set_capture_moment(s.capture_moment);
     st.set_capture_to_shelf(s.capture_to_shelf);
     st.set_claude_ask(s.claude_ask);
+    st.set_shelf_keep(s.shelf_keep);
+    st.set_motion_follow_windows(s.motion_follow_windows);
     st.set_claude_tab(s.claude_tab);
     st.set_claude_plan_limits(s.claude_plan_limits);
     st.set_claude_ask_wait(s.claude_ask_wait_s as f32);
@@ -593,6 +595,8 @@ fn read(ui: &SettingsWindow, base: &Settings) -> Settings {
         capture_moment: st.get_capture_moment(),
         capture_to_shelf: st.get_capture_to_shelf(),
         claude_ask: st.get_claude_ask(),
+        shelf_keep: st.get_shelf_keep(),
+        motion_follow_windows: st.get_motion_follow_windows(),
         claude_tab: st.get_claude_tab(),
         claude_plan_limits: st.get_claude_plan_limits(),
         claude_ask_wait_s: st.get_claude_ask_wait().round() as u32,

@@ -693,7 +693,7 @@ impl PillVisual {
         }
         self.shown = Some((w, colours));
         // Decoration: a scene that fails must not stop the pill's paint (and the ticks after it).
-        let fx = front.fx().filter(|_| crate::settings::current().weather_effects);
+        let fx = front.fx().filter(|_| crate::settings::current().weather_effects && !super::motion::reduced());
         if let Err(e) = self.follow_fx(fx, l.content_w, l.pill_h, s, animate) {
             crate::platform::log::log(&format!("pill: weather scene: {e}"));
         }
