@@ -34,6 +34,9 @@ public static class Smoke {
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT r);
     [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hwnd, int index);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr hwnd, StringBuilder s, int n);
+    // SPI_SETCLIENTAREAANIMATION (0x1043) with SPIF_SENDCHANGE: Windows' "Animation effects", broadcast.
+    [DllImport("user32.dll")] public static extern bool SystemParametersInfo(uint action, uint param, IntPtr value, uint flags);
+    public static bool Animations(bool on) { return SystemParametersInfo(0x1043, 0, on ? (IntPtr)1 : IntPtr.Zero, 2); }
 
     // "class visible x y w h exstyle" for each top-level window of process `pid`.
     public static List<string> Windows(uint pid) {
@@ -106,6 +109,15 @@ function Windows([string]$when) {
 $settingsDir = Join-Path $env:APPDATA 'WinIsland'
 New-Item -ItemType Directory -Force $settingsDir | Out-Null
 Set-Content -Path (Join-Path $settingsDir 'settings.json') -Value '{"weather_locate": false}' -Encoding ascii
+
+# A shelf kept by an earlier run: one file that is there and one that is gone. The one there
+# comes back; the gone one drops off.
+$kept = Join-Path $Out 'kept-on-the-shelf.txt'
+Set-Content -Path $kept -Value 'shelf' -Encoding ascii
+$localDir = Join-Path $env:LOCALAPPDATA 'WinIsland'
+New-Item -ItemType Directory -Force $localDir | Out-Null
+$shelfJson = @{ items = @(@{ path = $kept; dir = $false }, @{ path = (Join-Path $Out 'gone.txt'); dir = $false }) } | ConvertTo-Json -Depth 4
+Set-Content -Path (Join-Path $localDir 'shelf.json') -Value $shelfJson -Encoding utf8
 
 $away = @{ X = $screen.Width - 10; Y = [int]($screen.Height / 2) }
 [Smoke]::SetCursorPos($away.X, $away.Y) | Out-Null
@@ -191,6 +203,31 @@ if ($app) {
         $log = Get-Content (Join-Path $env:LOCALAPPDATA 'WinIsland\log.txt') -Raw
         if ($log -notmatch 'claude: usage from smoke') { throw 'the app got no usage from the status line' }
         Say 'the app got the usage'
+    }
+
+    Step 'the shelf kept from the last run' {
+        $log = Get-Content (Join-Path $env:LOCALAPPDATA 'WinIsland\log.txt') -Raw
+        if ($log -notmatch 'shelf: 1 kept from the last run \(some files are gone\)') { throw 'the kept shelf did not come back as one file' }
+        $now = Get-Content (Join-Path $localDir 'shelf.json') -Raw | ConvertFrom-Json
+        if (@($now.items).Count -ne 1) { throw "the kept list still has $(@($now.items).Count) items" }
+        Say 'the shelf came back from the last run, the gone file dropped'
+    }
+
+    # Windows' "Animation effects" off: the WinIsland reduces motion at once, and back.
+    Step 'reduced motion' {
+        if (-not [Smoke]::Animations($false)) { throw 'could not turn Windows animation effects off' }
+        try {
+            Start-Sleep -Seconds 2
+            $log = Get-Content (Join-Path $env:LOCALAPPDATA 'WinIsland\log.txt') -Raw
+            if ($log -notmatch 'motion: reduced') { throw 'the app did not reduce motion' }
+            Shot '09-reduced-motion'
+        } finally {
+            [Smoke]::Animations($true) | Out-Null
+        }
+        Start-Sleep -Seconds 2
+        $log = Get-Content (Join-Path $env:LOCALAPPDATA 'WinIsland\log.txt') -Raw
+        if ($log -notmatch 'motion: full') { throw 'the app did not bring motion back' }
+        Say 'motion follows Windows animation effects'
     }
 
     $alive = -not $app.HasExited

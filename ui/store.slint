@@ -92,6 +92,7 @@ export global Store {
     in-out property <float> saturation: 200;
     /// 0 off, 1 slow, 2 normal, 3 fast.
     in-out property <int> speed: 2;
+    in-out property <bool> motion-follow-windows: true;
     /// 0 on change and hover, 1 hover only, 2 off.
     in-out property <int> marquee: 0;
     in-out property <float> marquee-speed: 30;
@@ -169,6 +170,7 @@ export global Store {
     in-out property <bool> live-on: true;
     in-out property <bool> capture-moment: true;
     in-out property <bool> capture-to-shelf: true;
+    in-out property <bool> shelf-keep: true;
     in-out property <bool> claude-ask: true;
     in-out property <bool> claude-tab: true;
     in-out property <bool> claude-plan-limits: true;

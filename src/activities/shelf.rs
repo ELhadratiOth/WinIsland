@@ -1,4 +1,6 @@
-//! The shelf: files dropped on the pill, kept (newest first) until removed or the app restarts.
+//! The shelf: files dropped on the pill, kept (newest first) until removed. Its list (the paths
+//! and which are folders, never the files) is kept in `%LOCALAPPDATA%\WinIsland\shelf.json`, so a
+//! restart or an update doesn't empty it (settings: off forgets it).
 
 use std::path::{Path, PathBuf};
 
@@ -106,6 +108,26 @@ impl Shelf {
         self.items.is_empty()
     }
 
+    /// The list as kept on disk: each path and whether it is a folder, newest first.
+    pub fn to_json(&self) -> String {
+        let items: Vec<serde_json::Value> = self.items.iter().map(|i| serde_json::json!({"path": i.path, "dir": i.kind == FileKind::Folder})).collect();
+        serde_json::json!({"items": items}).to_string()
+    }
+
+    /// Puts back a kept list (`to_json`'s): its newest stays first, entries it can't read are
+    /// skipped, and no disk is asked anything (a folder is what the list says).
+    pub fn restore(&mut self, json: &str) -> usize {
+        let v: serde_json::Value = serde_json::from_str(json.trim_start_matches('\u{feff}')).unwrap_or_default();
+        let kept: Vec<(PathBuf, bool)> = v["items"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|i| Some((PathBuf::from(i["path"].as_str().filter(|p| !p.is_empty())?), i["dir"] == true))).collect())
+            .unwrap_or_default();
+        let dirs: Vec<PathBuf> = kept.iter().filter(|(_, d)| *d).map(|(p, _)| p.clone()).collect();
+        // `add` puts each in front: the oldest goes first.
+        let oldest_first: Vec<PathBuf> = kept.into_iter().rev().map(|(p, _)| p).collect();
+        self.add(&oldest_first, |p| dirs.iter().any(|d| d == p))
+    }
+
     /// Drops the items whose files are gone; true if any went.
     pub fn retain_existing(&mut self, exists: impl Fn(&Path) -> bool) -> bool {
         let before = self.items.len();
@@ -135,6 +157,30 @@ mod tests {
 
     fn no_dirs(_: &Path) -> bool {
         false
+    }
+
+    #[test]
+    fn the_kept_list_comes_back_in_its_order_with_its_folders() {
+        let mut shelf = Shelf::default();
+        shelf.add(&files(&["C:\\a.png", "C:\\docs", "C:\\c.pdf"]), |p| p.ends_with("docs"));
+        let json = shelf.to_json();
+        let mut back = Shelf::default();
+        assert_eq!(back.restore(&json), 3);
+        assert_eq!(back.items(), shelf.items(), "same order (newest first), same kinds");
+        assert_eq!(back.items()[1].kind, FileKind::Folder);
+    }
+
+    #[test]
+    fn a_damaged_or_odd_list_restores_what_it_can() {
+        let mut shelf = Shelf::default();
+        assert_eq!(shelf.restore("not json"), 0);
+        assert_eq!(shelf.restore(r#"{"items": [{"path": ""}, {"dir": true}, {"path": "C:\\x.txt"}, 7]}"#), 1);
+        assert_eq!(shelf.items()[0].name, "x.txt");
+        let too_many: Vec<serde_json::Value> = (0..30).map(|i| serde_json::json!({"path": format!("C:\\{i}.txt")})).collect();
+        let mut full = Shelf::default();
+        full.restore(&serde_json::json!({"items": too_many}).to_string());
+        assert_eq!(full.items().len(), SHELF_MAX);
+        assert_eq!(full.items()[0].name, "0.txt", "the newest kept");
     }
 
     #[test]

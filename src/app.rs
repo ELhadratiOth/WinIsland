@@ -192,6 +192,12 @@ fn matches_heard_ms(m: &MatchSnapshot) -> u64 {
     heard.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// The shelf's kept list: `%LOCALAPPDATA%\WinIsland\shelf.json`.
+fn shelf_file() -> PathBuf {
+    let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+    base.join("WinIsland").join("shelf.json")
+}
+
 /// Whether a shelf item's file is still there, asked only of local fixed drives: an offline
 /// share or USB stick would block the UI thread (and the taskbar with it) for the network
 /// timeout, and must not drop off the shelf for being away for a while.
@@ -498,6 +504,11 @@ struct StopwatchSlot {
 
 /// Blur when Windows' transparency effects are on and the setting allows it, on Windows 11
 /// ([`os::card_blur`]: Windows 10 keeps the flat material).
+/// The weather's scenes move: their setting is on and motion isn't reduced.
+fn weather_moves() -> bool {
+    settings::current().weather_effects && !crate::render::motion::reduced()
+}
+
 fn effects_enabled() -> bool {
     let transparency = UISettings::new().and_then(|u| u.AdvancedEffectsEnabled()).unwrap_or(true);
     os::card_blur(os::generation(), settings::current().card_blur, transparency)
@@ -829,6 +840,11 @@ impl App {
         privacy::watch(privacy_mailbox.clone());
         let headset_mailbox: HeadsetMailbox = Default::default();
         bt_battery::watch(headset_mailbox.clone());
+        // Windows' "Animation effects" before anything moves.
+        crate::render::motion::follow_windows();
+        if crate::render::motion::reduced() {
+            log("motion: reduced (Windows' animation effects are off)");
+        }
         let claude_box: ClaudeMailbox = Default::default();
         crate::activities::claude_worker::start(claude_box.clone(), crate::platform::windows::post_claude);
         let wellbeing_box: WellbeingMailbox = Default::default();
@@ -1004,6 +1020,7 @@ impl App {
         app.move_hook.follow_foreground();
         app.follow_api();
         app.fullscreen = app.fullscreen_hides();
+        app.restore_shelf();
         if std::env::args().any(|a| a == "--demo") {
             app.start_timer(60_000);
         }
@@ -1824,6 +1841,7 @@ impl App {
             log(&format!("capture: {} {}", c.path.display(), size_text(c.size)));
             if s.capture_to_shelf && self.shelf.add(std::slice::from_ref(&c.path), |_| false) > 0 {
                 self.shelf_ms = now_ms();
+                self.keep_shelf();
                 self.shelf_thumbs.insert(c.path.clone(), None);
                 self.shelf_worker.send(c.path.clone(), self.ui.card_scale.px(75.0) as u32);
             }
@@ -2185,8 +2203,50 @@ impl App {
                 }
             }
             self.forget_shelf_thumbs();
+            self.keep_shelf();
         }
         self.refresh()
+    }
+
+    /// The shelf's list as it is now, kept for the next start (the setting off: forgotten).
+    /// The files themselves are never touched.
+    fn keep_shelf(&self) {
+        let path = shelf_file();
+        if !settings::current().shelf_keep || self.shelf.is_empty() {
+            let _ = std::fs::remove_file(&path);
+            return;
+        }
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let tmp = path.with_extension("json.tmp");
+        if let Err(e) = std::fs::write(&tmp, self.shelf.to_json()).and_then(|_| std::fs::rename(&tmp, &path)) {
+            log(&format!("shelf: not kept: {e}"));
+        }
+    }
+
+    /// The shelf as the last run left it: the files still there (asked of local drives only),
+    /// with their previews on the way.
+    fn restore_shelf(&mut self) {
+        if !settings::current().shelf_keep {
+            return;
+        }
+        let Ok(text) = std::fs::read_to_string(shelf_file()) else { return };
+        let restored = self.shelf.restore(&text);
+        let gone = self.shelf.retain_existing(local_exists);
+        log(&format!("shelf: {} kept from the last run{}", self.shelf.items().len(), if gone { " (some files are gone)" } else { "" }));
+        if restored == 0 || self.shelf.is_empty() {
+            return;
+        }
+        self.shelf_ms = now_ms();
+        let side = self.ui.card_scale.px(75.0) as u32;
+        for item in self.shelf.items() {
+            self.shelf_thumbs.insert(item.path.clone(), None);
+            self.shelf_worker.send(item.path.clone(), side);
+        }
+        if gone {
+            self.keep_shelf();
+        }
     }
 
     /// Previews of items no longer on the shelf.
@@ -2204,6 +2264,7 @@ impl App {
         if self.shelf.retain_existing(local_exists) {
             self.shelf_hover = None;
             self.forget_shelf_thumbs();
+            self.keep_shelf();
             self.refresh()?;
         }
         if paths.is_empty() {
@@ -2399,6 +2460,7 @@ impl App {
     /// stops (paused, another activity in front, the setting off).
     fn follow_waveform(&mut self) -> Result<()> {
         let want = settings::current().media_waveform
+            && !crate::render::motion::reduced()
             && !self.fullscreen
             && matches!(&self.front, Some(PillContent::Media(m)) if m.playing);
         if want == self.meter_on {
@@ -2846,11 +2908,13 @@ impl App {
                 self.shelf.remove(i);
                 self.shelf_hover = None;
                 self.forget_shelf_thumbs();
+                self.keep_shelf();
             }
             CardAction::ShelfClear => {
                 self.shelf.clear();
                 self.shelf_hover = None;
                 self.forget_shelf_thumbs();
+                self.keep_shelf();
             }
             CardAction::OutputSettings => {
                 unsafe {
@@ -3160,6 +3224,26 @@ impl App {
     // ---- settings -----------------------------------------------------------------------------
 
     /// The settings window saved: read the file again and apply what changed, live.
+    /// Reads Windows' "Animation effects" again; a change applies now.
+    fn follow_motion(&mut self) -> Result<()> {
+        if crate::render::motion::follow_windows() {
+            return self.motion_changed();
+        }
+        Ok(())
+    }
+
+    /// Windows' "Animation effects" (or the setting that follows it) changed: the weather's
+    /// scenes and the waveform start or stop now, not with the next activity.
+    fn motion_changed(&mut self) -> Result<()> {
+        log(&format!("motion: {}", if crate::render::motion::reduced() { "reduced" } else { "full" }));
+        self.card_fx = None;
+        if let Some(content) = self.open.and_then(|o| self.card_content(o, now_ms())) {
+            self.sync_card_fx(&content);
+        }
+        self.follow_waveform()?;
+        self.repaint()
+    }
+
     fn reload_settings(&mut self) -> Result<()> {
         let old = settings::current();
         // Mid-write or locked: keep what runs now (defaults would switch everything off).
@@ -3180,6 +3264,12 @@ impl App {
         }
         if new.update_check != old.update_check {
             self.updater.set_enabled(new.update_check);
+        }
+        if new.shelf_keep != old.shelf_keep {
+            self.keep_shelf();
+        }
+        if new.motion_follow_windows != old.motion_follow_windows {
+            self.motion_changed()?;
         }
         if new.buds_device != old.buds_device {
             self.buds_worker.reselect();
@@ -3377,8 +3467,8 @@ impl App {
     /// sky and size. Decoration: one that fails is logged (once) and the card goes on without it.
     fn sync_card_fx(&mut self, content: &CardContent) {
         let want = match content {
-            CardContent::Weather(w) if settings::current().weather_effects => Some(w.fx),
-            CardContent::Brief(b) if settings::current().weather_effects => b.weather.as_ref().map(|w| w.fx),
+            CardContent::Weather(w) if weather_moves() => Some(w.fx),
+            CardContent::Brief(b) if weather_moves() => b.weather.as_ref().map(|w| w.fx),
             _ => None,
         };
         let (wd, hd) = card_size_dip(content);
@@ -4100,10 +4190,14 @@ impl App {
                 let rebuilt = self.rebuild_or_retry();
                 // The taskbar may be on another monitor now.
                 self.check_wallpaper();
-                rebuilt
+                rebuilt.and_then(|_| self.follow_motion())
             }
-            // A new wallpaper is broadcast as a setting change.
-            UiEvent::Environment | UiEvent::Timer(TIMER_WALLPAPER) => {
+            // A new wallpaper (and Windows' "Animation effects") is broadcast as a setting change.
+            UiEvent::Environment => {
+                self.check_wallpaper();
+                self.follow_motion()
+            }
+            UiEvent::Timer(TIMER_WALLPAPER) => {
                 self.check_wallpaper();
                 Ok(())
             }

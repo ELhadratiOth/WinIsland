@@ -75,6 +75,15 @@ pub fn build() -> Option<u32> {
 }
 
 /// Unknown counts as Windows 11, where everything was made.
+/// Windows' "Animation effects" (Settings → Accessibility → Visual effects; the old "Animate
+/// controls and elements inside windows"): off asks apps to keep still.
+pub fn animation_effects() -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{SystemParametersInfoW, SPI_GETCLIENTAREAANIMATION, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS};
+    let mut on = windows::core::BOOL(1);
+    let read = unsafe { SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, Some(&mut on as *mut _ as *mut _), SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0)) };
+    read.is_err() || on.as_bool()
+}
+
 pub fn generation() -> Generation {
     build().map_or(Generation::Windows11, generation_of)
 }

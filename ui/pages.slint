@@ -377,6 +377,14 @@ export component AppearanceInspector inherits VerticalLayout {
                 picked => { Ui.changed(); }
             }
         }
+        IRow {
+            label: @tr("Windows'u izle");
+            note: @tr("Animasyon efektleri kapalıyken hareket azalır");
+            Toggle {
+                checked <=> Store.motion-follow-windows;
+                toggled => { Ui.changed(); }
+            }
+        }
     }
 }
 
@@ -1738,6 +1746,14 @@ export component SystemInspector inherits VerticalLayout {
             note: @tr("Sonra sürükleyip atmak için");
             Toggle {
                 checked <=> Store.capture-to-shelf;
+                toggled => { Ui.changed(); }
+            }
+        }
+        IRow {
+            label: @tr("Rafı sakla");
+            note: @tr("Yeniden başlayınca ve güncellemede kalır");
+            Toggle {
+                checked <=> Store.shelf-keep;
                 toggled => { Ui.changed(); }
             }
         }

@@ -3249,3 +3249,19 @@ msgstr "Plan limits"
 #: ui/pages.slint
 msgid "5 saatlik ve haftalık, Claude Code'un oturumuyla"
 msgstr "5-hour and weekly, with Claude Code's sign-in"
+
+#: ui/pages.slint
+msgid "Windows'u izle"
+msgstr "Follow Windows"
+
+#: ui/pages.slint
+msgid "Animasyon efektleri kapalıyken hareket azalır"
+msgstr "Less motion when Windows' animation effects are off"
+
+#: ui/pages.slint
+msgid "Rafı sakla"
+msgstr "Keep the shelf"
+
+#: ui/pages.slint
+msgid "Yeniden başlayınca ve güncellemede kalır"
+msgstr "Stays after a restart or an update"

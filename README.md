@@ -44,7 +44,10 @@ score, what Claude Code is doing. Click the pill and a card opens below it.
 - **Shelf:** files you drop on the pill wait there until you drag them where you need them; new
   screenshots are added to the shelf automatically. Hover a file for its copy button: an image is
   copied as its picture (paste it into a chat or a document), a text or code file as its text, and
-  every file as the file itself (paste it into a folder).
+  every file as the file itself (paste it into a folder). The shelf stays after a restart or an
+  update: its list of paths (never the files) is kept in `%LOCALAPPDATA%\WinIsland\shelf.json`, and
+  files deleted meanwhile drop off. Turn this off with **Keep the shelf** (Settings → System →
+  Screenshots).
 - **System:** volume, charging and low-battery warnings, the app using the microphone or camera, and
   the charge of Bluetooth headphones.
 - When several activities are active, thin strips show beside the front one; scroll the mouse wheel
@@ -75,6 +78,12 @@ time.
 The settings window opens from **Settings…** in the tray menu; every change applies to the pill
 immediately. The search box at the top finds settings; on the Live match page it searches for teams,
 and on the Full screen page it adds exceptions. Ctrl+F goes to search, Ctrl+K opens the actions menu.
+
+**Reduced motion:** when Windows' **Animation effects** is off (Settings → Accessibility → Visual
+effects), WinIsland follows it as soon as it changes: the card opens and closes, and activities
+switch, without animation, and nothing moves on its own (no moving weather, no music waveform). To
+keep WinIsland's own motion anyway, turn off **Follow Windows** under Settings → Appearance → Motion,
+where **Animation speed** also is.
 
 ## Installation
 
@@ -139,7 +148,8 @@ curl -H "Content-Type: application/json" -d "{\"app\":\"Backup tool\",\"title\":
 them by hand, use the commands below. The command writes the path of the exe itself. The first time, it
 saves a backup as `settings.json.before-winisland`; after that, every write saves `settings.json.winisland-last`.
 It doesn't touch other hooks. It also sets WinIsland as Claude Code's status line, unless you already have
-one of your own (yours stays, and the card then has no usage bars):
+one of your own (yours stays; the card then takes the context from the session's transcript and the
+limits from Claude's usage endpoint, see below):
 
 ```
 winisland.exe claude-hooks install

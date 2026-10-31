@@ -2,6 +2,8 @@
 //! sampled into key frames: the system's natural-motion spring only reports completion about a
 //! second after it visibly settles, which left the pill hidden too long after closing.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 /// Damping ratio of the morph spring (≈4 % overshoot).
 pub const SPRING_DAMPING: f32 = 0.72;
 /// Natural frequency in rad/s: peak at ~0.25 s, settled (2 %) at ~0.31 s, matching the
@@ -9,8 +11,33 @@ pub const SPRING_DAMPING: f32 = 0.72;
 pub const SPRING_OMEGA: f32 = 18.1;
 pub const SPRING_DURATION_S: f32 = 0.45;
 
-/// Animation durations are multiplied by this (settings: off, slow, normal, fast).
+/// Windows' "Animation effects", as last read (`follow_windows`).
+static WINDOWS_ANIMATES: AtomicBool = AtomicBool::new(true);
+
+/// Reads Windows' "Animation effects" again (at start, and when a setting changes); whether it
+/// changed.
+pub fn follow_windows() -> bool {
+    let on = crate::platform::os::animation_effects();
+    WINDOWS_ANIMATES.swap(on, Ordering::Relaxed) != on
+}
+
+/// Reduced motion: Windows' "Animation effects" is off and the WinIsland follows it (settings).
+/// Transitions are then instant, and nothing moves on its own (the weather's scenes, the music
+/// waveform).
+pub fn reduced() -> bool {
+    reduced_for(crate::settings::current().motion_follow_windows, WINDOWS_ANIMATES.load(Ordering::Relaxed))
+}
+
+fn reduced_for(follow: bool, windows_animates: bool) -> bool {
+    follow && !windows_animates
+}
+
+/// Animation durations are multiplied by this (settings: off, slow, normal, fast; off with
+/// reduced motion).
 pub fn speed_factor() -> f32 {
+    if reduced() {
+        return 0.01;
+    }
     match crate::settings::current().animation_speed {
         crate::settings::AnimationSpeed::Off => 0.01,
         crate::settings::AnimationSpeed::Slow => 1.33,
@@ -46,6 +73,13 @@ pub fn spring_samples(n: usize) -> Vec<(f32, f32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reduced_motion_is_windows_off_and_followed() {
+        assert!(reduced_for(true, false));
+        assert!(!reduced_for(true, true));
+        assert!(!reduced_for(false, false), "not followed: the WinIsland's own speed setting decides");
+    }
 
     #[test]
     fn spring_starts_at_zero_and_settles_at_one() {
